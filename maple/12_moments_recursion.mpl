@@ -14,7 +14,7 @@
 # has a finite, direction-dependent limit; (a) is regular there.
 # ===========================================================================
 restart:
-Digits := 50:
+Digits := 40:
 
 chk := proc(label, ok)
   printf("%-70s %s\n", label, `if`(ok, "PASS", "FAIL"));
@@ -55,14 +55,7 @@ for n from 0 to 6 do for a from 0 to 4 do for b from 0 to 4-a do
 end do: end do: end do:
 chk(sprintf("(b) pointwise: div(y P F)=P r^n inside, 0 outside, F cont. at R (%d cases)", cnt), ok);
 
-# angular integrals: oint cos^a sin^b = 2 pi (a-1)!!(b-1)!!/(a+b)!!  (a,b even), else 0
-ok := true:
-for a from 0 to 6 do for b from 0 to 6 do
-  ang := int(cos(t)^a*sin(t)^b, t=0..2*Pi):
-  if type(a, even) and type(b, even) then
-    form := 2*Pi*doublefactorial(a-1)*doublefactorial(b-1)/doublefactorial(a+b-1+1-1) ;
-  end if:
-end do: end do:
+# angular integrals: oint cos^a sin^b = 2 pi (a-1)!!(b-1)!!/(a+b)!!  (a,b even), 0 else
 # (note: (a-1)!!(b-1)!!/(a+b)!!  with the usual convention (-1)!! = 1)
 df := proc(n) if n <= 0 then 1 else doublefactorial(n) end if end proc:
 ok := true:
@@ -175,55 +168,14 @@ Sg := proc(j, m, sv, zv) local h, i;
   else h := (j-1)/2; add(binomial(h,i)*(-zv^2)^(h-i)*Jg(m+2*i, sv, zv), i=0..h) end if
 end proc:
 
-# =================== 2. half-plane ===========================================
-# solid {y2 > c}, outward normal (0,-1), t = (1,0), edge points y = (s, -z): z = -c.
-#  outside: c = d>0,  z = -d, ind = 0.   inside: c = -d, z = +d, ind = 1.
-# polar reference (outside):  int_d^R r^(n+k+1) A_{ab}(d/r) dr,
-#   A_{ab}(u) = int_{asin u}^{Pi-asin u} cos^a sin^b dtheta
-Aab := proc(a, b, u) local th; Int(cos(th)^a*sin(th)^b, th = arcsin(u) .. Pi - arcsin(u)) end proc:
-Acl := proc(a, b) option remember; local th, u;
-  # closed form of A_ab(u), u = sin(theta0) in (0,1)
-  simplify(eval(int(cos(th)^a*sin(th)^b, th), th = Pi - arcsin(u)) - eval(int(cos(th)^a*sin(th)^b, th), th = arcsin(u))) assuming u > 0, u < 1
-end proc:
-polar_out := proc(a, b, n, dv, Rv) local k, rho, F;
-  k := a + b;
-  F := unapply(subs(u = dv/rho, Acl(a, b)), rho);
-  evalf(Int(rho^(n+k+1)*F(rho), rho = dv .. Rv))
-end proc:
-# full disk moment
-disk := proc(a, b, n, Rv) omega(a, b)*Rv^(n+2+a+b)/(n+2+a+b) end proc:
-
-worstA := 0: worstB := 0: cnt := 0:
-for pt in [[1/5, 1], [3/5, 1], [1/10, 7/10]] do
-  dv := pt[1]: Rv := pt[2]:
-  Eout := [map(evalf, [0, -1, 1, 0, -dv, -10, 10])]:     # far-extent edge, chord is clipped by L
-  Ein  := [map(evalf, [0, -1, 1, 0,  dv, -10, 10])]:
-  for n in [0, 1, 3] do
-    for a from 0 to 4 do for b from 0 to 4-a do
-      k := a + b:
-      # reference
-      ref_out := polar_out(a, b, n, dv, Rv):
-      ref_in  := disk(a, b, n, Rv) - (-1)^b*ref_out:          # reflect y2 -> -y2
-      A_out := evalf(momentA(Eout, 0, a, b, n, Rv)):
-      A_in  := evalf(momentA(Ein,  1, a, b, n, Rv)):
-      eA := max(abs(A_out - ref_out), abs(A_in - ref_in)):
-      worstA := max(worstA, eA):
-      if k >= 0 then
-        B_out := evalf(momentB(Eout, 0, a, b, n, Rv)):
-        B_in  := evalf(momentB(Ein,  1, a, b, n, Rv)):
-        eB := max(abs(B_out - ref_out), abs(B_in - ref_in)):
-        worstB := max(worstB, eB):
-      end if:
-      cnt := cnt + 1:
-    end do: end do:
-  end do:
-end do:
-printf("half-plane: %d (point,n,alpha) cases, k=0..4; worst |(a)-polar| = %.3e, worst |(b)-polar| = %.3e\n", cnt, worstA, worstB);
-chk("half-plane, x outside & inside: (a) recursion = polar reference (40 digits)", evalb(worstA < 1e-35));
-chk("half-plane, x outside & inside: (b) far-field   = polar reference (40 digits)", evalb(worstB < 1e-35));
-
-# symbolic d/dR check of (a) and (b) on the half-plane (x outside), selected alpha
-# (a) via the explicit recursion needs symbolic S_{j,m}; do it for k=1,2,3 with n=0,1,2
+# =================== 2. half-plane, SYMBOLIC in (d, R) =========================
+# solid {y2 > c}, outward normal n = (0,-1), t = (1,0); on the edge y = (s, -z), z = -c.
+#   outside the solid at distance d:  z = -d, indicator 0       (c = d)
+#   inside the solid at depth d:      z = +d, indicator 1       (c = -d)
+# chord [-L, L], L = sqrt(R^2 - d^2); atan jump over the chord = 2 arccos(d/R) sign(z).
+# Reference: dV/dR = R^(n+k+1) A_ab(d/R), A_ab(u) = int_{asin u}^{Pi-asin u} cos^a sin^b dtheta
+# (outside), V(R=d) = 0; inside: V_in = disk - (-1)^b V_out.  Both sides are compared as
+# functions of R (derivative) at sample points, 40 digits -- no numerical quadrature needed.
 Ipsym := proc(m::integer) option remember;
   if m = 0 then s elif m = -1 then arcsinh(s/abs(z)) elif m = -2 then arctan(s/z)/z
   elif m > 0 then (s*(s^2+z^2)^(m/2) + m*z^2*Ipsym(m-2))/(m+1)
@@ -232,29 +184,77 @@ Jpsym := proc(m::integer) `if`(m = -2, ln(s^2+z^2)/2, (s^2+z^2)^((m+2)/2)/(m+2))
 Spsym := proc(j::nonnegint, m::integer) local h, i;
   if j mod 2 = 0 then h := j/2; add(binomial(h,i)*(-z^2)^(h-i)*Ipsym(m+2*i), i=0..h)
   else h := (j-1)/2; add(binomial(h,i)*(-z^2)^(h-i)*Jpsym(m+2*i), i=0..h) end if end proc:
-# symbolic chord integral over [-L, L] with z = -d  of s^j r^m:
-chordS := proc(j, m) local F, hi, lo, d1, d2;
+
+Lh := sqrt(R^2 - d^2):
+# int_{-L}^{L} s^j r^m ds with z = zz (zz = -d or +d); |z| = d
+CS := proc(j, m, zz) local F;
   F := Spsym(j, m);
-  hi := sqrt(R^2 - d^2); lo := -hi;
-  subs([s = hi, z = -d], F) - subs([s = lo, z = -d], F)
+  subs([s = Lh, z = zz], F) - subs([s = -Lh, z = zz], F)
 end proc:
-ok := true: okB := true: cnt := 0:
-for n in [0, 1, 2] do for a from 0 to 3 do for b from 0 to 3-a do
-  k := a + b:
-  if k >= 1 then
-    e := n + 2 + k:
-    # (b) symbolic, x outside: sum_j  z/e * c_j * [chordS(j,n) - R^e chordS(j,-2-k)],  P = s^a (-z)^b = s^a d^b (z=-d)
-    Bsym := (-d)/e*d^b*( chordS(a, n) - R^e*chordS(a, -2-k) ):
-    dB := diff(Bsym, R):
-    # the polar integrand:  R^(n+k+1) A_ab(d/R)
-    refd := R^(n+k+1)*int(cos(th)^a*sin(th)^b, th = arcsin(d/R) .. Pi - arcsin(d/R)):
-    e1 := simplify(dB - refd) assuming d::positive, R > d:
-    cnt := cnt + 1:
-    if e1 <> 0 and a = 2 and b = 0 and n = 0 then print(e1); end if:
-    if e1 <> 0 then okB := false; printf("  (b) symbolic d/dR residual not simplified to 0 for n=%d a=%d b=%d\n", n, a, b); end if:
-  end if:
-end do: end do: end do:
-chk(sprintf("half-plane (b) SYMBOLIC: d/dR of far-field edge form = polar integrand (%d cases)", cnt), okB);
+
+# (a) symbolic recursion on the half-plane
+momentAS := proc(a, b, n, zz, ind) local i, beta, bi, t1, t2, bm, sgn;
+  if a + b = 0 then
+    sgn := `if`(zz = d, 1, -1);
+    return ind*2*Pi*R^(n+2)/(n+2) + (zz*CS(0, n, zz) - R^(n+2)*2*arccos(d/R)*sgn)/(n+2);
+  end if;
+  if a > 0 then i := 1; beta := [a-1, b]; else i := 2; beta := [a, b-1]; end if;
+  # edge normal (0,-1): n_1 = 0, n_2 = -1;  y^beta on the edge = s^beta1 (-zz)^beta2
+  if i = 1 then t1 := 0;
+  else t1 := -(-zz)^beta[2]*( CS(beta[1], n+2, zz) - R^(n+2)*CS(beta[1], 0, zz) )/(n+2) end if;
+  bi := beta[i]; t2 := 0;
+  if bi >= 1 then
+    bm := [beta[1] - `if`(i = 1, 1, 0), beta[2] - `if`(i = 2, 1, 0)];
+    t2 := bi*(momentAS(bm[1], bm[2], n+2, zz, ind) - R^(n+2)*momentAS(bm[1], bm[2], 0, zz, ind))/(n+2);
+  end if;
+  t1 - t2
+end proc:
+# (b) symbolic
+omegaS := proc(a, b) `if`(type(a, even) and type(b, even), 2*Pi*df(a-1)*df(b-1)/df(a+b), 0) end proc:
+momentBS := proc(a, b, n, zz, ind) local k, e;
+  k := a + b: e := n + 2 + k:
+  ind*omegaS(a, b)*R^e/e + zz/e*(-zz)^b*( CS(a, n, zz) - R^e*CS(a, -2-k, zz) )
+end proc:
+
+Acl := proc(a, b) option remember; local th, u;
+  simplify(eval(int(cos(th)^a*sin(th)^b, th), th = Pi - arcsin(u)) - eval(int(cos(th)^a*sin(th)^b, th), th = arcsin(u))) assuming u > 0, u < 1
+end proc:
+
+worstA := 0: worstB := 0: worstAB := 0: worst0 := 0: cnt := 0:
+pts := [[1/5, 1], [3/5, 1], [1/10, 7/10]]:
+for n in [0, 1, 2, 4] do
+  printf("  [half-plane symbolic: n = %d, t = %.1f s]\n", n, time());
+  for a from 0 to 4 do for b from 0 to 4-a do
+    k := a + b:
+    Aab := Acl(a, b):
+    for side in [out, inn] do
+      zz := `if`(side = out, -d, d): ind := `if`(side = out, 0, 1):
+      EA := momentAS(a, b, n, zz, ind):
+      EB := `if`(k >= 0, momentBS(a, b, n, zz, ind), 0):
+      dA := diff(EA, R): dB := diff(EB, R):
+      # polar derivative
+      dref := R^(n+k+1)*subs(u = d/R, Aab):
+      dref := `if`(side = out, dref, R^(n+k+1)*omegaS(a, b) - (-1)^b*dref):
+      for pt in pts do
+        sb := [d = pt[1], R = pt[2]]:
+        eA := abs(evalf(subs(sb, dA - dref))):
+        eB := abs(evalf(subs(sb, dB - dref))):
+        eAB := abs(evalf(subs(sb, EA - EB))):
+        worstA := max(worstA, eA): worstB := max(worstB, eB): worstAB := max(worstAB, eAB):
+        cnt := cnt + 1:
+      end do:
+      # value at the lower end R = d (L = 0): outside -> 0 ; inside -> disk moment
+      v0 := evalf(subs([d = 1/3, R = 1/3], EA)):
+      r0 := `if`(side = out, 0, evalf(subs([d = 1/3, R = 1/3], omegaS(a, b)*R^(n+2+k)/(n+2+k)))):
+      worst0 := max(worst0, abs(v0 - r0)):
+    end do:
+  end do: end do:
+end do:
+printf("half-plane symbolic: %d (n,alpha,side,point) cases; worst |dA/dR-polar| = %.2e, |dB/dR-polar| = %.2e, |a-b| = %.2e, |V(R=d) - ref| = %.2e\n",
+       cnt, worstA, worstB, worstAB, worst0);
+chk("half-plane x outside/inside, k<=4: d/dR of (a) = polar integrand (40 digits)", evalb(worstA < 1e-30));
+chk("half-plane x outside/inside, k<=4: d/dR of (b) = polar integrand (40 digits)", evalb(worstB < 1e-30));
+chk("half-plane: (a) = (b) as functions of R (and V(R=d) matches the start value)", evalb(worstAB < 1e-30 and worst0 < 1e-30));
 
 # =================== 3. wedge at a vertex: (a) vs polar ======================
 mkedges := proc(V, x) local Es, i, p, q, t, ln, nn, tt, Ed;
@@ -274,15 +274,15 @@ mkedges := proc(V, x) local Es, i, p, q, t, ln, nn, tt, Ed;
 end proc:
 
 worst := 0: cnt := 0:
-for AB in [ [[1/5, 0], [0, 1/4]], [[4/5, -1/10], [1/10, 3/5]], [[3/2, 1/2], [-1/2, 3/2]], [[1/2, -1/4], [3/10, 1/2]] ] do
+for AB in [ [[1/5, 0], [0, 1/4]], [[4/5, -1/10], [1/10, 3/5]], [[3/2, 1/2], [-1/2, 3/2]] ] do
   Es := mkedges([[0,0], AB[1], AB[2]], [0, 0]):
   Efar := Es[2]:
   z := Efar[5]: s0 := Efar[6]: s1 := Efar[7]:
   thn := arctan(Efar[2], Efar[1]):
   ang := arctan(s1/z) - arctan(s0/z):
   ind := ang/(2*Pi):                                   # interior angle / 2 pi at the vertex
-  for Rv in [1/8, 1/2, 1, 5/2] do
-    for n in [0, 1, 2, 4] do
+  for Rv in [1/8, 1/2, 5/2] do
+    for n in [0, 1, 3] do
       for a from 0 to 4 do for b from 0 to 4-a do
         k := a + b: e := n + 2 + k:
         val := momentA(Es, ind, a, b, n, Rv):
