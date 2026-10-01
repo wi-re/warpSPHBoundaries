@@ -120,6 +120,70 @@ def _build(name):
 
 KERNELS = {n: _build(n) for n in _SRC}
 
+# --------------------------------------------------------------------------------------------------------------
+# Additional exact piecewise-polynomial kernels of warpSPHCore (kernel_specs.yaml), support radius 1:
+#   shape = sum_t c_t (knot_t - q)_+^p_t   (truncated powers)  or an explicit polynomial in q (poly6)
+# Blocks are the truncated powers themselves (R = knot_t); the pi * W pieces follow by summing the blocks that cover each interval.
+# Not included (not piecewise polynomial in r / not exact): HOCT4 (hard-switched linear core), Gaussian.
+# --------------------------------------------------------------------------------------------------------------
+def _from_terms(name, terms):
+    """terms: [(coef, knot, power)] truncated powers; or for poly6 pass the polynomial via _from_poly."""
+    from math import comb
+    q = [Fraction(0), Fraction(1)]
+    blocks = {}
+    for c, R, pw in terms:
+        R = Fraction(R)
+        base = [R, Fraction(-1)]                       # (R - q)
+        poly = ppow(base, pw)
+        poly = pscale(poly, Fraction(c))
+        blocks[R] = padd(blocks.get(R, [Fraction(0)]), poly)
+    return _finish(name, blocks)
+
+
+def _finish(name, blocks):
+    Rs = sorted(blocks)                                                 # ascending knots, last = 1
+    # normalisation: 2 * int_0^1 r (pi W) dr = 1 with pi W = C * shape  ->  C = 1 / (2 int r shape)
+    def shape_integral():
+        tot = Fraction(0)
+        lo = Fraction(0)
+        for j, hi in enumerate(Rs):
+            poly = [Fraction(0)]
+            for R in Rs:
+                if R >= hi:
+                    poly = padd(poly, blocks[R])
+            P = pint(pmul([Fraction(0), Fraction(1)], poly))
+            tot += peval(P, hi) - peval(P, lo)
+            lo = hi
+        return tot
+    C = 1 / (2 * shape_integral())
+    bl = tuple(Block(R, tuple(Fraction(x) * C for x in blocks[R])) for R in sorted(Rs, reverse=True))
+    pieces = []
+    lo = Fraction(0)
+    for hi in Rs:
+        poly = [Fraction(0)]
+        for R in Rs:
+            if R >= hi:
+                poly = padd(poly, blocks[R])
+        pieces.append((lo, hi, tuple(Fraction(x) * C for x in poly)))
+        lo = hi
+    return EdgeKernel(name, bl, tuple(pieces), C)
+
+
+def _poly6():
+    return _finish("poly6", {Fraction(1): [Fraction(1), Fraction(0), Fraction(-3), Fraction(0), Fraction(3), Fraction(0), Fraction(-1)]})
+
+
+_F = Fraction
+KERNELS["quartic"] = _from_terms("quartic", [(1, _F(1), 4), (-5, _F(3, 5), 4), (10, _F(1, 5), 4)])
+KERNELS["quintic"] = _from_terms("quintic", [(1, _F(1), 5), (-6, _F(2, 3), 5), (15, _F(1, 3), 5)])
+KERNELS["b7"] = _from_terms("b7", [(1, _F(1), 6), (-7, _F(5, 7), 6), (21, _F(3, 7), 6), (-35, _F(1, 7), 6)])
+KERNELS["b8"] = _from_terms("b8", [(1, _F(1), 7), (-8, _F(3, 4), 7), (28, _F(1, 2), 7), (-56, _F(1, 4), 7)])
+KERNELS["poly6"] = _poly6()
+
+# 2D normalisation constants C2 * pi of warpSPHCore (kernel_specs.yaml), the independent check of the exact normalisation above
+WARPSPH_C2_PI = {"quartic": Fraction(46875, 2398), "quintic": Fraction(15309, 478), "b7": Fraction(5764801, 113149),
+                 "b8": Fraction(589824, 7435), "poly6": Fraction(4)}
+
 
 def kernel(name: str) -> EdgeKernel:
     try:
