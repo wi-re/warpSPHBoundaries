@@ -6,6 +6,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 |---|---|---|
 | `notation.md` | conventions shared by all derivations and code | draft |
 | `derivation.md` | exact closed forms: 2D/3D planar, 3D sphere (the `PLAN.md` track; Maple + mpmath validated) | [V] |
+| `exactness-and-approximations.md` | stage-2 numpy results: what is exact, accuracy/cost of cheap approximations (float32, Gauss, tiny elements) | [V] |
 | `backends-and-verification.md` | Maple → mpmath → numpy → torch → warp hierarchy, golden fixtures, tolerances; stage-1 results | stage 0–1 done |
 | `derivations/TEMPLATE.md` | template every derivation file follows | — |
 | `derivations/edge-value-identity.md` | 2D value integral as edge integrals | [V] Maple + mpmath |
@@ -34,3 +35,10 @@ golden-fixture cases. Do not mark a file [V] until the check table is green.
 | tests | `tests/edge/` (`pytest tests/edge`, ≈2.5 min) |
 | golden fixtures | `tests/fixtures/edge2d_golden.json` (92 cases; `python -m edgebound.fixtures` regenerates; schema in `python/edgebound/fixtures.py`) |
 | float64 behaviour of the guard-free algorithm | `python -m edgebound.precision_probe` (table in `backends-and-verification.md`) |
+
+## Stage 2 (numpy, vectorised, branch-free)
+
+`python/edgebound/np2d.py` (batched convex polygons; exact `Fraction` kernel compilation; dtype and quadrature options),
+`tests/edge/test_np2d.py` (all 82 convex-triangle fixtures in one vectorised call per kernel, covering meshes, stage-1
+agreement, tiny elements, longdouble/Gauss options, continuity across an edge), `python -m edgebound.np2d_study`
+(accuracy/cost tables in `exactness-and-approximations.md`).

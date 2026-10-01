@@ -102,6 +102,11 @@ verified remedy (`derivations/edge-value-identity.md` §6; the unsplit polynomia
 float32 will need exact combined indicator weights and a better-conditioned polynomial basis (kernel coefficients are
 up to ~10³ in magnitude).
 
+### Stage 2 status
+
+numpy float64 (`python/edgebound/np2d.py`) meets the table above on every fixture: worst 6e-14 (value), 5e-13 (gradient),
+1e-14 (moments) absolute. Details, float32 / quadrature variants and cost: `exactness-and-approximations.md`.
+
 ## Order of work
 
 1. Derivation files + Maple checks for primitives and moments.
