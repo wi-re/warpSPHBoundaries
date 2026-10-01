@@ -1,6 +1,6 @@
 # Boundary operations with the warpSPH call shape (2D, tiers 1/2 on the GPU)
 
-**Status:** [V] — `python/edgebound/boundaryOps.py` (interface), `warpbc.py` (Warp pair engine), tests `tests/edge/test_boundary_ops.py`, `test_warpbc.py`, `test_kernels_extra.py`
+**Status:** [V] — `python/edgebound/boundaryOps.py` (interface), `warpbc.py` (Warp pair engine), `implicitBodies.py` (tiers 3/4), tests `tests/edge/test_boundary_ops.py`, `test_warpbc.py`, `test_implicit_bodies.py`, `test_kernels_extra.py`
 
 ## 1. Call shape
 
@@ -54,18 +54,35 @@ Throughput (`python -m edgebound.boundary_bench`, RTX PRO 6000 Blackwell, 1 000 
 
 i.e. the whole boundary treatment costs about as much as one particle operator pass; it scales with the *near-wall* particles only.
 
-## 3. Tiers 3 and 4 in this interface (design; hard switches, no blending)
+## 3. Tiers 3 and 4 in this interface (implemented; hard switches, no blending)
 
-Tiers 1/2 above need a mesh. Implicit/SDF bodies (warpSPH rigid bodies) enter as a second reference type with the **same result conventions** and a per-(particle, body) hard switch (`tierPolicy`), thresholds from `tier-selection-2d.md`:
+```python
+from edgebound.boundaryOps import BoundaryDescription
+from edgebound.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy
+desc = BoundaryDescription(mesh=wallMesh,                                   # optional explicit triangles (tiers 1/2)
+                           bodies=[DiskBody(center, R), HalfPlaneBody(point, normalIntoFluid),
+                                   DiskBody(c2, R2, solid="outside")],      # solid disk, planar wall, circular cavity wall
+                           policy=TierPolicy(tier4MaxRadius=0.2, tier3MinRadius=2.0))   # hard thresholds in units of the particle's own h
+rho_b = boundaryOperation(ps, props, desc, bodyDensities=rho0)                         # same call as for a mesh
+```
 
-| body regime (disk obstacle, `d = 0.3h`) | model | needs | status |
+For every (particle, body) pair the model is chosen **per particle** from `R/h_i` (adaptive support honoured), thresholds from `tier-selection-2d.md`:
+
+| `R / h_i` | model | evaluated by | measured error vs the exact disk (value / gradient), `d = 0.05…0.6 h` |
 |---|---|---|---|
-| `R ≳ 2h` (and `κh ≲ 0.5`) | tier 3 (`F_0 + κF_1 + κ²F_2`, derivative in `d`) | SDF value, normal, curvature at the closest point; 1D tables `F_k(d)`, `F_k'(d)` per kernel | verified in mpmath (`tier3.py`); **not yet tabulated / on the GPU** |
-| `R ≲ 0.2h` | tier 4 disk series | kernel Laplacians `Δ^k W` at the centre distance | verified in mpmath (`tier4.py`); not yet on the GPU |
-| in between / anything with corners | tier 1/2 exact elements from a polygonisation of the SDF | mesh | **done (this document)** |
+| `≥ 2` | tier 3: `F_0 + κF_1 + κ²F_2`, gradient `∂_d λ n`, `d < 0` and cavities via the complement identity | torch, Hermite tables `F_k(q), F_k'(q)` (512 intervals per kernel, exact mpmath moments, cached in `results/tables/`) | `R = 4h`: 1.8e-5 / 3.9e-5; `R = 2h`: 1.4e-4 / 2.8e-4 |
+| `≤ 0.2` (and `[D−a, D+a]` inside one kernel piece, particle outside) | tier 4: disk series `K = 2` | torch, exact polynomial coefficients of `Δ^k W` | `R = 0.1h`: 2.4e-7 / 8.8e-6 (derivative of an asymptotic series loses an order) |
+| in between, or the series' validity fails | tier 2: **polygonisation of the body** (fan, edge `h/16`, polygon area = disk area) merged into the element mesh; only the pairs of particles with hard tier 2 are generated | Warp pair engine | `R = 0.7h`: 6e-8 / 6e-7; `R = 0.35h`: 2e-7 / 3e-6 |
+| `HalfPlaneBody` | always tier 3 with `κ = 0`: exact planar closed form `λ_2(d)` (also `d ≤ 0`) | table | ≤ 1e-9 vs the PLAN closed form |
 
-Supported operation classes for tiers 3/4 are the constant-field ones (`Density`, `Interpolate`/`Gradient`/`Divergence` of per-body constant or linear-in-normal fields, i.e. wall velocity of a rigid body evaluated at the closest point); fields varying along the surface need the moment versions of `F_k`
-(same derivation: half-plane moments of the derived profiles — not done). Nothing of this is exposed in `boundaryOps` yet; the interface above is deliberately the tier-1/2 case of that contract.
+Findings: (i) the area-preserving polygon makes the *exact-element fallback* far more accurate than my earlier `h/8`-edge numbers (the `O(ℓ²)` bias cancels), so tier 2 alone would be the accuracy
+choice everywhere — tiers 3/4 are the **cost** choice (O(1) work per particle instead of ~`2πR·16/h` pairs near the surface per body); (ii) switching errors are the errors above (≲ 1.4e-4 at the tier 3/2 switch), never
+a jump from the formulas themselves; (iii) the table interpolation error (1e-12 value, 1e-8 derivative) is negligible against the model error.
+
+Operation classes for bodies: constant fields per body only (`bodyValues[B,...]`, `bodyDensities[B]`): `Density` `ρ_b λ`, `Interpolate` `A λ`, `Gradient/Divergence/Curl` `a ⊗ ∇λ` with all four gradient modes
+(identical formulas to the mesh path — tested by assembling the explicit pair formulas), reactions per body (`returnReaction` → `(out, vertexReaction, bodyReaction)`, total conserved to 1e-12). A wall moving *rigidly* (velocity linear in
+position) needs first moments of the body and is therefore a tier-2 / explicit-mesh case today; the first-moment `F_k` tables are the missing piece. SDFs other than disk/half-plane need a closest-point + curvature callback
+(same tables, general closest point): the hook is `body.signed(positions) -> (d, n, kappa)`; a Warp SDF function can be plugged in there.
 
 ## 4. Limits worth knowing
 
