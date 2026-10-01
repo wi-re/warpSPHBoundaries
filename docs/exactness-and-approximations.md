@@ -73,7 +73,7 @@ random triangles with `x` inside the support, against the number of kernel evalu
 | w4 | **edge reduction**, closed form | ~6 transcendental calls | 1.9e-14 |
 
 The plain 2D rule has to resolve the kink at `r = h` (and the origin when `x ∈ T`); the edge form integrates smooth 1D
-functions, so ~15× fewer evaluations reach the same accuracy for the smoother kernel, ~20× for the cubic — and the
+functions, so 5× (cubic, ~4e-5) to ~15× (cubic, ~2e-6) and ~50× (w4, ~1e-9) fewer evaluations reach the same accuracy — and the
 closed form is exact to rounding for ~6 transcendental calls. In numpy the closed form is also the *fastest*
 (below), so quadrature is not a speed-up on CPU; it matters where `asinh` is expensive or unavailable (fixed-point, some
 GPU intrinsics) and as the building block for non-polynomial kernels (tier 3/4).
