@@ -62,9 +62,8 @@ is awkward through the clipping).
 - Derivatives w.r.t. vertex positions (shape derivative, for deforming or optimised
   geometry) are also edge-local: derive by hand (Maple) and implement as explicit
   custom adjoint functions rather than taping loops and clip logic.
-- **Open:** whether the installed Warp supports forward-mode derivatives. To my
-  knowledge its tape is reverse-mode only; check the docs for the installed version
-  before committing to a forward-mode design.
+- **Resolved (Warp 1.17):** reverse-mode `wp.Tape` + `wp.autograd.jacobian` (from backward passes) only; no forward mode. Explicit adjoint kernels are used
+  (`../docs/autodiff-and-gpu.md`).
 
 ## Status (Phase 1, 2D tier 1/2)
 
@@ -108,6 +107,11 @@ up to ~10³ in magnitude).
 Measured float32 tolerance table per fixture class and the conditioning fix are in `exactness-and-approximations.md`:
 exact Chebyshev compilation of the edge profiles + stable quadrature brings float32 to ≈ machine epsilon
 (value 8e-8, gradient 3e-7, moments 3e-9 over all representable fixtures), a 700–1000× gain over the closed form in float32.
+
+### Stages 4/5 status (torch, Warp)
+
+torch autograd equals the analytic gradient and the (new) edge-local shape adjoint at generic and degenerate points (custom angle backward); Warp float64 CPU/CUDA kernels
+match the fixtures and give ~120× over numpy for the value (`autodiff-and-gpu.md`).
 
 ### Stage 2 status
 
