@@ -6,6 +6,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 |---|---|---|
 | `notation.md` | conventions shared by all derivations and code | draft |
 | `derivation.md` | exact closed forms: 2D/3D planar, 3D sphere (the `PLAN.md` track; Maple + mpmath validated) | [V] |
+| `tier-selection-2d.md` | which tier for which obstacle size (2D disk), jumps at switches | [V] |
 | `autodiff-and-gpu.md` | torch autodiff vs analytic, shape adjoint, Warp float64 kernels, throughput | [V] |
 | `exactness-and-approximations.md` | stage-2 numpy results: what is exact, accuracy/cost of cheap approximations (float32, Gauss, tiny elements) | [V] |
 | `backends-and-verification.md` | Maple → mpmath → numpy → torch → warp hierarchy, golden fixtures, tolerances; stage-1 results | stage 0–1 done |
