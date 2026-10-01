@@ -206,6 +206,12 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Scratch / intermediate files
+.tmp/
+
+# Generated notebook figures (results/symbolic/ is committed: python/ depends on it)
+results/figures/
+
 # PyPI configuration file
 .pypirc
 
