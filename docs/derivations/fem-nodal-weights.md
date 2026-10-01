@@ -123,8 +123,8 @@ Selected rows (p = 3, kernel w4; relative error of the nodal weights; full table
 |---|---|---|---|---|---|
 | constant field, 8 triangles (pinwheel around `x`, `x` = common vertex) | integral 1, gradient 0 | ~1e-13 / ~1e-10 (integral), ~1e-8 (gradient) | **0 / 6e-17** | — | 1e-35 |
 | constant field, 96 irregular triangles | same | same | 1.6e-14 / 3.9e-13 | — | — |
-| linear `f = x`, 8 triangles | integral 0, gradient (1,0) | ~1e-13 | **0 / 0** | 5e-6 / 5e-5 (asserted) | 1e-35 |
-| linear `f = x`, 96 triangles | same | ~1e-13 | 8.9e-15 / 1.8e-13 | 5e-6 / 5e-5 (asserted) | — |
+| linear `f = x`, 8 triangles | integral 0, gradient (1,0) | ~1e-13 | **0 / 0** | 0 / 3e-8 | 1e-35 |
+| linear `f = x`, 96 triangles | same | ~1e-13 | 8.9e-15 / 1.8e-13 | 1.4e-8 / 1.6e-7 | — |
 | Fig. 2 setup: large triangle, piecewise-linear field, 17 evaluation points incl. on edges/vertex | independent 40-digit polar oracle | their reference: 65536-point quadrature | ≤ 1e-12 | — | — |
 
 Our errors are comparable to or below the paper's analytic solution (the 96-triangle gradient is limited at ~4e-13 by rim-straddling elements, where the kernel is only `C^4`).
