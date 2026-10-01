@@ -90,10 +90,60 @@ the 4-panel split removes most of it, the closed form removes all of it.
 
 (unoptimised numpy, ~100 flops·array passes per edge; absolute numbers are indicative only.)
 
+## Stage 3: float32 — diagnosis and an exact fix
+
+**Diagnosis** (measured with the stage-2 code on the fixtures): rounding the *geometry* (positions, `z`, `s_0`, `s_1`, chords,
+indicator) to float32 costs only ≈ 3e-8; evaluating the closed form in float32 costs 6e-5…3.5e-4. The loss is entirely the
+**monomial basis of the edge profiles**: the kernel's `P(r) = Σ c_n r^n` (and the iterated potentials Φ of the moment recursion)
+are smooth, bounded functions written as sums of huge alternating terms. Amplification `Σ|c_n| R^n / max|P|`:
+cubic 1.4e2, w2 3.1e2, w4 2.3e3, w6 1.8e4 (worst over all profiles up to |α| = 4). float32 `ε = 6e-8` times that amplification
+is exactly the observed error.
+
+**Fix, exact and offline:** convert every profile to the **Chebyshev basis on [0, R]** with rational arithmetic
+(`np2d.cheb_coeffs`; checked exactly at rational points in `tests/edge/test_np2d_stable.py`). The amplification
+`Σ|a_k| / max|P|` becomes **1.2 for every kernel and every α ≤ 4** (vs 1e2…2e4), and Clenshaw evaluation is backward stable.
+The edge integrals are then done by Gauss quadrature of the (smooth, now well-conditioned) integrand on dyadic panels
+`[0,|z|], [|z|,2|z|], [2|z|,4|z|], …` around the foot point (the singularities `±i z` of odd powers of `r`), the angle term stays
+closed form, the indicator/atan weights stay exact (`stable=(nodes, panels)` in `np2d`).
+
+float32 tolerance table (max abs error over the fixtures of each class, all four kernels; gradient scaled by `h`, moments by `h^k`;
+`python -m edgebound.np2d_study`):
+
+| class (cases) | method | value | grad | m₁₁ | m₂₂ |
+|---|---|---|---|---|---|
+| generic (16) | closed form | 6.0e-05 | 3.5e-04 | 2.5e-05 | 9.8e-06 |
+| generic (16) | **stable 8×6** | **8.4e-08** | **3.3e-07** | **2.0e-09** | **6.3e-10** |
+| x on edge / vertex / edge line (19) | closed form | 1.8e-05 | 2.0e-04 | 5.1e-06 | 3.1e-06 |
+| x on edge / vertex / edge line (19) | **stable 8×6** | **6.6e-08** | **1.8e-07** | **1.6e-09** | **1.4e-09** |
+| z → 0, down to 1e-40 (10) | closed form | 1.6e-06 | 2.3e-05 | 3.5e-07 | 2.4e-07 |
+| z → 0 (10) | **stable 8×6** | **4.2e-08** | **1.8e-07** | **3.0e-09** | **3.7e-10** |
+| tiny chords (5; 1 not representable) | closed form | 1.3e-05 | 2.3e-04 | 7.7e-07 | 2.0e-06 |
+| tiny chords | **stable 8×6** | **1.4e-08** | **1.5e-08** | **6.0e-10** | **1.7e-10** |
+| elements ≤ 1e-2 h (9) | closed form / stable 8×6 | 3.3e-09 / 3.5e-09 | 4.5e-08 / 3.8e-08 | 3e-10 / 3e-10 | 2e-11 / 1e-11 |
+| half-plane, d = 0 … 1, d < 0 (18) | closed form | 7.0e-06 | 2.0e-04 | 0 | 4.2e-07 |
+| half-plane | **stable 8×6** | **8.1e-08** | **2.2e-07** | 0 | **4.2e-10** |
+| engulf / outside support (2) | both | 0 | 0 | 0 | 1.8e-10 |
+
+Overall: float32 value 8e-8 (≈ 1.4 ε), gradient 3e-7, moments ≤ 3e-9 — a 700–1000× improvement over the float32 closed form,
+with *no* change of the identities. Tests assert 5e-7 / 2e-6 / 2e-7 (margin 3–7×).
+
+Caveats, measured:
+* **Panels matter at small `z/h`.** The cheap 5×4 variant is fine for value and moments but its gradient degrades to 2e-4…6e-4 for
+  `x` on an edge and for half-planes with small `d` (the last panel is too long next to the foot point); 8×6 holds 3.3e-7 everywhere,
+  down to `z = 1e-40`. A production kernel should size the panel count from `log2(L/|z|)` (or switch to the closed form for large `z`,
+  where both are fine).
+* **Cost.** In numpy the stable mode is ~10× the closed form (value 49 µs vs 3.7 µs per triangle; 8×6, w4; gradient 17 vs 2.0 µs):
+  more flops per edge, but all of it is branch-free fused multiply-add on positive terms, which is what a float32 GPU kernel wants;
+  the closed form remains the choice whenever float64 is available.
+* **Not representable in float32:** geometries whose features are below `ε·|v − x|` (e.g. an edge of 2e-12 at distance 0.9, or a 1e-6 h element
+  0.2 h away) — `d = q − p` underflows to 0. This is an input-representation limit; for such elements pass element-local coordinates
+  (relative to the element, plus the offset of `x` in float32 *relative to the element*).
+* Mixed alternative (not needed now): float32 geometry + float64 profile evaluation gives 3e-8, i.e. the whole float32 loss can also
+  be bought back with float64 only inside the profile polynomial.
+
 ## What is still open (stage 3 and later)
 
-* float32: a better-conditioned polynomial basis for the edge terms (Bernstein in `(1−q)` or Horner in `r` around the
-  support radius) and a measured float32 tolerance table from the fixtures.
+* float32 panel-count rule from `z/h` and a fused kernel for warp (stage 5); the Chebyshev coefficients are already exact constants.
 * Non-convex polygons in numpy (indicator from sign tests is for convex polygons; decompose or use winding).
 * Cheaper transcendental functions: replace `asinh`/`atan2` by bounded-error approximations and measure (error budget is
   now known: the angle term is multiplied by an exact weight `M_R ≤ 4/7/π`).

@@ -42,3 +42,9 @@ golden-fixture cases. Do not mark a file [V] until the check table is green.
 `tests/edge/test_np2d.py` (all 82 convex-triangle fixtures in one vectorised call per kernel, covering meshes, stage-1
 agreement, tiny elements, longdouble/Gauss options, continuity across an edge), `python -m edgebound.np2d_study`
 (accuracy/cost tables in `exactness-and-approximations.md`).
+
+## Stage 3 (float32)
+
+Exact Chebyshev compilation of the edge profiles (`np2d.cheb_coeffs`) + stable quadrature mode (`stable=(nodes, panels)`):
+float32 at ≈ machine epsilon on all representable fixtures; tolerance table per class in `exactness-and-approximations.md`;
+tests `tests/edge/test_np2d_stable.py`.

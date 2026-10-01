@@ -19,6 +19,11 @@ Approximation knobs (all optional, measured in `np2d_study.py`):
   quad    : None = closed-form primitives; m = Gauss-Legendre with m nodes on the clipped chord
             for the polynomial parts (the atan angle stays closed form: it is cheap and the
             only part that is not smooth when z -> 0)
+  stable  : None, or (nodes, panels): STABLE QUADRATURE mode for low precision.  The edge profiles are compiled
+            EXACTLY into the Chebyshev basis on [0, R] (amplification sum|a_k|/max|P| = 1.2 for every kernel and
+            alpha, versus 1e2..2e4 for the monomial basis) and evaluated by Clenshaw at Gauss nodes on dyadic
+            panels [0,|z|], [|z|,2|z|], ... of the chord; the angle term stays closed form.  No cancellation, so
+            float32 accuracy is limited by the quadrature, not by rounding.
   unsplit : True (default) = use  z int M(r)/r^2 ds  (no indicator, no atan) for every block whose
             whole polygon lies inside its radius R; mathematically identical, immune to the
             1-(1-eps) cancellation for elements << h.
@@ -254,10 +259,38 @@ def _gauss_panels(j, m, lo, hi, z, nodes, dt):
 class _Ctx:
     """per-call evaluation context: geometry + options + memo of chord integrals."""
 
-    def __init__(self, geo, quad):
+    def __init__(self, geo, quad, stable=None):
         self.g = geo
         self.quad = quad
+        self.stable = stable
         self.memo = {}
+        self._nodes = {}
+
+    def nodes(self, R):
+        """stable mode: (s, w, r) Gauss nodes on the chord clipped to R (R=None: the full edge)."""
+        v = self._nodes.get(R)
+        if v is None:
+            g = self.g
+            if R is None:
+                lo, hi = g.s0, g.s1
+            else:
+                lo, hi, _ = g.chord(R)
+            s, w = _dyadic_nodes(lo, hi, g.z, self.stable[1], self.stable[0], g.num.dt)
+            r = np.sqrt(s * s + g.z[..., None] ** 2)
+            v = (s, w, r)
+            self._nodes[R] = v
+        return v
+
+    def cheb_eval(self, P, R, rr):
+        """profile P (dict n -> Fraction) at radius array rr (pre-clamped), via exact Chebyshev coefficients."""
+        key = (tuple(sorted(P.items())), R)
+        a = self.memo.get(("cheb", key))
+        if a is None:
+            a = tuple(self.g.num.c(c) for c in cheb_coeffs(P, R))
+            self.memo[("cheb", key)] = a
+        Rf = self.g.num.c(R)
+        x = np.clip(2 * rr / Rf - 1, -1, 1)
+        return _clenshaw(a, x)
 
     def sdiff(self, j, m, R):
         """(N,K) array: int_chord s^j r^m ds over the chord clipped to radius R."""
@@ -287,6 +320,59 @@ class _Ctx:
         return v
 
 
+# ---------------------------------------------------------------- Chebyshev basis (exact compile)
+def cheb_coeffs(P, R):
+    """EXACT Chebyshev coefficients a_k (Fractions) of r -> sum P_n r^n on [0, R]  (x = 2r/R - 1)."""
+    R = Fraction(R)
+    D = max(P) if P else 0
+    px = [Fraction(0)] * (D + 1)
+    for n, c in P.items():
+        for j in range(n + 1):
+            px[j] += c * (R / 2) ** n * comb(n, j)
+    cheb = [Fraction(0)] * (D + 2)
+    xp = [Fraction(1)]
+    for j in range(D + 1):
+        for k, a in enumerate(xp):
+            cheb[k] += px[j] * a
+        new = [Fraction(0)] * (len(xp) + 1)
+        for k, a in enumerate(xp):
+            if k == 0:
+                new[1] += a
+            else:
+                new[k + 1] += a / 2
+                new[k - 1] += a / 2
+        xp = new
+    return tuple(cheb[:D + 1])
+
+
+def _clenshaw(a, x):
+    """sum a_k T_k(x), a: floats (already cast), x array."""
+    b1 = b2 = 0
+    for ak in a[:0:-1]:
+        b1, b2 = 2 * x * b1 - b2 + ak, b1
+    return x * b1 - b2 + a[0]
+
+
+def _dyadic_nodes(lo, hi, z, panels, nodes, dt):
+    """Gauss nodes/weights on the chord [lo, hi] with dyadic panels around the foot point s = 0:
+    breakpoints 0, |z|, 2|z|, 4|z|, ... (K of them) on each side, last panel up to the chord end.
+    Returns s, w with shape (..., Q); empty chords (lo = hi) get zero weights."""
+    x, w = _gl(nodes, dt)
+    az = np.abs(z)
+    Bs = [0 * az, az] + [az * (2 ** j) for j in range(1, panels)]
+    S, W = [], []
+    for side in (+1, -1):
+        t_lo = np.maximum(side * lo, 0) if side > 0 else np.maximum(-hi, 0)
+        t_hi = np.maximum(hi, 0) if side > 0 else np.maximum(-lo, 0)
+        edges = [np.clip(b, t_lo, t_hi) for b in Bs] + [t_hi]
+        for a_, b_ in zip(edges[:-1], edges[1:]):
+            half = (b_ - a_) / 2
+            mid = (a_ + b_) / 2
+            S.append(side * (mid[..., None] + half[..., None] * x))
+            W.append(half[..., None] * w)
+    return np.concatenate(S, axis=-1), np.concatenate(W, axis=-1)
+
+
 def _ypoly(g, beta):
     a, b = beta
     c1 = [g.z * g.n0, g.t0]
@@ -308,6 +394,12 @@ def _ypoly(g, beta):
 
 def _edge_integral(ctx, beta, R, P):
     """(N,K): int_chord y^beta (sum_n P_n r^n) ds."""
+    if ctx.stable is not None:
+        g = ctx.g
+        s, w, r = ctx.nodes(R)
+        y1 = g.z[..., None] * g.n0[..., None] + s * g.t0[..., None]
+        y2 = g.z[..., None] * g.n1[..., None] + s * g.t1[..., None]
+        return (w * y1 ** beta[0] * y2 ** beta[1] * ctx.cheb_eval(P, R, r)).sum(-1)
     num = ctx.g.num
     yp = _ypoly(ctx.g, beta)
     tot = 0
@@ -331,18 +423,27 @@ def _value_profile(ctx, R, P, unsplit):
     split = None
     if not unsplit or True:
         lo, hi, msk = g.chord(R)
-        poly = 0
-        for n, c in P.items():
-            poly = poly + num.c(c) / (n + 2) * ctx.sdiff(0, n, R)
+        Q = {n: c / (n + 2) for n, c in P.items()}                       # M_P(r)/r^2 as a polynomial
+        if ctx.stable is not None:
+            s_, w_, r_ = ctx.nodes(R)
+            poly = (w_ * ctx.cheb_eval(Q, R, r_)).sum(-1)
+        else:
+            poly = 0
+            for n, c in P.items():
+                poly = poly + num.c(c) / (n + 2) * ctx.sdiff(0, n, R)
         mR = sum(c * Fraction(R) ** (n + 2) / (n + 2) for n, c in P.items())
         edge = (z * poly - num.c(mR) * _dangle(z, lo, hi)).sum(1)          # times 1/pi later
         split = (edge, num.c(2 * mR) * g.ind)                             # (edge part [x 1/pi], indicator part [exact])
     if unsplit:
         inside = g.vmax2 <= num.c(Fraction(R) ** 2)
         if inside.any():
-            poly = 0
-            for n, c in P.items():
-                poly = poly + num.c(c) / (n + 2) * ctx.sfull(0, n)
+            if ctx.stable is not None:
+                s_, w_, r_ = ctx.nodes(None)
+                poly = (w_ * ctx.cheb_eval({n: c / (n + 2) for n, c in P.items()}, R, np.minimum(r_, num.c(R)))).sum(-1)
+            else:
+                poly = 0
+                for n, c in P.items():
+                    poly = poly + num.c(c) / (n + 2) * ctx.sfull(0, n)
             un = (z * poly).sum(1)
             e_part = np.where(inside, un, split[0])
             i_part = np.where(inside, 0, split[1])
@@ -351,17 +452,17 @@ def _value_profile(ctx, R, P, unsplit):
 
 
 # ============================================================== public API
-def _prep(verts, x, h, dtype, quad):
+def _prep(verts, x, h, dtype, quad, stable=None):
     verts = np.asarray(verts)
     x = np.asarray(x)
     if verts.ndim == 2:
         verts, x = verts[None], x[None]
     g = Geo(verts, x, h, dtype)
-    return _Ctx(g, quad)
+    return _Ctx(g, quad, stable)
 
 
-def value(verts, x, kernel, h=1, dtype=np.float64, quad=None, unsplit=True):
-    ctx = _prep(verts, x, h, dtype, quad)
+def value(verts, x, kernel, h=1, dtype=np.float64, quad=None, unsplit=True, stable=None):
+    ctx = _prep(verts, x, h, dtype, quad, stable)
     num = ctx.g.num
     _, vals = compile_moment(kernel, (0, 0))
     e_tot, i_tot = 0, 0
@@ -372,12 +473,12 @@ def value(verts, x, kernel, h=1, dtype=np.float64, quad=None, unsplit=True):
     return num.inv_pi * e_tot + i_tot
 
 
-def gradient(verts, x, kernel, h=1, dtype=np.float64, quad=None, unsplit=True):
-    return moment_gradient(verts, x, kernel, (0, 0), h, dtype, quad)
+def gradient(verts, x, kernel, h=1, dtype=np.float64, quad=None, unsplit=True, stable=None):
+    return moment_gradient(verts, x, kernel, (0, 0), h, dtype, quad, stable)
 
 
-def moment(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, unsplit=True):
-    ctx = _prep(verts, x, h, dtype, quad)
+def moment(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, unsplit=True, stable=None):
+    ctx = _prep(verts, x, h, dtype, quad, stable)
     g, num = ctx.g, ctx.g.num
     edges, vals = compile_moment(kernel, tuple(alpha))
     e_tot = 0
@@ -393,9 +494,9 @@ def moment(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, unsplit=Tr
     return (num.inv_pi * e_tot + i_tot) * hk
 
 
-def moment_gradient(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None):
+def moment_gradient(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, stable=None):
     """grad_x m_alpha = -sum_e n_e int_chord y^alpha W ds   -> (N, 2)."""
-    ctx = _prep(verts, x, h, dtype, quad)
+    ctx = _prep(verts, x, h, dtype, quad, stable)
     g, num = ctx.g, ctx.g.num
     gx = gy = 0
     for R, P in kernel_profile(kernel).items():

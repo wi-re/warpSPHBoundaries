@@ -71,6 +71,9 @@ def run(verbose=True):
                 ("float32 closed form", dict(dtype=np.float32))]
     for m in (2, 3, 4, 6, 8):
         variants.append((f"float64, Gauss {m} nodes x 4 panels", dict(quad=m)))
+    for s in [(4, 4), (6, 5), (8, 6)]:
+        variants.append((f"float64, stable Chebyshev quadrature {s[0]}x{s[1]}", dict(stable=s)))
+        variants.append((f"float32, stable Chebyshev quadrature {s[0]}x{s[1]}", dict(stable=s, dtype=np.float32)))
     for name, kw in variants:
         row = [name]
         LOST[0] = 0
@@ -85,6 +88,49 @@ def run(verbose=True):
         print("|---|" + "---|" * 8)
         for r in rows:
             print(f"| {r[0]} | " + " | ".join(f"{x:.1e}" for x in r[1:]) + " |")
+    return rows
+
+
+def float32_table(verbose=True):
+    """Stage 3: float32 tolerance table per fixture class, closed form vs stable (Chebyshev) quadrature."""
+    data = fx.load()
+    hard = [c for c in data["cases"] if c["kind"] == "element" and len(c["polygon"]) == 3 and "nonconvex" not in c["tags"]]
+    classes = [("generic", ["generic", "h_scaled", "clockwise"]), ("x on edge / vertex / edge line", ["x_on_edge", "x_at_vertex", "x_on_edge_line"]),
+               ("z -> 0", ["z_to_0"]), ("tiny chords", ["tiny_chord"]), ("elements <= 1e-2 h", ["small_element"]),
+               ("half-plane (d = 0 ... 1, d < 0)", ["half_plane"]), ("engulf / outside support", ["engulf", "outside_support"])]
+    modes = [("closed form", dict()), ("stable (8 nodes x 6 panels)", dict(stable=(8, 6))), ("stable (5 nodes x 4 panels)", dict(stable=(5, 4)))]
+    rows = []
+    np.seterr(all="ignore")
+    for cname, tags in classes:
+        recs = [c for c in hard if any(t in c["tags"] for t in tags)]
+        if cname.startswith("elements"):
+            recs = [c for c in recs if not c["id"].startswith(("small_element-1e0", "small_element-1e1-", "small_element-1-"))]
+        V, X, H = _rel(recs, np.float32)
+        for mname, kw in modes:
+            w = dict(value=0.0, grad=0.0, m11=0.0, m22=0.0)
+            lost = 0
+            for k in KERNELS:
+                v = np2d.value(V, X, k, H, dtype=np.float32, **kw)
+                g = np2d.gradient(V, X, k, H, dtype=np.float32, **kw)
+                m1 = np2d.moment(V, X, k, (1, 1), H, dtype=np.float32, **kw)
+                m2 = np2d.moment(V, X, k, (2, 2), H, dtype=np.float32, **kw)
+                for i, c in enumerate(recs):
+                    e = c["kernels"][k]
+                    ds = [abs(float(v[i]) - float(mp.mpf(e["value"]))),
+                          max(abs(float(g[i, j]) - float(mp.mpf(e["grad"][j]))) for j in range(2)) * float(H[i]),
+                          abs(float(m1[i]) - float(mp.mpf(e["moments"]["1,1"]))) / float(H[i]) ** 2,
+                          abs(float(m2[i]) - float(mp.mpf(e["moments"]["2,2"]))) / float(H[i]) ** 4]
+                    if not all(np.isfinite(d) for d in ds):
+                        lost += 1
+                        continue
+                    for key, d in zip(("value", "grad", "m11", "m22"), ds):
+                        w[key] = max(w[key], d)
+            rows.append((cname, len(recs), mname, w, lost // 4 if lost else 0))
+    if verbose:
+        print("\nfloat32 tolerance table (max abs error over fixtures of the class, 4 kernels)\n")
+        print("| class (cases) | method | value | grad x h | m_11 | m_22 | cases not representable in f32 |\n|---|---|---|---|---|---|---|")
+        for cname, n, mname, w, lost in rows:
+            print(f"| {cname} ({n}) | {mname} | {w['value']:.1e} | {w['grad']:.1e} | {w['m11']:.1e} | {w['m22']:.1e} | {lost} |")
     return rows
 
 
@@ -171,7 +217,8 @@ def timing(N=200_000, verbose=True):
     V = rng.uniform(-1, 1, (N, 3, 2))
     X = rng.uniform(-0.5, 0.5, (N, 2))
     out = []
-    for label, kw in [("closed form", {}), ("Gauss 3x4", dict(quad=3)), ("Gauss 4x4", dict(quad=4))]:
+    for label, kw in [("closed form", {}), ("Gauss 3x4", dict(quad=3)), ("Gauss 4x4", dict(quad=4)),
+                      ("stable 6x5", dict(stable=(6, 5))), ("stable 8x6", dict(stable=(8, 6)))]:
         row = [label]
         for what, fn in [("value", lambda: np2d.value(V, X, "w4", 1.0, **kw)),
                          ("grad", lambda: np2d.gradient(V, X, "w4", 1.0, **kw)),
@@ -192,6 +239,7 @@ def timing(N=200_000, verbose=True):
 
 if __name__ == "__main__":
     run()
+    float32_table()
     tiny_relative()
     vs_area_quadrature()
     timing()

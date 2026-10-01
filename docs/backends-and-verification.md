@@ -32,7 +32,8 @@ Every later stage loads this same set; tolerances are tied to dtype:
 | stage | value | gradient | notes |
 |---|---|---|---|
 | numpy f64 | 1e-12 | 1e-11 | after chord clipping, not for `L_T << h, p >= 2` |
-| numpy f32 | to be measured | to be measured | recorded per case, becomes the f32 tolerance table |
+| numpy f32 (stable Chebyshev quadrature 8×6) | 5e-7 (measured 8e-8) | 2e-6 (measured 3e-7) | moments 2e-7 (measured 3e-9); per class: `exactness-and-approximations.md` |
+| numpy f32 (closed form) | 1e-4 (measured 6e-5) | 5e-4 (measured 3.5e-4) | limited by monomial-coefficient cancellation, see below |
 | torch / warp | as numpy at the same dtype | as numpy | plus autodiff-vs-analytic below |
 
 ## Interfaces
@@ -101,6 +102,12 @@ The only genuine float64 failure is the tiny-element value/even-moment cancellat
 verified remedy (`derivations/edge-value-identity.md` §6; the unsplit polynomial form reaches 2e-16 relative at `L_T/h = 1e-6`).
 float32 will need exact combined indicator weights and a better-conditioned polynomial basis (kernel coefficients are
 up to ~10³ in magnitude).
+
+### Stage 3 status (float32)
+
+Measured float32 tolerance table per fixture class and the conditioning fix are in `exactness-and-approximations.md`:
+exact Chebyshev compilation of the edge profiles + stable quadrature brings float32 to ≈ machine epsilon
+(value 8e-8, gradient 3e-7, moments 3e-9 over all representable fixtures), a 700–1000× gain over the closed form in float32.
 
 ### Stage 2 status
 
