@@ -26,6 +26,9 @@ wp.config.quiet = True
 
 # channel layout: 0..2 = m(0,0), m(1,0), m(0,1);  3,4 = g(0,0)_{x,y};  5,6 = g(1,0)_{x,y};  7,8 = g(0,1)_{x,y}
 NCH = 9
+GAUSS_N = 8                 # nodes per direction of the far-field Gauss branch
+FAR_RATIO = 1.0             # |centroid - x| >= FAR_RATIO * longest edge   (element far from x relative to its size)
+TINY = 0.05                 # elements <= TINY h may use Gauss even when straddling a kernel radius
 ALPHAS = [(0, 0), (1, 0), (0, 1)]
 
 
@@ -116,6 +119,7 @@ class DevicePlan:
         self.rin_idx = rin_idx
         self.nE, self.nV = len(pb.E), len(pb.V)
         i32 = lambda rows, k: wp.array(np.array([r[k] for r in rows] or [0], dtype=np.int32), dtype=int, device=device)
+        self.radii_host = list(pb.radii)
         self.radii = wp.array(np.array(pb.radii, dtype=np.float64), dtype=f64, device=device)
         self.cn = wp.array(np.array(pb.cn or [0], dtype=np.int32), dtype=int, device=device)
         self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np.float64), dtype=f64, device=device)
@@ -123,6 +127,19 @@ class DevicePlan:
         self.e = [i32(E, k) for k in range(9)]          # ch, i, a, b, R, var, gate, c0, c1
         self.v = [i32(V, k) for k in range(6)]          # ch, R, var, gate, c0, c1 (+ mR below)
         self.v_mR = wp.array(np.array([r[6] for r in V] or [0.0], dtype=np.float64), dtype=f64, device=device)
+        # u-basis of the kernel (pi W = sum b_k (R - r)^k per block), for the far-field Gauss branch
+        from .np_fem import kernel_ubasis
+        ubR, ubK, ubB = [], [], []
+        for R, d in kernel_ubasis(kernel).items():
+            for k, b in d.items():
+                ubR.append(float(R)); ubK.append(int(k)); ubB.append(float(b))
+        self.nub = len(ubR)
+        self.ubR = wp.array(np.array(ubR, dtype=np.float64), dtype=f64, device=device)
+        self.ubK = wp.array(np.array(ubK, dtype=np.int32), dtype=int, device=device)
+        self.ubB = wp.array(np.array(ubB, dtype=np.float64), dtype=f64, device=device)
+        gx, gw = np.polynomial.legendre.leggauss(GAUSS_N)
+        self.gx = wp.array((gx + 1) / 2, dtype=f64, device=device)
+        self.gw = wp.array(gw / 2, dtype=f64, device=device)
 
 
 # ------------------------------------------------------------------------------------------------ the pair kernel
@@ -137,6 +154,8 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
                          v_ch: wp.array(dtype=int), v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
                          v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=f64), n_v: int,
                          cn: wp.array(dtype=int), cc: wp.array(dtype=f64),
+                         ub_R: wp.array(dtype=f64), ub_K: wp.array(dtype=int), ub_B: wp.array(dtype=f64), n_ub: int,
+                         gnode: wp.array(dtype=f64), gwt: wp.array(dtype=f64), n_g: int, far_ratio: f64, tiny: f64, n_radii: int,
                          wout: wp.array2d(dtype=f64), gout: wp.array2d(dtype=f64)):
     tid = wp.tid()
     qi = pair_q[tid]
@@ -163,6 +182,88 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
         l[k] = (a[0] * b[1] - a[1] * b[0]) / d2
         gx[k] = (a[1] - b[1]) / d2
         gy[k] = (b[0] - a[0]) / d2
+    # ---- far-field Gauss branch: element far from x relative to its size, kernel smooth on it (no straddled radius) or element tiny
+    cxm = (r0[0] + r1[0] + r2[0]) / f64(3.0)
+    cym = (r0[1] + r1[1] + r2[1]) / f64(3.0)
+    rho = wp.sqrt(cxm * cxm + cym * cym)
+    emax = f64(0.0)
+    rmin = f64(1.0e300)
+    rmax = f64(0.0)
+    for e in range(3):
+        pa = r0
+        pb = r1
+        if e == 1:
+            pa = r1
+            pb = r2
+        if e == 2:
+            pa = r2
+            pb = r0
+        dd = pb - pa
+        ln = wp.sqrt(dd[0] * dd[0] + dd[1] * dd[1])
+        emax = wp.max(emax, ln)
+        tt = wp.clamp(-(pa[0] * dd[0] + pa[1] * dd[1]) / (ln * ln), f64(0.0), f64(1.0))
+        qx = pa[0] + tt * dd[0]
+        qy = pa[1] + tt * dd[1]
+        rmin = wp.min(rmin, wp.sqrt(qx * qx + qy * qy))
+        rmax = wp.max(rmax, wp.sqrt(pa[0] * pa[0] + pa[1] * pa[1]))
+    straddle = int(0)
+    for ri in range(n_radii):
+        if rmin < radii[ri] and radii[ri] < rmax:
+            straddle = 1
+    if rho >= far_ratio * emax and (straddle == 0 or emax <= tiny):
+        w0 = f64(0.0)
+        w1 = f64(0.0)
+        w2 = f64(0.0)
+        gx0 = f64(0.0)
+        gy0 = f64(0.0)
+        gx1 = f64(0.0)
+        gy1 = f64(0.0)
+        gx2 = f64(0.0)
+        gy2 = f64(0.0)
+        area2 = wp.abs(d2)
+        for ia in range(n_g):
+            for ib in range(n_g):
+                ua = gnode[ia]
+                vb = gnode[ib]
+                m1 = ua
+                m2 = vb * (f64(1.0) - ua)
+                m0 = f64(1.0) - m1 - m2
+                wt = gwt[ia] * gwt[ib] * (f64(1.0) - ua) * area2
+                yx = m0 * r0[0] + m1 * r1[0] + m2 * r2[0]
+                yy = m0 * r0[1] + m1 * r1[1] + m2 * r2[1]
+                rr = wp.sqrt(yx * yx + yy * yy)
+                Wv = f64(0.0)
+                dW = f64(0.0)
+                for t_ in range(n_ub):
+                    Rb = ub_R[t_]
+                    if rr < Rb:
+                        uu = Rb - rr
+                        kk = ub_K[t_]
+                        Wv += ub_B[t_] * wp.pow(uu, f64(kk))
+                        if kk >= 1:
+                            dW -= ub_B[t_] * f64(kk) * wp.pow(uu, f64(kk - 1))
+                Wv = Wv * inv_pi
+                dWr = dW * inv_pi / wp.max(rr, f64(1.0e-300))
+                w0 += wt * m0 * Wv
+                w1 += wt * m1 * Wv
+                w2 += wt * m2 * Wv
+                # grad_x W = -(W'/r) y
+                gx0 += -wt * m0 * dWr * yx
+                gy0 += -wt * m0 * dWr * yy
+                gx1 += -wt * m1 * dWr * yx
+                gy1 += -wt * m1 * dWr * yy
+                gx2 += -wt * m2 * dWr * yx
+                gy2 += -wt * m2 * dWr * yy
+        wout[tid, 0] = w0
+        wout[tid, 1] = w1
+        wout[tid, 2] = w2
+        gout[tid, 0] = gx0 / h
+        gout[tid, 1] = gy0 / h
+        gout[tid, 2] = gx1 / h
+        gout[tid, 3] = gy1 / h
+        gout[tid, 4] = gx2 / h
+        gout[tid, 5] = gy2 / h
+        return
     # ccw copy for the edge machinery
     p0 = r0
     p1 = r1
@@ -322,6 +423,7 @@ def pair_weights(pair_q, pair_e, positions, supports, vertices, elements, kernel
         wp.launch(_pair_weights_kernel, dim=P, device=device, inputs=[
             wq, we, wpos, wsup, wv, wel, plan.radii, plan.rin_idx, f64(1 / np.pi),
             *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc,
+            plan.ubR, plan.ubK, plan.ubB, plan.nub, plan.gx, plan.gw, GAUSS_N, f64(FAR_RATIO), f64(TINY), len(plan.radii_host),
             wp.from_torch(wout, dtype=f64), wp.from_torch(gout, dtype=f64)])
         wp.synchronize_device(device)
     w, G = wout[:P], gout[:P].reshape(P, 3, 2)
