@@ -1,6 +1,6 @@
 # Scene architecture: bodies, representations, per-type adjacency (2D)
 
-**Status:** [V] — `python/edgebound/scene.py`, `warpbc.edge_channels`, tests `tests/edge/test_scene.py` (38), benchmark `python -m edgebound.scene_bench`.
+**Status:** [V] — `python/edgebound/scene.py`, `warpbc.edge_channels`, tests `tests/edge/test_scene.py` (44), benchmark `python -m edgebound.scene_bench`; used by the DFSPH solver of `dfsph-validation.md`.
 Supersedes the "one global element grid" structure of `boundaryOps.py` for scenes (`boundaryOps` stays the volume-element engine).
 
 ## 1. Why
@@ -58,7 +58,12 @@ everything else is ray cast against a y-binned edge list.
 
 so a rigidly moving wall (`BodyField.rigid(body)`: `a0 = v_c`, `a1 = ω [[0,-1],[1,0]]`) and any hydrostatic wall field need no nodal data. The four gradient
 modes enter as an affine map of the field per query (`s A + c`): Naive `(1, 0)`, Difference `(1, -f_i)`, Summation `(1, +f_i)`, Symmetric `(ρ_i/ρ_b, (ρ_b/ρ_i) f_i)`.
-`BodyField(perQuery=True)` gives the value at each query position (a wall pressure extrapolated from the particle itself, `p_b = p_i + ρ g·(x' − x_i)`).
+`BodyField(perQuery=True)` gives the value at each query position and, optionally, one gradient per query (`a1` of shape `[N,2]` / `[N,C,2]`): a wall pressure
+extrapolated from the particle itself, `p_b = p_i + ρ g·(x' − x_i)`.
+
+**Volume representations as moments.** The default `Scene(volumeMode='moments')` turns the P1 pair weights of a `VolumeRep` into the same `MomentPairs`
+(`λ = Σ w_k`, `g0 = Σ G_k`, `m1 = Σ w_k y_k`, `g1 = Σ y_k ⊗ G_k` — exact, `y` is a P1 function), so volumes accept every linear and per-query field and give an exact torque as well;
+`volumeMode='nodal'` keeps the nodal-data path (`boundaryOps.boundaryOperation`) for fields that are not linear in position.
 
 **Reactions.** Force on a body = `−Σ m_i (contribution)`, equal to minus the total momentum change (tested to 1e-12). The torque about the body centre,
 `−Σ m_i A_i ∫ (x'−c) × ∇_x W dA'`, is **exact for a constant field** (it needs exactly `g1`); tested against a 14×14-per-triangle Gauss quadrature to 5e-4 relative
@@ -69,13 +74,18 @@ reactions and an approximate nodal torque.
 
 * `ImplicitRep(DiskBody | HalfPlaneBody)`: the hard tier policy of `tier-selection-2d.md` per particle: R/h ≥ 2 tier 3, ≤ 0.2 tier 4, else the exact **surface polygon** of
   the shape (area preserving, edges ≤ h/16; cavities as clockwise loops with background 1) — the fallback is now a `SurfaceRep`, not a triangle fan.
-  Constant fields only (no first moments for tiers 3/4 yet).
+  Constant fields only for disks (no first moments for tiers 3/4 of curved bodies yet); **half planes carry first moments exactly** (below).
 * `SdfRep(values, origin, spacing, fallback=SurfaceRep)`: the only *generic* implicit type (sampled, so it works for any Warp kernel). Bilinear `d` with node-blended
   gradient and Laplacian; surface curvature `κ = Δd / (1 − dΔd)` (2D), `λ = F0 + κF1 + κ²F2` via the tier-3 tables. **Validity is a hard per-particle switch**:
   `|κh| ≤ 0.5` and `| |∇d| − 1 | ≤ 0.1` at the particle and at 16 probes on the circles of radius h/2 and h around it. This rules out ridges / medial axes (the unit-gradient test)
   and convex corners (κ → ∞); invalid particles use the fallback surface (error if none was given). Tested: a sampled disk (R = 3h, spacing h/16) is within 5e-4 of the exact
   disk; a box SDF with a fallback box is within 2e-3 everywhere, 1e-4 on average. The approximation error of the model is the tier-3 error (`κ³` terms) plus the sampling error
   of the SDF (here h/16); both are reported by the tests, not hidden.
+* **Planar first moments (tier 3 with linear fields).** For a half plane at distance `q = d/h` with the fluid-side normal `n`, `λ(q)` is the tabulated `F0`, and the first moments follow from
+  `λ` alone by integration by parts (divergence theorem, tangential parts vanish by symmetry):
+  `m1 = −h (qλ + Λ(q)) n`, `Λ(q) = ∫_q^1 λ`, `g1 = (λ − qλ′) n⊗n + λ t⊗t` (`Tier3.planar_moments`; `Λ` is the exact integral of the Hermite spline; `d < 0` by the complement, `g1 → I − g1_c`).
+  They are exact for `HalfPlaneBody` and used for flat parts of an `SdfRep` (O(κh) error where the SDF surface is curved: λ keeps its κ terms, the moments do not). With them a hydrostatic or rigidly
+  moving wall field works with tier 3 as well; tested against the exact surface loop to 1e-6 (half planes) and 2e-3 (sampled SDF).
 
 ## 5. Cost (benchmark: 1e6 particles, h = 3Δx, tank loop of 2000 edges + 100 small bodies, RTX-class GPU, float64)
 

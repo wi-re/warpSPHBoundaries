@@ -35,7 +35,7 @@ def body_pair(dev, center=(0.3, -0.2), angle=0.7, v=(0.4, -0.1), w=0.9):
     kw = dict(center=center, angle=angle, linearVelocity=v, angularVelocity=w)
     a = Body(bodyId=0, reps=[SurfaceRep.polygon(LSHAPE)], **kw)
     b = Body(bodyId=0, reps=[VolumeRep(LV, LE)], **kw)
-    return Scene([a], dev), Scene([b], dev)
+    return Scene([a], dev), Scene([b], dev, volumeMode="nodal")
 
 
 def particles(dev, n=60, seed=1, sup=0.9):
@@ -282,3 +282,64 @@ def test_per_query_fields_equal_the_body_field_sampled_at_the_queries(device):
     got = sceneOperation(ps2, pr, sc, bodyFields=[BodyField(pq, None, perQuery=True)])
     unit = sceneOperation(ps2, pr, sc, bodyFields=[BodyField(torch.tensor(1.0, dtype=TD, device=device), None)])
     np.testing.assert_allclose(got.cpu().numpy(), (pq[:, None] * unit).cpu().numpy(), atol=1e-13)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_volume_moments_mode_equals_nodal_mode_and_surface(device):
+    """volume representation as exact-moment pair sets (default) = nodal P1 path = surface loops; the torque is now exact for volumes too."""
+    sa, sb = body_pair(device)
+    sm = Scene([Body(bodyId=0, center=(0.3, -0.2), angle=0.7, linearVelocity=(0.4, -0.1), angularVelocity=0.9, reps=[VolumeRep(LV, LE)])], device)
+    ps = particles(device)
+    fld = [BodyField.rigid(sa.bodies[0], rho=1.3)]
+    for op in [WarpOperation.Density, WarpOperation.Interpolate, WarpOperation.Gradient, WarpOperation.Divergence, WarpOperation.Curl]:
+        oa = sceneOperation(ps, props(op), sa, bodyFields=fld)
+        om = sceneOperation(ps, props(op), sm, bodyFields=fld)
+        np.testing.assert_allclose(om.cpu().numpy(), oa.cpu().numpy(), atol=2e-10 * max(1, float(oa.abs().max())), rtol=0)
+    f = BodyField(torch.tensor(1.7, dtype=TD, device=device), None)
+    _, ra = sceneOperation(ps, props(WarpOperation.Gradient), sa, bodyFields=[f], returnReaction=True)
+    _, rm = sceneOperation(ps, props(WarpOperation.Gradient), sm, bodyFields=[f], returnReaction=True)
+    np.testing.assert_allclose(rm.force.cpu().numpy(), ra.force.cpu().numpy(), atol=1e-10)
+    np.testing.assert_allclose(rm.torque.cpu().numpy(), ra.torque.cpu().numpy(), atol=1e-9)
+    assert rm.torqueExact == [True]
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_per_query_gradient_field(device):
+    """perQuery with a per-query gradient a1_i equals the body linear field when a1_i is the same for all queries."""
+    ps = particles(device, n=40, seed=12)
+    sc = Scene([Body(center=(0.2, 0.1), angle=0.4, reps=[SurfaceRep.polygon(LSHAPE)])], device)
+    body = sc.bodies[0]
+    a0 = torch.tensor(0.7, dtype=TD, device=device)
+    a1 = torch.tensor([0.3, -0.5], dtype=TD, device=device)
+    ref = sceneOperation(ps, props(WarpOperation.Gradient), sc, bodyFields=[BodyField(a0, a1)])
+    Ax = a0 + (ps.positions - body.center) @ a1
+    got = sceneOperation(ps, props(WarpOperation.Gradient), sc, bodyFields=[BodyField(Ax, a1[None].expand(40, 2).contiguous(), perQuery=True)])
+    np.testing.assert_allclose(got.cpu().numpy(), ref.cpu().numpy(), atol=1e-12)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_half_plane_first_moments_and_linear_fields(device):
+    """tier-3 planar first moments: HalfPlane / flat-wall SDF with a linear boundary field equals the exact surface (box loop) result."""
+    box = SurfaceRep.box((0, 0), (1, 1), solid="outside")
+    h = 0.1
+    rng = np.random.default_rng(3)
+    P = np.concatenate([rng.uniform(0.01, 0.99, (200, 2))])
+    # keep particles at least one support from the corners so the single wall model is exact (no second wall within h)
+    cx = np.minimum(P[:, 0], 1 - P[:, 0]) > 1.01 * h
+    P = P[cx & (np.minimum(P[:, 1], 1 - P[:, 1]) < h)]
+    ps = state(P, device, sup=h, rho=np.ones(len(P)))
+    a0 = torch.as_tensor(np.random.default_rng(1).normal(size=len(P)), dtype=TD, device=device)
+    a1 = torch.tensor([0.0, -9.81], dtype=TD, device=device)
+    fld = BodyField(a0, a1, perQuery=True)
+    ref = sceneOperation(ps, props(WarpOperation.Gradient, mode=GradientScheme.Symmetric), Scene([Body(reps=[box])], device), queryValues=a0, bodyFields=[fld])
+    # the wall seen as half planes / SDF of the box (only the bottom/top walls matter for the selected particles, side walls are > h away)
+    hp = Scene([Body(bodyId=i, reps=[ImplicitRep(HalfPlaneBody(p_, n_))]) for i, (p_, n_) in enumerate(
+        [((0.0, 0.0), (0.0, 1.0)), ((0.0, 1.0), (0.0, -1.0)), ((0.0, 0.0), (1.0, 0.0)), ((1.0, 0.0), (-1.0, 0.0))])], device)
+    got = sceneOperation(ps, props(WarpOperation.Gradient, mode=GradientScheme.Symmetric), hp, queryValues=a0, bodyFields=[fld] * 4)
+    np.testing.assert_allclose(got.cpu().numpy(), ref.cpu().numpy(), atol=1e-6 * max(1, float(ref.abs().max())))
+    def boxsdf(p):
+        q = (p - 0.5).abs() - 0.5
+        return -(q.clamp(min=0).norm(dim=1) + q.max(dim=1).values.clamp(max=0))
+    sdf = SdfRep.fromFunction(boxsdf, (-0.3, -0.3), (1.3, 1.3), h / 16, fallback=box)
+    got = sceneOperation(ps, props(WarpOperation.Gradient, mode=GradientScheme.Symmetric), Scene([Body(reps=[sdf])], device), queryValues=a0, bodyFields=[fld])
+    np.testing.assert_allclose(got.cpu().numpy(), ref.cpu().numpy(), atol=2e-3 * max(1, float(ref.abs().max())))

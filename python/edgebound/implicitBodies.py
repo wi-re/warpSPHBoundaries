@@ -65,6 +65,40 @@ class Tier3:
         self.q = torch.as_tensor(q, dtype=torch.float64, device=device)
         self.F = torch.as_tensor(F, dtype=torch.float64, device=device)
         self.dF = torch.as_tensor(dF, dtype=torch.float64, device=device)
+        # Lambda(q) = int_q^1 F0(s) ds (exact integral of the Hermite spline), for the first moment of a half plane
+        hh = self.q[1:] - self.q[:-1]
+        seg = 0.5 * hh * (self.F[0][:-1] + self.F[0][1:]) + hh * hh * (self.dF[0][:-1] - self.dF[0][1:]) / 12.0
+        self.Lam = torch.cat([torch.flip(torch.cumsum(torch.flip(seg, [0]), 0), [0]), torch.zeros(1, dtype=torch.float64, device=device)])
+
+    def planar_moments(self, d):
+        """first moments of the half plane solid at SIGNED distance d / h (positive on the fluid side, units of h), valid for d >= 0 and (by the complement) d < 0:
+        returns (lam, dlam/dq, m1n, g1nn) with
+            m1 = int_solid y W dA  = -m1n n           (n: unit normal into the fluid, y = x' - x; no tangential part)
+            g1 = int_solid y (x) grad_x W dA = g1nn n (x) n + g1tt t (x) t,   g1tt = lam,   g1nn = lam - q lam'
+        all in units of h (m1n: h, g1: dimensionless)."""
+        a = d.abs()
+        lam0, dl0 = self._hermite(0, a)
+        # Lambda by Hermite interpolation (derivative -F0)
+        qq = a.clamp(float(self.q[0]), 1.0)
+        idx = torch.bucketize(qq, self.q[1:-1].contiguous())
+        q0, q1 = self.q[idx], self.q[idx + 1]
+        hq = q1 - q0
+        t_ = (qq - q0) / hq
+        f0, f1 = self.Lam[idx], self.Lam[idx + 1]
+        m0, m1_ = -self.F[0][idx] * hq, -self.F[0][idx + 1] * hq
+        t2, t3 = t_ * t_, t_ * t_ * t_
+        Lam = (2 * t3 - 3 * t2 + 1) * f0 + (t3 - 2 * t2 + t_) * m0 + (-2 * t3 + 3 * t2) * f1 + (t3 - t2) * m1_
+        Lam = torch.where(a < 1.0, Lam, torch.zeros_like(Lam))
+        m1n_c = a * lam0 + Lam                       # complement / solid-side half plane moment (positive d)
+        g1nn_c = lam0 - a * dl0
+        g1tt_c = lam0
+        pos = d >= 0
+        lam = torch.where(pos, lam0, 1.0 - lam0)
+        dlam = torch.where(pos, dl0, dl0)           # d lambda / d d is the same for both sides (see `lam`)
+        m1n = m1n_c                                 # d < 0: the solid contains the particle, m1 = -(m1 of the fluid complement) = -m1n_c n as well (the full-plane first moment is 0)
+        g1nn = torch.where(pos, g1nn_c, 1.0 - g1nn_c)
+        g1tt = torch.where(pos, g1tt_c, 1.0 - g1tt_c)
+        return lam, dlam, m1n, g1nn, g1tt
 
     def _hermite(self, k, q):
         """F_k(q), F_k'(q) by cubic Hermite interpolation (q clamped to the table, F = 0 for q >= 1)."""

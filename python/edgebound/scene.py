@@ -492,9 +492,12 @@ class ParticleCells:
 
 
 class Scene:
-    def __init__(self, bodies: List[Body], device="cpu"):
+    def __init__(self, bodies: List[Body], device="cpu", volumeMode: str = "moments"):
+        """`volumeMode`: 'moments' (volume representations as pair sets of exact moments, fields linear in position) or 'nodal' (P1 nodal data through
+        `boundaryOps.boundaryOperation`, as for deformable / measured boundary fields)."""
         self.bodies = bodies
         self.device = device
+        self.volumeMode = volumeMode
         for b in bodies:
             b.center = b.center.to(device)
             b.linearVelocity = b.linearVelocity.to(device)
@@ -553,7 +556,15 @@ class Scene:
             sub = _subState(queryParticles, cand, lpos, lsup, dev)
             adj = buildBoundaryAdjacency(sub, operationProperties, rep.mesh, grid=rep.grid(float(lsup.max())), supportMax=float(lsup.max()))
             adj.gradWeights = adj.gradWeights @ pose.R.T                                 # gradient vectors back to the world frame
-            ent["volume"].append((rep, adj, cand))
+            if self.volumeMode == "nodal":
+                ent["volume"].append((rep, adj, cand))
+            else:                                                                        # fields linear in position: moments of the P1 weights (y_k are P1 functions)
+                qw = queryParticles.positions.to(dev, F64)[cand][adj.pairQuery.long()]
+                Xk = pose.toWorld(rep.mesh.vertices)[rep.mesh.elements[adj.pairElement.long()].long()]            # [P,3,2]
+                y = Xk - qw[:, None, :]
+                w, G = adj.weights, adj.gradWeights
+                ent["surface"].append(MomentPairs(cand[adj.pairQuery.long()], w.sum(1), G.sum(1), torch.einsum("pk,pkd->pd", w, y),
+                                                  torch.einsum("pkd,pkj->pdj", y, G)))
         elif isinstance(rep, (ImplicitRep, SdfRep)):
             if isinstance(rep, ImplicitRep):
                 lam, g, tier, _ = evaluateBody(rep.shape, lpos, lsup, name, dev, rep.policy, {"t3": _tier3(name, str(dev)), "t4": _tier4(name, str(dev))})
@@ -566,12 +577,33 @@ class Scene:
                     raise ValueError("SdfRep: the SDF is not smooth at the scale of h for some particles and no fallback SurfaceRep was given")
             sel = (~low) & (lam != 0)
             idx = torch.nonzero(sel).flatten()
-            pairs = MomentPairs(cand[idx], lam[idx], g[idx]).toWorld(pose) if len(idx) else None
+            pairs = None
+            if len(idx):
+                mom = _planar_moments(rep, lpos[idx], lsup[idx], name, dev)
+                pairs = (MomentPairs(cand[idx], lam[idx], g[idx], *mom) if mom is not None else MomentPairs(cand[idx], lam[idx], g[idx])).toWorld(pose)
             if pairs is not None:
                 ent["implicit"].append(pairs)
             if bool(low.any()):
                 li = torch.nonzero(low).flatten()
                 ent["surface"].append(fb.pairs(lpos[li], lsup[li], cand[li], name, dev).toWorld(pose))
+
+
+def _planar_moments(rep, lpos, lsup, name, dev):
+    """(m1 [P,2], g1 [P,2,2]) of the half-plane model of the surface at the particle (exact for planes; O(kappa h) error for curved SDF surfaces, where the
+    lambda itself keeps its tier-3 curvature terms); None for primitives without first moments (disks)."""
+    if isinstance(rep, ImplicitRep):
+        if not isinstance(rep.shape, HalfPlaneBody):
+            return None
+        d, n, _ = rep.shape.signed(lpos)
+    else:
+        d, n, _, _ = rep.signed(lpos)
+    t3 = _tier3(name, str(dev))
+    q = d / lsup
+    lam, dlam, m1n, g1nn, g1tt = t3.planar_moments(q)
+    m1 = -(m1n * lsup)[:, None] * n
+    tt = torch.stack([-n[:, 1], n[:, 0]], 1)
+    g1 = g1nn[:, None, None] * n[:, :, None] * n[:, None, :] + g1tt[:, None, None] * tt[:, :, None] * tt[:, None, :]
+    return m1, g1
 
 
 def _sdfTier3(rep: SdfRep, lpos, lsup, name, dev):
@@ -628,8 +660,9 @@ def _apply(op, mode, pairs: MomentPairs, body: Body, fld: BodyField, ps, queryVa
         a0 = torch.as_tensor(fld.a0, dtype=F64, device=dev)
         scalar = a0.ndim == 1
         a0 = a0.reshape(-1, 1) if scalar else a0
-        a1 = None if fld.a1 is None else torch.as_tensor(fld.a1, dtype=F64, device=dev)
-        a1 = None if a1 is None else (a1.reshape(1, 2) if scalar else a1)
+        a1 = None if fld.a1 is None else torch.as_tensor(fld.a1, dtype=F64, device=dev)          # [N,2] (scalar) or [N,C,2]: gradient at each query
+        if a1 is not None:                                              # a constant gradient (leading axis added) or one gradient per query
+            a1 = a1.reshape(1, 1, 2) if (scalar and a1.ndim == 1) else (a1.reshape(-1, 1, 2) if scalar else (a1[None] if a1.ndim == 2 else a1))
     else:
         a0, a1, scalar = _canon(fld.a0, fld.a1)
         a0, a1 = a0.to(dev), (None if a1 is None else a1.to(dev))
@@ -638,14 +671,16 @@ def _apply(op, mode, pairs: MomentPairs, body: Body, fld: BodyField, ps, queryVa
     x = ps.positions.to(dev, F64)[q]
     if fld.perQuery:
         Ai = a0[q]                                                       # value at the query position  [P,C]
+        a1p = None if a1 is None else (a1.expand(len(q), -1, -1) if a1.shape[0] == 1 else a1[q])       # [P,C,2]
     else:
         Ai = a0[None].expand(len(q), -1)
         if a1 is not None:
             Ai = Ai + (x - c) @ a1.T                                    # A at the query position  [P,C]
+        a1p = None if a1 is None else a1[None].expand(len(q), -1, -1)
     if op == WarpOperation.Interpolate:
         out = Ai * pairs.lam[:, None]
-        if a1 is not None:
-            out = out + pairs.m1 @ a1.T
+        if a1p is not None:
+            out = out + torch.einsum("pcd,pd->pc", a1p, pairs.m1)
         return (out[:, 0] if scalar else out), None, None
     # gradient family: effective field  s * A + cvec
     f = None
@@ -665,8 +700,8 @@ def _apply(op, mode, pairs: MomentPairs, body: Body, fld: BodyField, ps, queryVa
         s, cv = torch.ones(len(q), dtype=F64, device=dev), torch.zeros_like(Ai)
     A0 = s[:, None] * Ai + cv                                           # [P,C]
     out = A0[:, :, None] * pairs.g0[:, None, :]                         # [P,C,2]
-    if a1 is not None:
-        out = out + s[:, None, None] * torch.einsum("cd,pdj->pcj", a1, pairs.g1)
+    if a1p is not None:
+        out = out + s[:, None, None] * torch.einsum("pcd,pdj->pcj", a1p, pairs.g1)
     force = torque = None
     if scalar:
         m = ps.masses.to(dev, F64)[q]
