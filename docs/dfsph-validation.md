@@ -73,9 +73,39 @@ The same case with the domain (inner faces at the box) given as the representati
 * four half planes double count the corner region: λ of a particle `0.55 dx` from both walls is `0.4166` instead of `0.3738` (+11 %), and the trajectories deviate at once (7e-4 after 0.1 s). Hence the need for the SDF
   switch (probe test → fallback surface) or an exact corner primitive.
 
-## 5. Not done / next
+## 5. Moving bodies and the force on them (`dfsph_cases.tank_with_obstacle`, `python -m edgebound.dfsph_validation obstacle`)
+
+A hexagon (circumradius 0.06 m, `SurfaceRep` loop or six triangles as `VolumeRep`) rotating at a prescribed `omega` in the tank, carved out of the lattice with the same first-row distance as the flat walls.
+What a prescribed moving body adds to the solver (all through the scene layer, nothing special-cased):
+
+* **source term** `−dt (v_p,i − v_b)·∇W` → `−dt (v_p,i·∇λ − ∫ v_b·∇W)`: one `Divergence` op with `BodyField.rigid(body)` (`a0 = v_c`, `a1 = ω J`: exact first moments);
+* **wall pressure** `∂p/∂n = ρ (g − a_wall)·n` with the wall acceleration of the body at the particle, `a_wall = a + α J s − ω² s` (`Body.accelerationAt`; the `O(ω²h²)` curvature of `p_b` is neglected, 2 % of the gravity
+  term at ω = 4 rad/s, h = 0.022);
+* **friction** relative to the wall velocity, `v_wall = ∫ v_b W / λ` (`Interpolate`), per body; the divergence solve sees the wall automatically when a body moves (`boundaryInDivergence=None`);
+* the bodies move after the fluid (`Body.move`), the friction adjacency is re-used as the next step's adjacency (same positions, same poses).
+
+**Forces on every body** are tracked each step (`sim.history[k]`: `pressure` and `friction`, each `[B, 2]`, `balance`): the pressure force is `−Σ m_i a_b,i` of the last pressure pass of each solve (one `perBody` boundary
+operation: the contribution of each body separately), the friction force `Σ m_i fac_i v_tangential,i / dt` (omniSPH's `boundaryPressureForce` / `boundaryDragForce`). `force_coefficients(F, ρ, U, L)` gives `(c_x, c_y)`.
+**Bookkeeping check**: every step `Σ m Δv = dt (m g − ΣF_pressure − ΣF_friction)` holds to round-off (`1e-18`, asserted `< 1e-14` in the tests): the tracked forces are exactly the momentum exchanged with the bodies
+(XSPH and the fluid–fluid pressure forces are pairwise antisymmetric and drop out).
+
+| case (tank 0.6 × 0.30 m, r = 0.005, 0.6 s) | rep | mean `F_y` on the body (t > 0.2) | buoyancy `ρ g A` | mean `F_x` | Σ forces on all bodies / (−weight) | max momentum residual |
+|---|---|---|---|---|---|---|
+| fixed | surface | 0.09250 | 0.09175 | +0.00024 | 0.99939 | 2e-18 |
+| fixed | volume | 0.09250 | 0.09175 | +0.00024 | 0.99939 | 2e-18 |
+| ω = 3 rad/s | surface | 0.08643 | 0.09175 | +0.00175 | 0.99792 | 1e-18 |
+| ω = 3 rad/s | volume | 0.08736 | 0.09175 | +0.00093 | 0.99919 | 1e-18 |
+
+* the fixed body feels the Archimedes force within **0.8 %** (time average; the instantaneous force scatters by ±20 % like every SPH wall force, see §2), and the walls plus the body carry the fluid weight within 0.06 %;
+* the spinning body's mean force is 5–6 % below buoyancy (the rotation drives a flow; friction is 1e-4 of the pressure force at `μ = 5e-3`); surface and volume representation give identical forces for the first steps
+  (`test_surface_and_volume_obstacles_give_the_same_forces`, 1e-9) and then separate through the chaos of the flow;
+* dam break (0.2 × 0.8 m column, box 1.6 × 1.0 m, 1425 particles) into a hexagon spinning at 3 rad/s: no force until the surge arrives (t = 0.36 s), peak horizontal force 1.10 N/m at t = 0.40 s, decaying afterwards
+  (`results/dfsph/dam_hexagon.png`).
+* Not tracked: the **torque** on the body. For a linear pressure field it needs the second moments `∫ y_a y_b ∇W` (exact for surface loops via `|α| = 2` edge channels, not for P1 volume weights); the force is exact.
+
+## 6. Not done / next
 
 * the boundary force of omniSPH (`log.txt`) is not compared (our `wallForce` = `−Σ m a_b` is available per step);
 * omniSPH's barycentric (`sim.barycentricPressure`) MLS pressure at the triangle vertices is not reproduced: it would need nodal data on a refined wall layer (`volumeMode='nodal'`);
 * gradient renormalisation with the exact wall moments (removes the first-row residual of §2), larger resolutions, 3D;
-* the rotating obstacle (the scene layer already carries pose and `BodyField.rigid`), then tier 3/4 around a moving disk.
+* tier 3/4 around a moving disk (needs first moments of curved tier-3/4 bodies), torque via second moments, the gradient correction below.

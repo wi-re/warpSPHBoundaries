@@ -1,7 +1,8 @@
-"""Validation of DFSPH2D on the scene boundary layer.   cd .tmp/omni (a directory with a `cfg` symlink to omniSPH/cfg);  python -m edgebound.dfsph_validation [omni|reps|all]
+"""Validation of DFSPH2D on the scene boundary layer.   cd .tmp/omni (a directory with a `cfg` symlink to omniSPH/cfg);  python -m edgebound.dfsph_validation [omni|reps|obstacle|all]
 
  omni : tank settling and dam break against the compiled omniSPH (identical initial particles, omniSPH conventions: V = pi r^2, wall face one spacing outside the
         block, Wendland C2, same DFSPH loop); walls = omniSPH's triangle slabs as a `VolumeRep`.
+ obstacle : forces on a hexagon (Archimedes, spinning, dam break into it), no omniSPH needed
  reps : the same calibrated rest lattice / dam break with the domain as VolumeRep, SurfaceRep, SdfRep (tier 3 + corner fallback) and four half planes (control).
 """
 import sys
@@ -91,10 +92,59 @@ def reps(r=0.005, T=0.6, dev="cuda:0", snaps=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6)):
     return res
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and (len(sys.argv) < 2 or sys.argv[1] != "obstacle"):
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
     if what in ("omni", "all"):
         vs_omni("tank", T=0.3)
         vs_omni("dam", T=0.6)
     if what in ("reps", "all"):
         reps()
+
+
+# ----------------------------------------------------------------------------------------------------------------------------- bodies in the fluid
+def _forces(sim):
+    t = np.array([h["t"] for h in sim.history])
+    F = np.array([h["pressure"] + h["friction"] for h in sim.history])           # [T, bodies, 2]
+    return t, F
+
+
+def obstacle(dev="cuda:0", out_png=None):
+    """forces on a submerged hexagon: Archimedes for a fixed body, a spinning body, momentum bookkeeping, and a dam break running into a spinning hexagon."""
+    from .dfsph_cases import tank_with_obstacle
+    print("\n### submerged hexagon (R = 0.06 m, A = %.5f m^2) in a tank at rest, r = 0.005, 0.6 s\n" % (1.5 * np.sqrt(3) * 0.06 ** 2))
+    print("| case | rep | mean F_y on the body (t > 0.2) | buoyancy rho g A | mean F_x | sum of forces on all bodies / (-weight) | max momentum-balance residual |")
+    print("|---|---|---|---|---|---|---|")
+    for omega in (0.0, 3.0):
+        for rep in ("surface", "volume"):
+            sim, info = tank_with_obstacle(omega=omega, rep=rep, device=dev)
+            while sim.time < 0.6:
+                sim.step()
+            t, F = _forces(sim)
+            m = t > 0.2
+            fo, fd = F[m, 1].mean(0), F[m, 0].mean(0)
+            print(f"| omega = {omega} rad/s | {rep} | {fo[1]:.5f} | {info['buoyancy']:.5f} | {fo[0]:+.5f} | {(fo + fd)[1] / -info['weight']:.5f} | {max(h['balance'] for h in sim.history):.1e} |")
+    # dam break into a spinning hexagon
+    sim2, info = tank_with_obstacle(L=1.6, H=1.0, fill=0.8, fluidWidth=0.2, Rh=0.06, center=(0.9, 0.11), omega=3.0, device=dev, r=0.006)
+    nkeep = len(sim2.x)
+    while sim2.time < 1.0:
+        sim2.step()
+    t, F = _forces(sim2)
+    fo = F[:, 1]
+    i = int(np.argmax(np.abs(fo[:, 0])))
+    print(f"\ndam break into a hexagon spinning at 3 rad/s (r = 0.006, {nkeep} particles): peak horizontal force on the hexagon {fo[i, 0]:+.4f} N/m at t = {t[i]:.3f} s,"
+          f" peak vertical {fo[np.argmax(np.abs(fo[:, 1])), 1]:+.4f}; max momentum-balance residual {max(h['balance'] for h in sim2.history):.1e}")
+    if out_png:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(1, 2, figsize=(10, 3.4))
+        ax[0].plot(t, fo[:, 0], label="F_x"); ax[0].plot(t, fo[:, 1], label="F_y"); ax[0].set_xlabel("t [s]"); ax[0].set_ylabel("force on the hexagon [N/m]"); ax[0].legend()
+        xs = sim2.x.cpu().numpy()
+        ax[1].scatter(xs[:, 0], xs[:, 1], s=2, c=sim2.v.norm(dim=1).cpu().numpy()); ax[1].set_aspect("equal"); ax[1].set_title(f"t = {sim2.time:.2f} s")
+        fig.tight_layout(); fig.savefig(out_png, dpi=120)
+    return sim2
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "obstacle":
+    import os
+    obstacle(out_png=os.path.join(os.path.dirname(__file__), "..", "..", "results", "dfsph", "dam_hexagon.png"))

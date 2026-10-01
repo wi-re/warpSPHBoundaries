@@ -423,10 +423,19 @@ class Body:
     linearVelocity: tuple = (0.0, 0.0)
     angularVelocity: float = 0.0
     reps: list = field(default_factory=list)
+    linearAcceleration: tuple = (0.0, 0.0)       # prescribed motion: enter the wall pressure condition  dp/dn = rho (g - a_wall) . n
+    angularAcceleration: float = 0.0
 
     def __post_init__(self):
         self.center = torch.as_tensor(self.center, dtype=F64)
         self.linearVelocity = torch.as_tensor(self.linearVelocity, dtype=F64)
+        self.linearAcceleration = torch.as_tensor(self.linearAcceleration, dtype=F64)
+
+    def accelerationAt(self, world):
+        """acceleration of the material points of the body at world positions: a + alpha J s - omega^2 s (s = x - centre)."""
+        s = world - self.center
+        w, al = float(self.angularVelocity), float(self.angularAcceleration)
+        return self.linearAcceleration.to(world.device) + al * torch.stack([-s[:, 1], s[:, 0]], 1) - w * w * s
 
     @property
     def pose(self):
@@ -436,6 +445,8 @@ class Body:
         """explicit Euler pose update (as `warpSPH.rigidBody.integrateRigidBody`); nothing else is rebuilt."""
         self.center = self.center + dt * self.linearVelocity
         self.angle = float(self.angle) + dt * float(self.angularVelocity)
+        self.linearVelocity = self.linearVelocity + dt * self.linearAcceleration.to(self.linearVelocity.device)
+        self.angularVelocity = float(self.angularVelocity) + dt * float(self.angularAcceleration)
 
     def obb(self):
         dev = self.center.device
@@ -728,9 +739,11 @@ class SceneReaction:
 
 
 def sceneOperation(queryParticles, operationProperties: OperationProperties, scene: Scene, adjacency: Optional[SceneAdjacency] = None,
-                   queryValues: Optional[torch.Tensor] = None, bodyFields: Optional[List[BodyField]] = None, returnReaction: bool = False):
+                   queryValues: Optional[torch.Tensor] = None, bodyFields: Optional[List[BodyField]] = None, returnReaction: bool = False,
+                   perBody: bool = False):
     """Boundary contribution of the requested operation (Density, Interpolate, Gradient, Divergence, Curl) for every query particle, summed over all
-    bodies and representations.  `bodyFields[b]` is the `BodyField` of `scene.bodies[b]` (default: a unit density wall without field)."""
+    bodies and representations (`perBody=True`: a tensor [B, N, ...] with the contribution of each body separately).  `bodyFields[b]` is the `BodyField` of
+    `scene.bodies[b]` (default: a unit density wall without field)."""
     dev = scene.device
     adj = adjacency or scene.buildAdjacency(queryParticles, operationProperties)
     op, mode = operationProperties.operation, operationProperties.gradientMode
@@ -745,8 +758,15 @@ def sceneOperation(queryParticles, operationProperties: OperationProperties, sce
     torque = torch.zeros(nb, dtype=F64, device=dev)
     exact = [True] * nb
 
-    def accumulate(idx, contrib):
+    outs = [None] * nb
+
+    def accumulate(idx, contrib, bi=0):
         nonlocal out
+        if perBody:
+            if outs[bi] is None:
+                outs[bi] = torch.zeros((N, *contrib.shape[1:]), dtype=F64, device=dev)
+            outs[bi].index_add_(0, idx, contrib)
+            return
         if out is None:
             out = torch.zeros((N, *contrib.shape[1:]), dtype=F64, device=dev)
         out.index_add_(0, idx, contrib)
@@ -755,7 +775,7 @@ def sceneOperation(queryParticles, operationProperties: OperationProperties, sce
         body, fld = ent["body"], bodyFields[bi]
         for s in [s for s in ent["surface"] + ent["implicit"] if s is not None and len(s.q)]:
             contrib, f, t = _apply(op, mode, s, body, fld, queryParticles, qv, rhoI, dev)
-            accumulate(s.q, contrib)
+            accumulate(s.q, contrib, bi)
             if f is not None:
                 force[bi] += f
                 if t is None:
@@ -782,7 +802,12 @@ def sceneOperation(queryParticles, operationProperties: OperationProperties, sce
                 force[bi] += f
                 torque[bi] += ((X - body.center)[:, 0] * rv[:, 1] - (X - body.center)[:, 1] * rv[:, 0]).sum()
                 exact[bi] = False                      # nodal reactions: approximate torque (needs p = 2 weights for the exact one)
-            accumulate(cand, res)
+            accumulate(cand, res, bi)
+    if perBody:
+        ref = next((o for o in outs if o is not None), None)
+        if ref is None:
+            ref = _empty(op, bodyFields, qv, N, dev)
+        return torch.stack([o if o is not None else torch.zeros_like(ref) for o in outs])
     if out is None:
         out = _empty(op, bodyFields, qv, N, dev)
     if returnReaction:

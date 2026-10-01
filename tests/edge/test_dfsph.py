@@ -130,3 +130,61 @@ def test_agrees_with_omnisph_reference():
         assert np.sqrt(((xo - xs) ** 2).sum(1).mean()) < 3e-3
     finally:
         os.chdir(old)
+
+
+# ----------------------------------------------------------------------------------------------------------------------------- force tracking
+from edgebound import dfsph_cases as C
+from edgebound.scene import BodyField, sceneOperation, Body, SurfaceRep, Scene
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_momentum_bookkeeping_with_a_rotating_obstacle(device):
+    """sum m dv = dt (m g - sum F_pressure - sum F_friction) to round-off, every step: the tracked forces are exactly the momentum exchanged with the bodies."""
+    sim, _ = C.tank_with_obstacle(L=0.3, H=0.3, fill=0.15, Rh=0.04, omega=4.0, r=0.006, device=device)
+    for _ in range(25):
+        sim.step()
+    assert max(h["balance"] for h in sim.history) < 1e-14
+    fo = np.array([h["pressure"][1] for h in sim.history])
+    assert np.abs(fo).max() > 1e-4                       # the obstacle really feels the fluid
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_archimedes_force_on_a_submerged_body(device):
+    """a fixed submerged hexagon: the time-averaged vertical force is the buoyancy rho g A, the forces on all bodies add up to minus the weight."""
+    sim, info = C.tank_with_obstacle(L=0.4, H=0.35, fill=0.2, Rh=0.04, omega=0.0, r=0.005, device=device)
+    for _ in range(320):
+        sim.step()
+    t = np.array([h["t"] for h in sim.history])
+    F = np.array([h["pressure"] + h["friction"] for h in sim.history])      # [T,2 bodies,2]
+    m = t > 0.15
+    fo, fd = F[m, 1].mean(0), F[m, 0].mean(0)
+    assert abs(fo[1] / info["buoyancy"] - 1) < 0.06
+    assert abs(fo[0]) < 0.1 * info["buoyancy"]
+    assert abs((fo + fd)[1] / (-info["weight"]) - 1) < 5e-3
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_surface_and_volume_obstacles_give_the_same_forces(device):
+    sims = [C.tank_with_obstacle(L=0.3, H=0.3, fill=0.15, Rh=0.04, omega=3.0, rep=rep, r=0.006, device=device)[0] for rep in ("surface", "volume")]
+    for _ in range(20):
+        for s in sims:
+            s.step()
+    fs = np.array([h["pressure"] for h in sims[0].history])
+    fv = np.array([h["pressure"] for h in sims[1].history])
+    np.testing.assert_allclose(fs, fv, atol=1e-9, rtol=0)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_per_body_operation_sums_to_the_total(device):
+    sc = Scene([Body(bodyId=0, center=(0.0, 0.0), reps=[SurfaceRep.box((-0.3, -0.1), (0.3, 0.0))]),
+                Body(bodyId=1, center=(0.0, 0.25), angle=0.3, reps=[C.hexagon(0.05)])], device)
+    rng = np.random.default_rng(2)
+    P = rng.uniform(-0.4, 0.4, (80, 2))
+    ps = ParticleState(positions=torch.as_tensor(P, dtype=TD, device=device), supports=torch.full((80,), 0.05, dtype=TD, device=device),
+                       masses=torch.ones(80, dtype=TD, device=device), kinds=torch.zeros(80, dtype=torch.int32, device=device), densities=torch.ones(80, dtype=TD, device=device))
+    pr = OperationProperties(kernel=KernelFunctions.Wendland2, operation=WarpOperation.Gradient, operationMode=OperationDirection.BoundaryToFluid)
+    f = [BodyField(torch.tensor(1.3, dtype=TD, device=device)), BodyField(torch.tensor(0.7, dtype=TD, device=device))]
+    tot = sceneOperation(ps, pr, sc, bodyFields=f)
+    per = sceneOperation(ps, pr, sc, bodyFields=f, perBody=True)
+    assert per.shape == (2, 80, 2)
+    np.testing.assert_allclose(per.sum(0).cpu().numpy(), tot.cpu().numpy(), atol=1e-13)
