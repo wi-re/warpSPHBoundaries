@@ -1,6 +1,6 @@
 # FEM nodal weights: P0 to P3 (and what extends beyond tier 1)
 
-**Status:** [V] for P0–P3 in 2D (stage 1 exact/mpmath, stage 2/3 numpy with conditioning remedies); checks 1–7 green; the 2025-paper test cases are not imported (paper PDF not available here)
+**Status:** [V] for P0–P3 in 2D (stage 1 exact/mpmath, stage 2/3 numpy with conditioning remedies); checks 1–7 green; the validation problems of the 2025 paper (arXiv:2507.21686, Sec. 6.2) are reproduced (§9)
 **Tier(s):** 1 (nodal re-expansion); the moment machinery is shared by 2, 3, 4 · **Dimension:** 2D
 **Depends on:** `moments-recursion.md`, `edge-gradient-identity.md`
 **Implemented in:** `python/edgebound/fem.py` (stage 1), `python/edgebound/np_fem.py` (numpy, hybrid), `np2d.grad_moment`, `fem_fixtures.py`, `fem_study.py`
@@ -80,7 +80,9 @@ the **plain** edge-reduction + monomial re-expansion loses accuracy fast when `L
    on the element, so tensor-Gauss on the element (8×8 nodes, kernel evaluated from the exact `(R−r)^k` expansion, no cancellation) is
    spectrally accurate: **1e-15 for `|centroid − x| ≥ longest edge`** (checked at ratios 1…3, 6–14 nodes, p = 1 and 3; the singularity of `W`
    at `x` stays ≥ 0.33 L from the element). `np_fem.weights_hybrid` selects Gauss for far elements and the exact edge reduction otherwise
-   (so exactness is kept wherever the edges matter: `x` inside / adjacent). Measured: float64 hybrid **1e-15 everywhere** (all `p`, `L/h` 1…1e-4,
+   (so exactness is kept wherever the edges matter: `x` inside / adjacent). The Gauss branch is only used where the kernel is smooth on the element: far AND not straddling a kernel radius
+   (support rim, cubic knot) unless the element is tiny (`≤ 0.05 h`; kink contribution `~ tiny^{k+1}`); in float32 straddling far elements also use Gauss (its ~1e-8 error is below float32 epsilon,
+   whereas the edge route amplifies float32 noise by `(d/L)^{p+1}`). Measured: float64 hybrid **1e-15 everywhere** (all `p`, `L/h` 1…1e-4,
    `d` up to 0.6 h); at the support rim (elements straddling `r = h`) the kernel is only `C^k`, Gauss is algebraic: absolute 3e-12 (weights there are ≲ 5e-7).
 4. **float32:** with the three remedies the float32 error is at epsilon level (`3e-7` relative, flat in `L_T/h`; `p = 3` near elements of size `~h`: ≤ 8e-5 relative,
    i.e. ≤ 1e-6 absolute) instead of `10^3 … 10^{22}`. Elements whose features are below float32 resolution at their distance remain unrepresentable
@@ -109,7 +111,23 @@ Selected rows (p = 3, kernel w4; relative error of the nodal weights; full table
 
 ## 8. Open questions
 
-- Import the exact test cases of Winchenbach & Kolb 2025 (paper not available in this checkout) and compare accuracy/speed.
 - Tolerances for the near-but-outside regime in float32 at `p = 3` (≈ 1e-4 relative worst case) if tighter bounds are needed: use float64
   profile evaluation inside the edge terms (cost: only the near elements).
 - Variable density `ρA` (degree `2p`) and L2 projection of non-unisolvent samples: straightforward with the existing moments, not implemented.
+
+## 9. External benchmark: Winchenbach & Kolb 2025 (arXiv:2507.21686, Sec. 6.2)
+
+`tests/edge/test_paper2025.py` reproduces the paper's validation problems (Wendland C4, `h = 1`, `x = 0`, triangulations covering the support exactly):
+
+| problem | exact answer | paper (their analytic / degree-50 quadrature) | here, float64 numpy | float32 stable | stage 1 (40 digits) |
+|---|---|---|---|---|---|
+| constant field, 8 triangles (pinwheel around `x`, `x` = common vertex) | integral 1, gradient 0 | ~1e-13 / ~1e-10 (integral), ~1e-8 (gradient) | **0 / 6e-17** | — | 1e-35 |
+| constant field, 96 irregular triangles | same | same | 1.6e-14 / 3.9e-13 | — | — |
+| linear `f = x`, 8 triangles | integral 0, gradient (1,0) | ~1e-13 | **0 / 0** | 5e-6 / 5e-5 (asserted) | 1e-35 |
+| linear `f = x`, 96 triangles | same | ~1e-13 | 8.9e-15 / 1.8e-13 | 5e-6 / 5e-5 (asserted) | — |
+| Fig. 2 setup: large triangle, piecewise-linear field, 17 evaluation points incl. on edges/vertex | independent 40-digit polar oracle | their reference: 65536-point quadrature | ≤ 1e-12 | — | — |
+
+Our errors are comparable to or below the paper's analytic solution (the 96-triangle gradient is limited at ~4e-13 by rim-straddling elements, where the kernel is only `C^4`).
+Differences in method that matter: our result has no branching in the integrand (one clip per edge, elementary primitives instead of `2F1`, sectors/segments/stubs), is
+vectorised over (element, point) pairs, extends to P2/P3 fields, moments `k ≤ 4`, gradients and shape derivatives, and its float32 error is at epsilon level after the Chebyshev
+conditioning (stage 3). Their test also exercises the case we handle by the `x at a vertex` convention (`x` = common vertex of all 8 triangles): exact here.

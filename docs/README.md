@@ -55,3 +55,5 @@ tests `tests/edge/test_np2d_stable.py`.
 
 `python/edgebound/fem.py` (exact stage 1), `np_fem.py` (numpy: edge reduction near `x`, Gauss on far elements), `fem_fixtures.py` →
 `tests/fixtures/edge2d_fem_golden.json`, `fem_study.py` (conditioning table), tests `tests/edge/test_fem.py`, `test_fem_np.py`.
+
+External benchmark: `tests/edge/test_paper2025.py` (Winchenbach & Kolb 2025 validation problems; results in `derivations/fem-nodal-weights.md` §9).

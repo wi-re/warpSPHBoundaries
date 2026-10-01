@@ -171,14 +171,35 @@ def gauss_weights(verts, x, kernel, p, h=1, nodes=8, dtype=np.float64, grad=Fals
     return w, G / (hh.reshape(-1, 1, 1) if hh.ndim else hh)
 
 
-def far_mask(verts, x, ratio=1.0):
-    """True where the element is 'far': |centroid - x| >= ratio * (longest edge)."""
+def far_mask(verts, x, ratio=1.0, kernel=None, tiny=0.05, h=1.0, allow_straddle=False):
+    """True where the Gauss branch is spectrally accurate and no cancellation-free alternative is needed:
+         |centroid - x| >= ratio * (longest edge)             (element far from x relative to its size)
+         and (the element does not straddle a kernel radius R_j (support rim, cubic knot)  or  longest edge <= tiny * h),
+    because the kernel is only C^k at R_j: Gauss on a straddling element is algebraic (measured 3e-8 on rim triangles of size 0.5 h), while for a tiny
+    element the kink contribution is ~tiny^(k+1) and the edge route would lose (d/L)^(p+1) digits."""
     v = np.asarray(verts, dtype=np.float64)
     xx = np.asarray(x, dtype=np.float64)
-    c = v.mean(axis=1)
-    rho = np.hypot(c[:, 0] - xx[:, 0], c[:, 1] - xx[:, 1])
-    e = np.stack([np.hypot(*(v[:, i] - v[:, (i + 1) % 3]).T) for i in range(3)], axis=1).max(1)
-    return rho >= ratio * e
+    hh = np.asarray(h, dtype=np.float64)
+    hb = hh.reshape(-1, 1, 1) if hh.ndim else hh
+    rel = (v - xx[:, None, :]) / hb
+    c = rel.mean(axis=1)
+    rho = np.hypot(c[:, 0], c[:, 1])
+    e = np.stack([np.hypot(*(rel[:, i] - rel[:, (i + 1) % 3]).T) for i in range(3)], axis=1).max(1)
+    far = rho >= ratio * e
+    if kernel is None:
+        return far
+    # exact distance range of the element from x (x outside): rmin = min over edges of the point-segment distance, rmax = max vertex distance
+    rmax = np.hypot(rel[..., 0], rel[..., 1]).max(1)
+    rmin = np.full(len(rel), np.inf)
+    for i in range(3):
+        p, q = rel[:, i], rel[:, (i + 1) % 3]
+        d = q - p
+        tt = np.clip(-(p * d).sum(1) / np.maximum((d * d).sum(1), 1e-300), 0, 1)
+        rmin = np.minimum(rmin, np.hypot(*(p + tt[:, None] * d).T))
+    straddle = np.zeros(len(rel), dtype=bool)
+    for R in get_kernel(kernel).Rs:
+        straddle |= (rmin < float(R)) & (float(R) < rmax)
+    return far & (allow_straddle | ~straddle | (e <= tiny))
 
 
 def weights_hybrid(verts, x, kernel, p, h=1, dtype=np.float64, stable=None, grad=False, far_ratio=1.0, nodes=8):
@@ -187,7 +208,8 @@ def weights_hybrid(verts, x, kernel, p, h=1, dtype=np.float64, stable=None, grad
     x_ = np.asarray(x, dtype=dtype)
     if verts_.ndim == 2:
         verts_, x_ = verts_[None], x_[None]
-    far = far_mask(verts_, x_, far_ratio)
+    # float32: Gauss on rim/knot-straddling far elements (error ~1e-8) is below float32 epsilon, while the edge route amplifies float32 noise ~ (d/L)^(p+1)
+    far = far_mask(verts_, x_, far_ratio, kernel, h=h, allow_straddle=np.dtype(dtype) == np.dtype(np.float32))
     near = weights(verts_, x_, kernel, p, h, dtype, stable, grad)
     if not far.any():
         return near
