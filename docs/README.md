@@ -14,7 +14,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `derivations/edge-primitives.md` | `I_m`, `J_m`, `S_{j,m}` antiderivatives | [V] Maple + mpmath |
 | `derivations/truncated-monomials.md` | kernels as `r^n 1[r<=R]` blocks | [V] Maple + mpmath |
 | `derivations/moments-recursion.md` | higher moments (compact-potential recursion) | (a) [V] k≤4; (b) [V], z≠0 only |
-| `derivations/fem-nodal-weights.md` | P0–P3 nodal weights, order-recovery checks | [D] |
+| `derivations/fem-nodal-weights.md` | P0–P3 nodal weights, order-recovery checks, conditioning study and remedies | [V] checks 1–7 |
 | `derivations/tier3-curvature-2d.md` | 2D curvature expansion (closest point) | [P] |
 | `derivations/tier4-slender-series.md` | fibres: slender series, ball primitive | [D]/[P] |
 | `derivations/tet-face-edge-chain.md` | 3D tetrahedra | [P] |
@@ -48,3 +48,8 @@ agreement, tiny elements, longdouble/Gauss options, continuity across an edge), 
 Exact Chebyshev compilation of the edge profiles (`np2d.cheb_coeffs`) + stable quadrature mode (`stable=(nodes, panels)`):
 float32 at ≈ machine epsilon on all representable fixtures; tolerance table per class in `exactness-and-approximations.md`;
 tests `tests/edge/test_np2d_stable.py`.
+
+## FEM nodal weights (2D)
+
+`python/edgebound/fem.py` (exact stage 1), `np_fem.py` (numpy: edge reduction near `x`, Gauss on far elements), `fem_fixtures.py` →
+`tests/fixtures/edge2d_fem_golden.json`, `fem_study.py` (conditioning table), tests `tests/edge/test_fem.py`, `test_fem_np.py`.

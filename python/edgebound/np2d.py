@@ -40,6 +40,8 @@ import numpy as np
 
 from .kernels import kernel as get_kernel
 
+AUTO_CLOSED_FRAC = 0.3     # stable mode: elements with all vertices within AUTO_CLOSED_FRAC * R use the closed form
+
 # ============================================================== exact compilation
 def _phi(P, R):
     """Phi[f](r) = -int_r^R t f dt for f = sum P_n r^n  (exact, dict n -> Fraction)."""
@@ -51,7 +53,14 @@ def _phi(P, R):
     return {n: c for n, c in out.items() if c != 0}
 
 
-def _compile(P, R, alpha, mult, edges, values):
+def _phi_inner(P, R):
+    """Phi~[f](r) = +int_0^r t f dt  (vanishes at 0, NOT at R): an equally valid potential of y f.  Over a closed polygon the
+    constant Phi~ - Phi = M(R) drops out EXACTLY (it contributes  C (oint n_i y^b ds - b_i int y^(b-e_i)) = 0), so for a polygon
+    inside the support it can be used without the 1 - (1 - eps) cancellation of the R-normalised potential."""
+    return {n + 2: c / (n + 2) for n, c in P.items()}
+
+
+def _compile(P, R, alpha, mult, edges, values, inner=False):
     a, b = alpha
     if a + b == 0:
         d = values.setdefault(R, {})
@@ -60,18 +69,18 @@ def _compile(P, R, alpha, mult, edges, values):
         return
     i = 0 if a > 0 else 1
     beta = (a - 1, b) if i == 0 else (a, b - 1)
-    Ph = _phi(P, R)
+    Ph = _phi_inner(P, R) if inner else _phi(P, R)
     d = edges.setdefault((i, beta, R), {})
     for n, c in Ph.items():
         d[n] = d.get(n, 0) + mult * c
     bi = beta[i]
     if bi >= 1:
         bm = (beta[0] - (i == 0), beta[1] - (i == 1))
-        _compile(Ph, R, bm, -mult * bi, edges, values)
+        _compile(Ph, R, bm, -mult * bi, edges, values, inner)
 
 
 @lru_cache(maxsize=None)
-def compile_moment(kname, alpha):
+def compile_moment(kname, alpha, inner=False):
     """Exact plan for m_alpha of kernel `kname`:
          edges  : {(i, beta, R): {n: c}}   sum_e n_{e,i} int_chord y^beta (sum c_n r^n) ds
          values : {R: {n: c}}              value-type terms  (profile polynomial, radius)
@@ -80,7 +89,7 @@ def compile_moment(kname, alpha):
     edges, values = {}, {}
     for blk in k.blocks:
         P = {n: Fraction(c) for n, c in enumerate(blk.coeffs) if c != 0}
-        _compile(P, blk.R, tuple(alpha), Fraction(1), edges, values)
+        _compile(P, blk.R, tuple(alpha), Fraction(1), edges, values, inner)
     edges = {key: {n: c for n, c in d.items() if c != 0} for key, d in edges.items()}
     values = {R: {n: c for n, c in d.items() if c != 0} for R, d in values.items()}
     return edges, {R: d for R, d in values.items() if d}
@@ -392,14 +401,29 @@ def _ypoly(g, beta):
     return out
 
 
+def _small_mask(ctx, R):
+    """(N,) True where the whole polygon is within AUTO_CLOSED_FRAC * R of x (monomial basis is well conditioned there)."""
+    return ctx.g.vmax2 <= ctx.g.num.c(Fraction(R) ** 2 * Fraction(AUTO_CLOSED_FRAC) ** 2)
+
+
 def _edge_integral(ctx, beta, R, P):
     """(N,K): int_chord y^beta (sum_n P_n r^n) ds."""
     if ctx.stable is not None:
+        small = _small_mask(ctx, R)
+        if small.all():
+            return _edge_integral_closed(ctx, beta, R, P)
         g = ctx.g
         s, w, r = ctx.nodes(R)
         y1 = g.z[..., None] * g.n0[..., None] + s * g.t0[..., None]
         y2 = g.z[..., None] * g.n1[..., None] + s * g.t1[..., None]
-        return (w * y1 ** beta[0] * y2 ** beta[1] * ctx.cheb_eval(P, R, r)).sum(-1)
+        st = (w * y1 ** beta[0] * y2 ** beta[1] * ctx.cheb_eval(P, R, r)).sum(-1)
+        if small.any():
+            return np.where(small[:, None], _edge_integral_closed(ctx, beta, R, P), st)
+        return st
+    return _edge_integral_closed(ctx, beta, R, P)
+
+
+def _edge_integral_closed(ctx, beta, R, P):
     num = ctx.g.num
     yp = _ypoly(ctx.g, beta)
     tot = 0
@@ -424,26 +448,32 @@ def _value_profile(ctx, R, P, unsplit):
     if not unsplit or True:
         lo, hi, msk = g.chord(R)
         Q = {n: c / (n + 2) for n, c in P.items()}                       # M_P(r)/r^2 as a polynomial
+        poly_closed = 0
+        for n, c in P.items():
+            poly_closed = poly_closed + num.c(c) / (n + 2) * ctx.sdiff(0, n, R)
         if ctx.stable is not None:
+            small = _small_mask(ctx, R)
             s_, w_, r_ = ctx.nodes(R)
             poly = (w_ * ctx.cheb_eval(Q, R, r_)).sum(-1)
+            poly = np.where(small[:, None], poly_closed, poly) if small.any() else poly
         else:
-            poly = 0
-            for n, c in P.items():
-                poly = poly + num.c(c) / (n + 2) * ctx.sdiff(0, n, R)
+            poly = poly_closed
         mR = sum(c * Fraction(R) ** (n + 2) / (n + 2) for n, c in P.items())
         edge = (z * poly - num.c(mR) * _dangle(z, lo, hi)).sum(1)          # times 1/pi later
         split = (edge, num.c(2 * mR) * g.ind)                             # (edge part [x 1/pi], indicator part [exact])
     if unsplit:
         inside = g.vmax2 <= num.c(Fraction(R) ** 2)
         if inside.any():
+            poly_closed = 0
+            for n, c in P.items():
+                poly_closed = poly_closed + num.c(c) / (n + 2) * ctx.sfull(0, n)
             if ctx.stable is not None:
+                small = _small_mask(ctx, R)
                 s_, w_, r_ = ctx.nodes(None)
                 poly = (w_ * ctx.cheb_eval({n: c / (n + 2) for n, c in P.items()}, R, np.minimum(r_, num.c(R)))).sum(-1)
+                poly = np.where(small[:, None], poly_closed, poly) if small.any() else poly
             else:
-                poly = 0
-                for n, c in P.items():
-                    poly = poly + num.c(c) / (n + 2) * ctx.sfull(0, n)
+                poly = poly_closed
             un = (z * poly).sum(1)
             e_part = np.where(inside, un, split[0])
             i_part = np.where(inside, 0, split[1])
@@ -477,17 +507,37 @@ def gradient(verts, x, kernel, h=1, dtype=np.float64, quad=None, unsplit=True, s
     return moment_gradient(verts, x, kernel, (0, 0), h, dtype, quad, stable)
 
 
+def _plan_terms(ctx, edges, vals, unsplit):
+    """per support radius R: (edge+value part [x 1/pi], indicator part) of a compiled plan."""
+    g = ctx.g
+    per = {}
+    for (i, beta, R), P in edges.items():
+        ni = g.n0 if i == 0 else g.n1
+        e = (ni * _edge_integral(ctx, beta, R, P)).sum(1)
+        d = per.setdefault(R, [0, 0])
+        d[0] = d[0] + e
+    for R, P in vals.items():
+        e, ind = _value_profile(ctx, R, P, unsplit)
+        d = per.setdefault(R, [0, 0])
+        d[0] = d[0] + e
+        d[1] = d[1] + ind
+    return per
+
+
 def moment(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, unsplit=True, stable=None):
     ctx = _prep(verts, x, h, dtype, quad, stable)
     g, num = ctx.g, ctx.g.num
-    edges, vals = compile_moment(kernel, tuple(alpha))
-    e_tot = 0
-    i_tot = 0
-    for (i, beta, R), P in edges.items():
-        ni = g.n0 if i == 0 else g.n1
-        e_tot = e_tot + (ni * _edge_integral(ctx, beta, R, P)).sum(1)
-    for R, P in vals.items():
-        e, ind = _value_profile(ctx, R, P, unsplit)
+    alpha = tuple(alpha)
+    trunc = _plan_terms(ctx, *compile_moment(kernel, alpha), unsplit)
+    inner = _plan_terms(ctx, *compile_moment(kernel, alpha, True), unsplit) if (unsplit and alpha != (0, 0)) else None
+    e_tot, i_tot = 0, 0
+    for R in trunc:
+        e, ind = trunc[R]
+        if inner is not None:
+            inside = g.vmax2 <= num.c(Fraction(R) ** 2)          # whole polygon inside the support radius R of this block
+            if inside.any():
+                e = np.where(inside, inner[R][0], e)
+                ind = np.where(inside, inner[R][1], ind)
         e_tot = e_tot + e
         i_tot = i_tot + ind
     hk = np.asarray(g.h, dtype=num.dt) ** (alpha[0] + alpha[1])
@@ -506,3 +556,61 @@ def moment_gradient(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, s
     k = alpha[0] + alpha[1]
     sc = num.inv_pi * np.asarray(g.h, dtype=num.dt) ** (k - 1)
     return np.stack([gx * sc, gy * sc], axis=-1)
+
+
+# ============================================================== g_alpha = int_T y^alpha grad_x W   (W only), for FEM gradient weights
+@lru_cache(maxsize=None)
+def _inner_profile(kname):
+    """innermost kernel piece (pi * W polynomial valid for r <= R_in) split as P(0) + Q, Q = sum_{n>=1} p_n r^n; exact."""
+    lo, hi, c = get_kernel(kname).pieces[0]
+    Q = {n: Fraction(cn) for n, cn in enumerate(c) if n >= 1 and cn != 0}
+    return Q, Fraction(hi)
+
+
+@lru_cache(maxsize=None)
+def _compile_profile_moment(Qitems, R, alpha):
+    edges, values = {}, {}
+    _compile(dict(Qitems), R, tuple(alpha), Fraction(1), edges, values, True)
+    edges = {key: {n: c for n, c in d.items() if c != 0} for key, d in edges.items()}
+    values = {Rr: {n: c for n, c in d.items() if c != 0} for Rr, d in values.items()}
+    return edges, {Rr: d for Rr, d in values.items() if d}
+
+
+def grad_moment(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, unsplit=True, stable=None):
+    """g_alpha = int_T y^alpha grad_x W dA  (grad acting on W only; units of h).  (N, 2).
+
+    Truncated form:  g = grad_x m_alpha + alpha_j m_{alpha - e_j}  (two O(L^{|alpha|+1}) terms that cancel to O(L^{|alpha|+3}) for an
+    element << h around x).  For polygons inside the innermost kernel piece the potential Psi~ = -(W(r) - W(0)) (vanishes at 0; the
+    constant drops out exactly over the closed polygon) gives
+        g_j = -sum_e n_j int_edge y^alpha Q ds + alpha_j int_T y^{alpha - e_j} Q dA,     Q = pi W - pi W(0),
+    where both terms scale like r^2: no cancellation."""
+    alpha = tuple(alpha)
+    k = alpha[0] + alpha[1]
+    ctx = _prep(verts, x, h, dtype, None if stable is not None else quad, stable)
+    g, num = ctx.g, ctx.g.num
+    # truncated (general) form
+    mg = moment_gradient(verts, x, kernel, alpha, 1 if not np.ndim(h) else np.ones_like(np.asarray(h, dtype=float)), dtype, quad, stable)
+    # moment_gradient applies h^(k-1) with h = 1 -> unit h
+    out = np.array(mg, copy=True)
+    for j in (0, 1):
+        if alpha[j]:
+            beta = (alpha[0] - (j == 0), alpha[1] - (j == 1))
+            out[:, j] = out[:, j] + alpha[j] * moment(verts, x, kernel, beta, 1, dtype, quad, unsplit, stable)
+    if not unsplit:
+        return out
+    Q, Rin = _inner_profile(kernel)
+    inside = g.vmax2 <= num.c(Rin ** 2)
+    if not inside.any():
+        return out
+    res = np.zeros_like(out)
+    for j in (0, 1):
+        nj = g.n0 if j == 0 else g.n1
+        e1 = -(nj * _edge_integral(ctx, alpha, Rin, Q)).sum(1)
+        e2 = 0
+        if alpha[j]:
+            beta = (alpha[0] - (j == 0), alpha[1] - (j == 1))
+            edges, vals = _compile_profile_moment(tuple(sorted(Q.items())), Rin, beta)
+            per = _plan_terms(ctx, edges, vals, True)
+            e2 = alpha[j] * sum(v[0] + v[1] * 0 for v in per.values())
+        res[:, j] = np.asarray(num.inv_pi * (e1 + e2), dtype=out.dtype)
+    return np.where(inside[:, None], res, out)
