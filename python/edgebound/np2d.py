@@ -147,6 +147,7 @@ class Geo:
         # normalise orientation to ccw (branch-free)
         a2 = (rel[:, :, 0] * np.roll(rel, -1, 1)[:, :, 1] - rel[:, :, 1] * np.roll(rel, -1, 1)[:, :, 0]).sum(1)
         flip = (a2 < 0)[:, None, None]
+        self.flip = (a2 < 0)
         rel = np.where(flip, rel[:, ::-1, :], rel)
         self.N, self.K = rel.shape[0], rel.shape[1]
         self.h = h
@@ -620,3 +621,61 @@ def grad_moment(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, unspl
             e2 = alpha[j] * sum(v[0] + v[1] * 0 for v in per.values())
         res[:, j] = np.asarray(num.inv_pi * (e1 + e2), dtype=out.dtype)
     return np.where(inside[:, None], res, out)
+
+
+# ============================================================== shape derivative (vertex gradient), edge-local adjoint
+def shape_gradient(verts, x, kernel, alpha=(0, 0), h=1, dtype=np.float64, quad=None, stable=None):
+    """d m_alpha / d vertex_k  for every vertex (N, K, 2); m_alpha = int_P y^alpha W dA, y = x' - x fixed.
+
+    Reynolds: only the boundary moves, dm = sum_e int_e y^alpha W (v . n_e) ds with the linear velocity of the edge
+    v(tau) = (1 - tau) dp + tau dq, tau = (s - s0)/l.  Hence (exactly)
+        d m / d p_e = n_e int (1 - tau) y^alpha W ds ,     d m / d q_e = n_e int tau y^alpha W ds ,
+    two chord integrals with the SAME primitives as the gradient (one extra power of s) -- no extra transcendental functions.
+    Units: value (alpha = 0) dimensionless -> d/d vertex ~ 1/h; general alpha: h^(|alpha|-1)."""
+    ctx = _prep(verts, x, h, dtype, quad, stable)
+    g, num = ctx.g, ctx.g.num
+    K = g.K
+    out = np.zeros((g.N, K, 2), dtype=num.dt)
+    ell = g.s1 - g.s0
+    for R, P in kernel_profile(kernel).items():
+        a0 = _edge_integral(ctx, tuple(alpha), R, P)                        # int y^alpha W ds
+        a1s = _edge_integral_s(ctx, tuple(alpha), R, P)                     # int s y^alpha W ds
+        a1 = (a1s - g.s0 * a0) / ell                                        # int tau y^alpha W ds
+        for comp, nrm in enumerate((g.n0, g.n1)):
+            start = nrm * (a0 - a1)
+            end = nrm * a1
+            out[:, :, comp] += start + np.roll(end, 1, axis=1)             # end of edge e is vertex e+1
+    k = alpha[0] + alpha[1]
+    sc = num.inv_pi * np.asarray(g.h, dtype=num.dt) ** (k - 1)
+    sc = sc.reshape(-1, 1, 1) if np.ndim(sc) else sc
+    out = out * sc
+    # undo the orientation normalisation (ccw flip) done in Geo: vertices were reversed for clockwise input
+    return _unflip(g, out)
+
+
+def _unflip(g, out):
+    if g.flip is not None and g.flip.any():
+        flipped = out[:, ::-1, :]
+        return np.where(g.flip[:, None, None], flipped, out)
+    return out
+
+
+def _edge_integral_s(ctx, beta, R, P):
+    """(N,K): int_chord s * y^beta (sum_n P_n r^n) ds   (closed form or stable nodes)."""
+    g = ctx.g
+    if ctx.stable is not None:
+        s, w, r = ctx.nodes(R)
+        y1 = g.z[..., None] * g.n0[..., None] + s * g.t0[..., None]
+        y2 = g.z[..., None] * g.n1[..., None] + s * g.t1[..., None]
+        return (w * s * y1 ** beta[0] * y2 ** beta[1] * ctx.cheb_eval(P, R, r)).sum(-1)
+    num = g.num
+    yp = [0] + list(_ypoly(g, beta))                                       # multiply by s: shift coefficients
+    tot = 0
+    for j, cj in enumerate(yp):
+        if isinstance(cj, int):
+            continue
+        inner = 0
+        for n, c in P.items():
+            inner = inner + num.c(c) * ctx.sdiff(j, n, R)
+        tot = tot + cj * inner
+    return tot
