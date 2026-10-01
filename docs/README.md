@@ -7,6 +7,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `notation.md` | conventions shared by all derivations and code | draft |
 | `derivation.md` | exact closed forms: 2D/3D planar, 3D sphere (the `PLAN.md` track; Maple + mpmath validated) | [V] |
 | `boundary-operations.md` | warpSPH-style boundary operations (Interpolate/Gradient/Divergence/Curl/Density), Warp P1 pair engine, kernels, throughput, tier 3/4 implicit bodies (disk, half-plane) with hard tier switches | [V] tiers 1–4 |
+| `scene-architecture.md` | scene layer: bodies with pose + OBB, surface / volume / implicit / SDF representations, per-type adjacency and operations, reactions, DFSPH mapping | [V] 2D |
 | `tier-selection-2d.md` | which tier for which obstacle size (2D disk), jumps at switches | [V] |
 | `autodiff-and-gpu.md` | torch autodiff vs analytic, shape adjoint, Warp float64 kernels, throughput | [V] |
 | `exactness-and-approximations.md` | stage-2 numpy results: what is exact, accuracy/cost of cheap approximations (float32, Gauss, tiny elements) | [V] |

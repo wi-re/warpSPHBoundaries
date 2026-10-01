@@ -428,3 +428,101 @@ def pair_weights(pair_q, pair_e, positions, supports, vertices, elements, kernel
         wp.synchronize_device(device)
     w, G = wout[:P], gout[:P].reshape(P, 3, 2)
     return (w, G) if as_torch else (w.cpu().numpy(), G.cpu().numpy())
+
+
+# ================================================================================================ surface elements (single edges)
+# A closed boundary needs no triangles: every channel is  (edge-local part)  +  (indicator of the body) x u,  the indicator being a BODY-level quantity.
+# `edge_channels` returns the edge-local parts; `indicator_vector(kernel)` is u.  Only the compact-potential (truncated) forms are used: the inner
+# potentials rely on the constant dropping out over a CLOSED polygon, which a single edge does not provide.
+@wp.kernel
+def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
+                          pos: wp.array(dtype=wp.vec2d), sup: wp.array(dtype=f64),
+                          verts: wp.array(dtype=wp.vec2d), edges: wp.array(dtype=wp.vec2i),
+                          radii: wp.array(dtype=f64), inv_pi: f64,
+                          e_ch: wp.array(dtype=int), e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int),
+                          e_R: wp.array(dtype=int), e_var: wp.array(dtype=int), e_gate: wp.array(dtype=int),
+                          e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int), n_e: int,
+                          v_ch: wp.array(dtype=int), v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
+                          v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=f64), n_v: int,
+                          cn: wp.array(dtype=int), cc: wp.array(dtype=f64),
+                          cout: wp.array2d(dtype=f64)):
+    tid = wp.tid()
+    qi = pair_q[tid]
+    ed = edges[pair_e[tid]]
+    h = sup[qi]
+    xv = pos[qi]
+    p = (verts[ed[0]] - xv) / h
+    q = (verts[ed[1]] - xv) / h
+    d = q - p
+    ell = wp.sqrt(d[0] * d[0] + d[1] * d[1])
+    if ell == f64(0.0):
+        return
+    t0 = d[0] / ell
+    t1 = d[1] / ell
+    n0 = t1                                   # outward (fluid-side) normal of a counter-clockwise boundary
+    n1 = -t0
+    z = (p[0] * q[1] - p[1] * q[0]) / ell     # positive when x lies on the solid side
+    s0 = (d[0] * p[0] + d[1] * p[1]) / ell
+    s1 = (d[0] * q[0] + d[1] * q[1]) / ell
+    ch = wp.vector(f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0))
+    az = wp.abs(z)
+    for t in range(n_e):
+        if (e_var[t] != 1) and (e_gate[t] != 2):
+            R = radii[e_R[t]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    ni = n0
+                    if e_i[t] == 1:
+                        ni = n1
+                    ch[e_ch[t]] = ch[e_ch[t]] + ni * _edge_integral(e_a[t], e_b[t], 0, lo, hi, z, n0, n1, t0, t1, cn, cc, e_c0[t], e_c1[t])
+    for t in range(n_v):
+        if (v_var[t] != 1) and (v_gate[t] != 2):
+            R = radii[v_R[t]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    mR = v_mR[t]
+                    poly = f64(0.0)
+                    for k in range(v_c0[t], v_c1[t]):
+                        poly += cc[k] / f64(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z)
+                    ch[v_ch[t]] = ch[v_ch[t]] + z * poly - mR * _dangle(z, lo, hi)
+    for k in range(9):
+        cout[tid, k] = inv_pi * ch[k]
+
+
+def indicator_vector(kernel):
+    """u[9]: channel value of a body that contains the whole support (indicator 1) -- (1,0,0, 0,0, 1,0, 0,1): lambda = 1, g_(1,0)_x = g_(0,1)_y = lambda."""
+    pb, _ = build_plan(kernel)
+    u = np.zeros(NCH)
+    for ch, R, var, gate, c0, c1, mR in [(v[0], v[1], v[2], v[3], v[4], v[5], v[6]) for v in pb.V]:
+        if var != 1 and gate != 2:
+            u[ch] += 2.0 * mR
+    return u
+
+
+def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, device="cuda:0", plan=None, as_torch=True):
+    """edge-local channels c[P,9] (dimensionless, units of h) of every (query, edge) pair; edges [E,2] counter-clockwise around the solid (solid on the left).
+    The total of a closed body is  sum_edges c + indicator * indicator_vector(kernel)."""
+    import torch
+    plan = plan or DevicePlan(kernel, device)
+    P = len(pair_q)
+    cout = torch.zeros((max(P, 1), NCH), dtype=torch.float64, device=device)
+    if P:
+        keep = []
+        wq, a = _wp_from(pair_q, wp.int32, device, torch.int32); keep.append(a)
+        we, a = _wp_from(pair_e, wp.int32, device, torch.int32); keep.append(a)
+        wpos, a = _wp_from(positions, wp.vec2d, device, torch.float64); keep.append(a)
+        wsup, a = _wp_from(supports, f64, device, torch.float64); keep.append(a)
+        wv, a = _wp_from(vertices, wp.vec2d, device, torch.float64); keep.append(a)
+        wed, a = _wp_from(edges, wp.vec2i, device, torch.int32); keep.append(a)
+        wp.launch(_edge_channels_kernel, dim=P, device=device, inputs=[
+            wq, we, wpos, wsup, wv, wed, plan.radii, f64(1 / np.pi),
+            *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc, wp.from_torch(cout, dtype=f64)])
+        wp.synchronize_device(device)
+    c = cout[:P]
+    return c if as_torch else c.cpu().numpy()
