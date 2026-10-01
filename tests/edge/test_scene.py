@@ -343,3 +343,26 @@ def test_half_plane_first_moments_and_linear_fields(device):
     sdf = SdfRep.fromFunction(boxsdf, (-0.3, -0.3), (1.3, 1.3), h / 16, fallback=box)
     got = sceneOperation(ps, props(WarpOperation.Gradient, mode=GradientScheme.Symmetric), Scene([Body(reps=[sdf])], device), queryValues=a0, bodyFields=[fld])
     np.testing.assert_allclose(got.cpu().numpy(), ref.cpu().numpy(), atol=2e-3 * max(1, float(ref.abs().max())))
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_covariance_operation(device):
+    """Covariance = int y (x) grad_x W (the renormalisation matrix of the wall): surface = volume = half-plane model; a particle deep inside a body sees the full-plane value I."""
+    sa, sm = body_pair(device)
+    sm = Scene([Body(bodyId=0, center=(0.3, -0.2), angle=0.7, reps=[VolumeRep(LV, LE)])], device)
+    ps = particles(device)
+    pr = props(WarpOperation.Covariance)
+    ca = sceneOperation(ps, pr, sa)
+    cm = sceneOperation(ps, pr, sm)
+    assert ca.shape == (len(ps.positions), 2, 2)
+    np.testing.assert_allclose(cm.cpu().numpy(), ca.cpu().numpy(), atol=2e-10)
+    # deep inside the body (support entirely in the solid): C = I
+    inside = Scene([Body(reps=[SurfaceRep.box((-1, -1), (1, 1))])], device)
+    ps2 = state(np.array([[0.0, 0.0], [0.2, -0.1]]), device, sup=0.3)
+    c = sceneOperation(ps2, pr, inside)
+    np.testing.assert_allclose(c.cpu().numpy(), np.stack([np.eye(2)] * 2), atol=1e-12)
+    # flat wall at distance d: C = lambda t(x)t + (lambda - q lambda') n(x)n  against the half-plane model
+    hp = Scene([Body(reps=[ImplicitRep(HalfPlaneBody((0.0, 0.0), (0.0, 1.0)))])], device)
+    sf = Scene([Body(reps=[SurfaceRep.box((-3, -3), (3, 0.0))])], device)
+    ps3 = state(np.array([[0.0, 0.03], [0.1, 0.07], [-0.2, 0.12]]), device, sup=0.2)
+    np.testing.assert_allclose(sceneOperation(ps3, pr, hp).cpu().numpy(), sceneOperation(ps3, pr, sf).cpu().numpy(), atol=1e-7)

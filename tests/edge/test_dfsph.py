@@ -188,3 +188,45 @@ def test_per_body_operation_sums_to_the_total(device):
     per = sceneOperation(ps, pr, sc, bodyFields=f, perBody=True)
     assert per.shape == (2, 80, 2)
     np.testing.assert_allclose(per.sum(0).cpu().numpy(), tot.cpu().numpy(), atol=1e-13)
+
+
+# ----------------------------------------------------------------------------------------------------------------------------- wall closure
+def _tank_sim(device, **cfgkw):
+    dx, dy, h = 0.0089, 0.0088, 0.02236
+    cal = D.lattice_calibration(dx, dy, h)
+    pos = lattice(30, 14, dx, dy, x0=0.1, y0=0.1)
+    lo = pos.min(0) - np.array([cal["dwallX"], cal["dwallY"]])
+    hi = np.array([pos[:, 0].max() + cal["dwallX"], 0.5])
+    sc = D.domain_scene("surface", lo, hi, h, device)
+    sim = D.DFSPH2D(pos, np.zeros_like(pos), cal["V"], np.full(len(pos), h), sc, D.DFSPHConfig(wallMass=cal["mu"], **cfgkw), device)
+    return sim, pos, dy
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_wall_closure_removes_the_static_wall_residual(device):
+    """exact hydrostatic pressure on the calibrated lattice: the residual acceleration of the wall rows drops by more than an order of magnitude with the closure,
+    the interior (no wall contact) is untouched."""
+    res = {}
+    for gc in ("none", "wall"):
+        sim, pos, dy = _tank_sim(device, gradientCorrection=gc)
+        sim._prepare()
+        sim.rho = sim._sum(sim.V[sim.pj] * sim.W) + sim.lam
+        x = sim.x
+        ytop = float(x[:, 1].max()) + dy / 2
+        p = 9.81 * (ytop - x[:, 1])
+        acc = torch.tensor([0.0, -9.81], dtype=TD, device=device) + sim._fluid_accel(p) + sim._boundary_accel(p, True)
+        r = acc.norm(dim=1)
+        res[gc] = (float(r[x[:, 1] < 0.1 + 0.6 * dy].mean()), float(r[(x[:, 1] > 0.1 + 6 * dy) & (x[:, 0] > 0.2) & (x[:, 0] < 0.3)].mean()))
+    assert res["none"][0] > 8.0 and res["wall"][0] < 1.0
+    assert abs(res["wall"][1] - res["none"][1]) < 1e-12
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_closure_keeps_the_force_bookkeeping_and_tight_solves_with_a_moving_body(device):
+    cfg = D.DFSPHConfig(gradientCorrection="wall", densityEta=1e-5, divergenceEta=1e-5, divergenceMaxIterations=60, maxIterations=500, divergenceClamp=True)
+    sim, info = C.tank_with_obstacle(L=0.3, H=0.3, fill=0.15, Rh=0.04, omega=4.0, r=0.006, device=device, cfg=None)
+    sim.cfg.__dict__.update(dict(cfg.__dict__, wallMass=info["cal"]["mu"]))
+    for _ in range(60):
+        sim.step()
+    assert max(h["balance"] for h in sim.history) < 1e-13
+    assert torch.isfinite(sim.x).all() and float(sim.v.norm(dim=1).max()) < 5.0

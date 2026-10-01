@@ -103,9 +103,50 @@ operation: the contribution of each body separately), the friction force `Σ m_i
   (`results/dfsph/dam_hexagon.png`).
 * Not tracked: the **torque** on the body. For a linear pressure field it needs the second moments `∫ y_a y_b ∇W` (exact for surface loops via `|α| = 2` edge channels, not for P1 volume weights); the force is exact.
 
-## 6. Not done / next
+## 6. Gradient correction at the wall (`DFSPHConfig.gradientCorrection`)
+
+**The problem** (§2): for the exact hydrostatic pressure the symmetric DFSPH acceleration of the calibrated lattice is not zero near a wall, because the kernel sum of the fluid neighbours is incomplete and the wall's exact
+`∇λ` does not cancel it at the discrete particle positions (`Σ_j V_j ∇W_ij + μ ∇λ ≠ 0`). Mean residual `|a + g|` per region, exact `p = ρ g (H − y)`, `r = 0.005`:
+
+| | first row | rows 2–3 | left column | interior |
+|---|---|---|---|---|
+| symmetric DFSPH, exact wall integrals (omniSPH form) | 17.7 m/s² | 4.5 | 8.8 | 0.43 |
+| + first-order renormalisation `L = (Σ V y⊗∇W + μ g1)⁻ᵀ`, difference-form pressure gradient (exact wall moments) | **0.0** | 0.02 | 0.05 | **0.0** |
+| + **zeroth-order wall closure** (kept, `gradientCorrection='wall'`) | 0.19 | 0.86 | 0.92 | 0.43 |
+
+**What was tried and dropped.** The renormalised difference form is exactly consistent (the exact wall moments `g1` complete the covariance matrix, `Covariance` operation of the scene) and makes the hydrostatic lattice an
+equilibrium. But (i) it is not an acceptable DFSPH operator: the diagonal of the difference-form system changes sign at the free surface (`α > 0`, `Σ V∇W` there is large), the Jacobi iteration diverges within
+two steps (with a free-surface-safe eigenvalue threshold it survives only without the divergence solve, and with it diverges again); (ii) the difference form is not pairwise antisymmetric, so the wall is no longer the
+reaction of the fluid: the tracked force on the walls drops to 5 % of the weight (the missing part is carried by non-conservative fluid–fluid forces). A hybrid (renormalise only wall-contact particles) keeps
+the iteration stable but has the same bookkeeping problem. The `Covariance` operation stays in the scene layer (tested: surface = volume = half-plane model, `I` deep inside a body).
+
+**The closure kept.** A uniform pressure must exert no net force on a wall-contact particle, so the wall has to supply minus the discrete incompleteness of the fluid sum. The exact `∇λ` fixes the *direction* (the
+geometry, and therefore the force distribution over the bodies); only its *magnitude* in the `p_i`-terms (`α`, source, `dt² a·∇λ`, `−(p_i/ρ_i² + p_i)∇λ`) is rescaled,
+`s_i = clip( −(Σ_j V_j ∇W_ij)·n / |μ∇λ|, 1 − κ, 1 + κ )`, `n = ∇λ/|∇λ|`, `κ = 0.2` (`closureLimit`; the clip bounds the effect where the incompleteness is a free surface and not the wall). The
+first-order part of the wall term, `μ ∫ (a₁·y) ∇W` with the hydrostatic gradient, keeps the exact moments. Everything else is unchanged: symmetric pair forces, so the **momentum bookkeeping stays exact** (`1e-18`, asserted),
+the force on each body is still `−Σ m a_b`. The closure removes the static wall residual by a factor 90 (first row) / 5–9 (rows 2–3, left column); the interior (no wall contact) is bit-identical.
+
+**Dynamic effect** (submerged fixed hexagon, tank at rest, 0.6 s, statistics over t > 0.2; `python -m edgebound.dfsph_validation closure`; two repeats per row, GPU atomics make runs differ in the chaotic cases):
+
+| solver | closure | mean `F_y`/buoyancy − 1 | std `F_y`/buoyancy | std (Σ forces / weight) | rms speed |
+|---|---|---|---|---|---|
+| omniSPH tolerances (η = 1e-3, 4 iterations) | none | +0.8 % | 0.101 | 0.064 | 0.047 |
+| | wall | +0.9 % | 0.124 | 0.067 | 0.050 |
+| tight (η = 1e-5, 200 divergence iterations, divergence pressure unclamped) | none | −0.2 / +0.4 % | 0.37 / 0.51 | 0.17 / 0.22 | 0.047 / 0.049 |
+| | **wall** | +0.1 % | **0.060** | **0.021** | 0.046 |
+| tight, divergence pressure clamped ≥ 0 | none | −0.5 % | 0.126 | 0.041 | 0.063 |
+| | wall | −1.1 / −2.1 % | 0.156 / 0.168 | 0.055 / 0.057 | 0.072 |
+
+* with an accurately solved pressure and an unclamped divergence pressure the closure cuts the force noise **6–8×** (the noise of the body force 0.4–0.5 → 0.06 of the buoyancy, of the total wall force 0.2 → 0.02 of the
+  weight), at unchanged mean (buoyancy within 0.1 %): this is the regime where the wall-row inconsistency is no longer hidden by the loose solve;
+* with omniSPH's loose tolerances (4 iterations) there is no gain (the solver stops before the wall-row balance matters), with a clamped divergence pressure none either — so the closure is **not** the default;
+* the whole-tank rms speed (0.046 m/s) is the interior noise of the lattice (`0.43 m/s²` first-order inconsistency of the symmetric fluid–fluid operator, relaxed by DFSPH), not a wall effect; it is unchanged;
+* **a moving body needs the divergence pressure clamped for tight solves**: with 200 divergence iterations and an unclamped divergence pressure the tank with the spinning hexagon diverges after 0.22 s
+  (`divergenceClamp=True` fixes it; omniSPH's 4 iterations are fine either way).
+
+## 7. Not done / next
 
 * the boundary force of omniSPH (`log.txt`) is not compared (our `wallForce` = `−Σ m a_b` is available per step);
 * omniSPH's barycentric (`sim.barycentricPressure`) MLS pressure at the triangle vertices is not reproduced: it would need nodal data on a refined wall layer (`volumeMode='nodal'`);
 * gradient renormalisation with the exact wall moments (removes the first-row residual of §2), larger resolutions, 3D;
-* tier 3/4 around a moving disk (needs first moments of curved tier-3/4 bodies), torque via second moments, the gradient correction below.
+* tier 3/4 around a moving disk (needs first moments of curved tier-3/4 bodies), torque via second moments, a first-order consistent *and* conservative fluid–fluid/wall operator (the renormalisation above breaks pairwise antisymmetry and the free-surface diagonal), the interior lattice noise.

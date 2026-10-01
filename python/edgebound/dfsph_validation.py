@@ -1,7 +1,8 @@
-"""Validation of DFSPH2D on the scene boundary layer.   cd .tmp/omni (a directory with a `cfg` symlink to omniSPH/cfg);  python -m edgebound.dfsph_validation [omni|reps|obstacle|all]
+"""Validation of DFSPH2D on the scene boundary layer.   cd .tmp/omni (a directory with a `cfg` symlink to omniSPH/cfg);  python -m edgebound.dfsph_validation [omni|reps|obstacle|closure|all]
 
  omni : tank settling and dam break against the compiled omniSPH (identical initial particles, omniSPH conventions: V = pi r^2, wall face one spacing outside the
         block, Wendland C2, same DFSPH loop); walls = omniSPH's triangle slabs as a `VolumeRep`.
+ closure : the zeroth-order wall closure (gradientCorrection='wall') against the plain solver
  obstacle : forces on a hexagon (Archimedes, spinning, dam break into it), no omniSPH needed
  reps : the same calibrated rest lattice / dam break with the domain as VolumeRep, SurfaceRep, SdfRep (tier 3 + corner fallback) and four half planes (control).
 """
@@ -144,6 +145,43 @@ def obstacle(dev="cuda:0", out_png=None):
         fig.tight_layout(); fig.savefig(out_png, dpi=120)
     return sim2
 
+
+def closure_study(dev="cuda:0", repeats=2):
+    """effect of the zeroth-order wall closure on a submerged fixed hexagon in a tank at rest (0.6 s, statistics over t > 0.2): bias and noise of the force on the body, noise of the
+    total wall force, rms speed.  Three solver settings; GPU atomics make each run a different realisation of the chaotic flow, hence `repeats` runs per row (values separated by '/')."""
+    from .dfsph_cases import tank_with_obstacle
+    settings = (("omniSPH tolerances", {}),
+                ("tight, divergence unclamped", dict(densityEta=1e-5, divergenceEta=1e-5, divergenceMaxIterations=200, maxIterations=2000)),
+                ("tight, divergence clamped", dict(densityEta=1e-5, divergenceEta=1e-5, divergenceMaxIterations=200, maxIterations=2000, divergenceClamp=True)))
+    print("\n### wall closure: submerged fixed hexagon, tank at rest\n")
+    print("| solver | closure | mean F_y / buoyancy - 1 | std F_y / buoyancy | std (sum of all forces / weight) | rms speed (whole tank) |")
+    print("|---|---|---|---|---|---|")
+    for sname, kw in settings:
+        for gc in ("none", "wall"):
+            vals = []
+            for _ in range(repeats):
+                sim, info = tank_with_obstacle(omega=0.0, device=dev)
+                sim.cfg.__dict__.update(dict(kw, gradientCorrection=gc))
+                rms = []
+                try:
+                    while sim.time < 0.6:
+                        sim.step()
+                        if sim.time > 0.2:
+                            rms.append(float(sim.v.norm(dim=1).pow(2).mean().sqrt()))
+                except Exception:
+                    vals.append((np.nan,) * 4)
+                    continue
+                t, F = _forces(sim)
+                m = t > 0.2
+                fo = F[m, 1, 1]
+                tot = (F[m, 0, 1] + F[m, 1, 1]) / -info["weight"]
+                vals.append((100 * (fo.mean() / info["buoyancy"] - 1), fo.std() / info["buoyancy"], tot.std(), np.mean(rms)))
+            v = np.array(vals)
+            print(f"| {sname} | {gc} | " + " | ".join(" / ".join(f"{x:{f}}" for x in v[:, k]) for k, f in enumerate(["+.1f", ".3f", ".3f", ".4f"])) + " |")
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "closure":
+    closure_study()
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "obstacle":
     import os

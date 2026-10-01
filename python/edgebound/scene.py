@@ -665,6 +665,10 @@ def _apply(op, mode, pairs: MomentPairs, body: Body, fld: BodyField, ps, queryVa
     c = body.center
     if op == WarpOperation.Density:
         return fld.rho * pairs.lam, None, None
+    if op == WarpOperation.Covariance:                                    # int y (x) grad_x W: the renormalisation (covariance) matrix of the wall
+        if pairs.g1 is None:
+            raise NotImplementedError("Covariance needs first moments (surface / volume / half-plane representations)")
+        return fld.rho * pairs.g1, None, None
     if fld.a0 is None:
         raise ValueError("BodyField with a0 is required for this operation")
     if fld.perQuery:
@@ -839,6 +843,8 @@ def _empty(op, bodyFields, qv, N, dev):
     for f in bodyFields:
         if f.a0 is not None:
             scalar = torch.as_tensor(f.a0).ndim == (1 if f.perQuery else 0)
+    if op == WarpOperation.Covariance:
+        return torch.zeros((N, 2, 2), dtype=F64, device=dev)
     if op in (WarpOperation.Density, WarpOperation.Divergence, WarpOperation.Curl):
         return torch.zeros(N, dtype=F64, device=dev)
     if op == WarpOperation.Gradient:
