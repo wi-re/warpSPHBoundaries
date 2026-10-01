@@ -68,6 +68,8 @@ def _pmul(a, b):
 
 
 def _Sdiff(j, m, lo, hi, z):
+    if m < 0:                      # negative powers (derived profiles of tier 3): needs z != 0, downward recurrence (use with guard digits)
+        return pr.Sg(j, m, hi, z) - pr.Sg(j, m, lo, z)
     return pr.S_all(j, m, hi, z) - pr.S_all(j, m, lo, z)
 
 
@@ -81,7 +83,10 @@ def block_value(P: G.Prepared, n, R):
         if ch is None:
             continue
         lo, hi = ch
-        Ih, Il = pr.I_all(n, hi, e.z)[n], pr.I_all(n, lo, e.z)[n]
+        if n >= 0:
+            Ih, Il = pr.I_all(n, hi, e.z)[n], pr.I_all(n, lo, e.z)[n]
+        else:
+            Ih, Il = pr.Ig(n, hi, e.z), pr.Ig(n, lo, e.z)
         tot += (e.z * (Ih - Il) - R ** (n + 2) * pr.dangle(e.z, lo, hi)) / (n + 2)
     return tot
 

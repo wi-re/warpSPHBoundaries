@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MAPLE="${MAPLE:-$HOME/maple2026/bin/maple}"
-for s in 10_edge_primitives 11_truncated_monomials 12_moments_recursion 13_halfplane; do
+for s in 10_edge_primitives 11_truncated_monomials 12_moments_recursion 13_halfplane 14_tier3_2d; do
   echo "=== maple $s.mpl ==="
   "$MAPLE" -q "maple/$s.mpl"
 done

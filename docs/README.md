@@ -17,7 +17,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `derivations/moments-recursion.md` | higher moments (compact-potential recursion) | (a) [V] k≤4; (b) [V], z≠0 only |
 | `derivations/fem-nodal-weights.md` | P0–P3 nodal weights, order-recovery checks, conditioning study and remedies | [V] checks 1–7 |
 | `derivations/tier2-closed-boundary.md` | closed polylines, boundary data only, polygon→disk convergence | [V] |
-| `derivations/tier3-curvature-2d.md` | 2D curvature expansion (closest point) | [P] |
+| `derivations/tier3-curvature-2d.md` | 2D curvature expansion (closest point), F0/F1/F2 closed forms | [V] |
 | `derivations/tier4-slender-series.md` | fibres: slender series (2D strip/disk [V]; 3D ball/strand [D]/[P]), circle edge identity | 2D [V] |
 | `derivations/tet-face-edge-chain.md` | 3D tetrahedra | [P] |
 
