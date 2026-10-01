@@ -6,13 +6,13 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 |---|---|---|
 | `notation.md` | conventions shared by all derivations and code | draft |
 | `derivation.md` | exact closed forms: 2D/3D planar, 3D sphere (the `PLAN.md` track; Maple + mpmath validated) | [V] |
-| `backends-and-verification.md` | Maple → mpmath → numpy → torch → warp hierarchy, golden fixtures, tolerances | plan |
+| `backends-and-verification.md` | Maple → mpmath → numpy → torch → warp hierarchy, golden fixtures, tolerances; stage-1 results | stage 0–1 done |
 | `derivations/TEMPLATE.md` | template every derivation file follows | — |
-| `derivations/edge-value-identity.md` | 2D value integral as edge integrals | [V] numerics |
-| `derivations/edge-gradient-identity.md` | 2D gradient and first moment | [V] numerics |
-| `derivations/edge-primitives.md` | `I_m`, `J_m` antiderivatives | [D] |
-| `derivations/truncated-monomials.md` | kernels as `r^n 1[r<=R]` blocks | [D] |
-| `derivations/moments-recursion.md` | higher moments (compact-potential recursion) | [D] |
+| `derivations/edge-value-identity.md` | 2D value integral as edge integrals | [V] Maple + mpmath |
+| `derivations/edge-gradient-identity.md` | 2D gradient and first moment | [V] Maple + mpmath |
+| `derivations/edge-primitives.md` | `I_m`, `J_m`, `S_{j,m}` antiderivatives | [V] Maple + mpmath |
+| `derivations/truncated-monomials.md` | kernels as `r^n 1[r<=R]` blocks | [V] Maple + mpmath |
+| `derivations/moments-recursion.md` | higher moments (compact-potential recursion) | (a) [V] k≤4; (b) [V], z≠0 only |
 | `derivations/fem-nodal-weights.md` | P0–P3 nodal weights, order-recovery checks | [D] |
 | `derivations/tier3-curvature-2d.md` | 2D curvature expansion (closest point) | [P] |
 | `derivations/tier4-slender-series.md` | fibres: slender series, ball primitive | [D]/[P] |
@@ -24,3 +24,13 @@ fields). See `PLAN.md` "Relation to HANDOFF.md" for how they fit.
 
 Rule for derivation files: each lists the checks it needs; those checks are the
 golden-fixture cases. Do not mark a file [V] until the check table is green.
+
+## Phase 1 artefacts (HANDOFF track, 2D tier 1/2 verification)
+
+| what | where |
+|---|---|
+| Maple proofs/checks | `maple/10_edge_primitives.mpl`, `11_truncated_monomials.mpl`, `12_moments_recursion.mpl`, `13_halfplane.mpl` (`maple/run_edge.sh` runs all four) |
+| stage-1 reference implementation (mpmath) + polar oracle | `python/edgebound/` (`core`, `geometry`, `primitives`, `kernels`, `oracle`) |
+| tests | `tests/edge/` (`pytest tests/edge`, ≈2.5 min) |
+| golden fixtures | `tests/fixtures/edge2d_golden.json` (92 cases; `python -m edgebound.fixtures` regenerates; schema in `python/edgebound/fixtures.py`) |
+| float64 behaviour of the guard-free algorithm | `python -m edgebound.precision_probe` (table in `backends-and-verification.md`) |

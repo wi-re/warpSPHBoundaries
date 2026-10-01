@@ -216,7 +216,7 @@ momentBS := proc(a, b, n, zz, ind) local k, e;
   ind*omegaS(a, b)*R^e/e + zz/e*(-zz)^b*( CS(a, n, zz) - R^e*CS(a, -2-k, zz) )
 end proc:
 
-Acl := proc(a, b) option remember; local th, u;
+Acl := proc(a, b) option remember; local th; global u;
   simplify(eval(int(cos(th)^a*sin(th)^b, th), th = Pi - arcsin(u)) - eval(int(cos(th)^a*sin(th)^b, th), th = arcsin(u))) assuming u > 0, u < 1
 end proc:
 

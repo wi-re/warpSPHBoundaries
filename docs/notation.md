@@ -28,6 +28,14 @@ verified · **[P]** plan / open (same legend as `HANDOFF.md`).
   `x` lies on the inner side**.
 - Along the edge line `y = z_e n_e + s t_e`, `r = sqrt(s² + z_e²)`,
   `s_0 = t_e·(p_e - x)`, `s_1 = t_e·(q_e - x)`.
+- **Exact orientation predicate.** Polygons are normalised to counter-clockwise order. `sign(z_e) = sign(cross(q−p, x−p))`
+  is computed from exact rationals (`python/edgebound/geometry.py`); `z_e = 0` exactly when `x` is on the edge line.
+- **Indicator / degenerate placements** (value-type terms): `x` strictly inside → 1, outside → 0, in the open interior of
+  an edge → `1/2`, at a vertex → interior angle / `2π`; an edge with `z_e = 0` contributes 0 to every atan term (average of
+  the one-sided limits; `atan` over a chord is computed as `atan2(z (hi−lo), z² + hi·lo)`). Verified: the total is continuous
+  in `x`. Do NOT use this averaged convention for the far-field moment form (b) (`moments-recursion.md` §4).
+- Scaling with the support radius `h` (geometry divided by `h`): value `h⁰`, `∇_x` value `h⁻¹`, `m_α` `h^k`,
+  `∇_x m_α` `h^{k−1}` (`k = |α|`).
 - Chord for support radius `R`: if `|z_e| < R`, `L = sqrt(R² - z_e²)` and
   `s ∈ [max(s_0, -L), min(s_1, L)]`; otherwise the edge contributes nothing
   (value identity: the far-field flux cancels over a closed boundary).

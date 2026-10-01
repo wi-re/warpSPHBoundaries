@@ -65,6 +65,43 @@ is awkward through the clipping).
   knowledge its tape is reverse-mode only; check the docs for the installed version
   before committing to a forward-mode design.
 
+## Status (Phase 1, 2D tier 1/2)
+
+- Stage 0 (Maple): `maple/10`–`13` — primitives, truncated monomials, moments recursion, half-plane link
+  to `λ_2(d)`; see the check tables in `derivations/`.
+- Stage 1 (mpmath): `python/edgebound/` + independent polar oracle (`oracle.py`, shares no code with
+  `core.py`) + `tests/edge/` (all green). Reference accuracy ≈ 1e-35 (40 dps + 20 guard digits); oracle agreement
+  asserted at 1e-30.
+- Golden fixtures: `tests/fixtures/edge2d_golden.json`, 92 cases (element and covering-mesh cases), 4 kernels,
+  `value`, `grad`, moments `k = 1…4`, moment gradients `k = 0…2`, 40 digits, exact rational geometry (`"a/b"` strings),
+  per-case `where` (inside / outside / edge / vertex) and exact expectations (disk moments as rationals, half-plane `λ_2`).
+  Tags: `generic`, `h_scaled`, `x_on_edge`, `x_at_vertex`, `x_on_edge_line`, `z_to_0` (`1e-3…1e-40`),
+  `tiny_chord` (grazing the support circle, edge ends within `1e-13` of the circle, knot circle of the cubic),
+  `small_element` (`L_T/h = 1e-6…1`), `half_plane` (`d = 0, 1e-12, …, 1−1e-12, 1, 3/2, <0`), `engulf`,
+  `covering_mesh` (also `x` at a mesh vertex / on a mesh edge / fan), `nonconvex`, `clockwise`, `outside_support`,
+  `cubic_knot`. Not yet in the file: tier-3 cases (`d < 0` with curvature) and FEM weights (`p ≥ 1` nodal fields).
+- Backends loading the fixtures should read the polygon as exact rationals (`Fraction(str)`), evaluate in their dtype,
+  and compare with the tolerance table above; `h != 1` cases carry physical units.
+
+### Float64 behaviour of the guard-free algorithm (53-bit emulation)
+
+`python -m edgebound.precision_probe` runs the *same algorithm* with `mp.prec = 53` and no guard digits against the
+40-digit fixtures (cubic and w4). Worst absolute errors over the 91 element cases (moments in units `h^k`):
+
+| quantity | worst abs. error | where |
+|---|---|---|
+| value | 5.7e-14 | generic (coefficient cancellation of the kernel polynomial) |
+| gradient | 5.8e-14 | generic, `x` at a vertex |
+| `m_1` / `m_2` / `m_3` / `m_4` | 1.6e-14 / 3.0e-14 / 1.7e-14 / 2.8e-14 | half-plane with `x` inside the solid (even `k`) |
+| tiny elements, `x` inside / at a vertex, value | ≈ 3e-14 **absolute** | `L_T/h = 1e-3`: relative 3e-8; `1e-6`: value lost (true value 7e-14) |
+
+Everything else (`z → 1e-40`, `x` on an edge/vertex, chords of `1e-13`, grazing the circle) stays at the 1e-14
+level, i.e. within the numpy-f64 tolerance table above (value 1e-12, gradient 1e-11) with a factor ≥ 20 margin.
+The only genuine float64 failure is the tiny-element value/even-moment cancellation `1 − (1 − ε)`, with a
+verified remedy (`derivations/edge-value-identity.md` §6; the unsplit polynomial form reaches 2e-16 relative at `L_T/h = 1e-6`).
+float32 will need exact combined indicator weights and a better-conditioned polynomial basis (kernel coefficients are
+up to ~10³ in magnitude).
+
 ## Order of work
 
 1. Derivation files + Maple checks for primitives and moments.

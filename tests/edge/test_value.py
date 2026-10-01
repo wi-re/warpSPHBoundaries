@@ -139,3 +139,27 @@ def test_h_scaling():
         Th = [(a * h, b * h) for a, b in T]
         xh = (x[0] * h, x[1] * h)
         assert abs(eb.value(Th, xh, "w4", h=h) - eb.value(T, x, "w4")) < mp.mpf(10) ** -35
+
+
+@pytest.mark.parametrize("name", KERNELS)
+def test_unsplit_form_for_polygons_inside_the_innermost_piece(name):
+    """Remedy for tiny elements (edge-value-identity.md s.6): if the whole polygon lies inside
+    r <= R_1 (innermost kernel piece), value = sum_e z int M_in(r)/r^2 ds with M_in/r^2 a POLYNOMIAL:
+    no indicator, no atan.  (Float64 cancellation of the split form is avoided; this checks the identity.)"""
+    from edgebound.kernels import kernel as get_kernel
+    from edgebound import primitives as pr
+    kern = get_kernel(name)
+    lo, hi, c = kern.pieces[0]                       # innermost piece, (pi*W) coefficients, r in [0, hi]
+    for T, x in [([(F(-1, 10), F(-1, 20)), (F(1, 5), F(-1, 10)), (F(0), F(1, 4))], (F(1, 50), F(1, 30))),
+                 ([(F(-1, 10**5), F(-1, 10**5)), (F(2, 10**5), F(-1, 10**5)), (F(0), F(3, 10**5))], (F(0), F(0))),
+                 ([(F(-1, 10), F(-1, 20)), (F(1, 5), F(-1, 10)), (F(0), F(1, 4))], (F(-1, 10), F(-1, 20)))]:   # x at a vertex
+        P = G.prepare(T, x)
+        assert max(mp.sqrt(mpq(v[0]) ** 2 + mpq(v[1]) ** 2) for v in P.verts_rel) < mpq(hi)   # all vertices inside r <= R_1
+        tot = mp.mpf(0)
+        for e in P.edges:
+            for n, cn in enumerate(c):
+                if cn == 0:
+                    continue
+                tot += e.z * mpq(cn) / (n + 2) * (pr.I_all(n, e.s1, e.z)[n] - pr.I_all(n, e.s0, e.z)[n])
+        tot /= mp.pi
+        assert abs(tot - eb.value(T, x, name)) < mp.mpf(10) ** -35
