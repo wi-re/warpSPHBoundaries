@@ -29,7 +29,7 @@ Approximation knobs (all optional, measured in `np2d_study.py`):
             1-(1-eps) cancellation for elements << h.
 
 Geometry: batched convex polygons `verts (N, K, 2)` (triangles K = 3), evaluation points `x (N, 2)`,
-support radius `h` (scalar or (N,)).  Non-convex polygons: decompose (the indicator here is the sign test).
+support radius `h` (scalar or (N,)).  Simple polygons, convex or not (indicator = crossing number from the same relative coordinates; vertex / edge conventions as in notation.md).
 """
 from fractions import Fraction
 from functools import lru_cache
@@ -163,10 +163,9 @@ class Geo:
         self.s0 = (d[..., 0] * p[..., 0] + d[..., 1] * p[..., 1]) / ell
         self.s1 = (d[..., 0] * q[..., 0] + d[..., 1] * q[..., 1]) / ell
         self.vmax2 = (rel ** 2).sum(-1).max(1)               # max vertex distance^2 per element
-        # indicator from the SAME z: sign test + zero counts (convex polygons)
+        # indicator for SIMPLE polygons (convex or not), from the same relative coordinates / the same computed z:
+        #   on the boundary: vertex -> interior angle / 2 pi ; edge interior -> 1/2 ;  else crossing number of the ray y = 0, x > 0.
         z = self.z
-        neg = (z < 0).any(1)
-        nz = (z == 0).sum(1)
         pn = np.roll(rel, -1, 1)
         pp = np.roll(rel, 1, 1)
         a_ = pn - rel
@@ -174,11 +173,18 @@ class Geo:
         cr = a_[..., 0] * b_[..., 1] - a_[..., 1] * b_[..., 0]
         dt_ = a_[..., 0] * b_[..., 0] + a_[..., 1] * b_[..., 1]
         ang = np.arctan2(cr, dt_)
-        ang = np.where(ang <= 0, ang + 2 * np.pi, ang)
-        zprev = np.roll(z, 1, 1)                             # edge i-1 ends at vertex i, edge i starts there
-        at_vertex = ((z == 0) & (zprev == 0))
-        vang = (np.where(at_vertex, ang, 0).sum(1)) / self.num.two_pi
-        self.ind = np.where(neg, 0, np.where(nz == 0, 1, np.where(nz == 1, 0.5, vang))).astype(dt)
+        ang = np.where(ang <= 0, ang + 2 * np.pi, ang)               # interior angle at each vertex (reflex allowed)
+        at_vertex = (rel == 0).all(-1)                                # x coincides with vertex i
+        vang = np.where(at_vertex, ang, 0).sum(1) / self.num.two_pi
+        on_seg = (z == 0) & (self.s0 <= 0) & (self.s1 >= 0)           # x on the closed segment of edge i
+        on_edge = on_seg.any(1) & ~at_vertex.any(1)
+        py, qy = p[..., 1], q[..., 1]
+        straddle = (py > 0) != (qy > 0)
+        den = np.where(straddle, qy - py, 1)
+        xc = p[..., 0] + (0 - py) * (q[..., 0] - p[..., 0]) / den     # x of the crossing with the ray y = 0
+        crossings = (straddle & (xc > 0)).sum(1)
+        inside = (crossings % 2 == 1)
+        self.ind = np.where(at_vertex.any(1), vang, np.where(on_edge, 0.5, inside.astype(float))).astype(dt)
         self._chords = {}
 
     def chord(self, R):

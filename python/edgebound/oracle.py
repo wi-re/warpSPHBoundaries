@@ -179,3 +179,79 @@ def polar_gradient(verts, x, kernel, h=1, dps=40, **kw):
     gy = polar_moment_profile(verts, x, (0, 1), pieces, h=h, dps=dps, **kw)
     hh = mpq(to_frac(h))
     return +(gx / mp.pi / hh), +(gy / mp.pi / hh)
+
+
+# ======================================================================= exact DISK oracle (curved boundary, tier 2/3/4 reference)
+def polar_disk_moment_profile(center, Rd, x, alpha, pieces, h=1, dps=40, maxdegree=10):
+    """int_{disk(center, Rd)} y^alpha g(|y|) dA, y = x' - x, by polar quadrature around x with exact ray/circle intersections
+    (breakpoints: tangent angles and the angles where the disk boundary crosses a profile radius R_j)."""
+    k = alpha[0] + alpha[1]
+    with mp.workdps(dps + 15):
+        hh = mpq(to_frac(h))
+        u = ((mpq(to_frac(center[0])) - mpq(to_frac(x[0]))) / hh, (mpq(to_frac(center[1])) - mpq(to_frac(x[1]))) / hh)
+        Rr = mpq(to_frac(Rd)) / hh
+        du = mp.sqrt(u[0] ** 2 + u[1] ** 2)
+        F = _F_factory(pieces, k)
+        inside = du < Rr
+        angs = [-mp.pi, mp.pi]
+        th_u = mp.atan2(u[1], u[0]) if du > 0 else mp.mpf(0)
+        if not inside:
+            s = mp.asin(Rr / du)
+            angs += [th_u - s, th_u + s]
+        for R in sorted({hi for lo, hi, c in pieces}):
+            Rq = mpq(R)
+            if du > 0:
+                cs = (du ** 2 + Rq ** 2 - Rr ** 2) / (2 * du * Rq)
+                if abs(cs) <= 1:
+                    a = mp.acos(cs)
+                    angs += [th_u - a, th_u + a]
+        # wrap to (-pi, pi]
+        w = []
+        for a in angs:
+            while a > mp.pi:
+                a -= 2 * mp.pi
+            while a < -mp.pi:
+                a += 2 * mp.pi
+            w.append(a)
+        w = sorted(set(w))
+        total = mp.mpf(0)
+        for a0, a1 in zip(w[:-1], w[1:]):
+            if a1 - a0 < mp.mpf(10) ** (-(dps + 10)):
+                continue
+
+            def f(th):
+                ca, sa = mp.cos(th), mp.sin(th)
+                b = u[0] * ca + u[1] * sa
+                disc = b * b - du ** 2 + Rr ** 2
+                if disc <= 0:
+                    return mp.mpf(0)
+                sq = mp.sqrt(disc)
+                if inside:
+                    rin, rout = mp.mpf(0), b + sq
+                else:
+                    if b <= 0:
+                        return mp.mpf(0)
+                    rin, rout = b - sq, b + sq
+                return ca ** alpha[0] * sa ** alpha[1] * (F(rout) - F(rin))
+            total += mp.quad(f, [a0, a1], maxdegree=maxdegree)
+        return +total
+
+
+def polar_disk_moment(center, Rd, x, kernel, alpha, h=1, dps=40, **kw):
+    v = polar_disk_moment_profile(center, Rd, x, alpha, _W_pieces(kernel), h=h, dps=dps, **kw)
+    return +(v / mp.pi * mpq(to_frac(h)) ** (alpha[0] + alpha[1]))
+
+
+def polar_disk_value(center, Rd, x, kernel, h=1, dps=40, **kw):
+    return polar_disk_moment(center, Rd, x, kernel, (0, 0), h=h, dps=dps, **kw)
+
+
+def polar_disk_gradient(center, Rd, x, kernel, h=1, dps=40, **kw):
+    pieces = []
+    for lo, hi, c in _W_pieces(kernel):
+        dc = pderiv(list(c))
+        pieces.append((lo, hi, {j - 1: -d for j, d in enumerate(dc) if d != 0}))
+    gx = polar_disk_moment_profile(center, Rd, x, (1, 0), pieces, h=h, dps=dps, **kw)
+    gy = polar_disk_moment_profile(center, Rd, x, (0, 1), pieces, h=h, dps=dps, **kw)
+    hh = mpq(to_frac(h))
+    return +(gx / mp.pi / hh), +(gy / mp.pi / hh)

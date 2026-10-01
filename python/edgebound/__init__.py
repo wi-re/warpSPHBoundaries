@@ -6,8 +6,8 @@ Derivations: docs/derivations/*.md.  Do not confuse with `curvbound` (PLAN track
 from .core import gradient, moment, moment_gradient, value
 from .geometry import prepare
 from .kernels import KERNELS, disk_moment, kernel
-from .oracle import polar_gradient, polar_moment, polar_value
+from .oracle import polar_disk_gradient, polar_disk_moment, polar_disk_value, polar_gradient, polar_moment, polar_value
 
 __all__ = ["value", "gradient", "moment", "moment_gradient", "prepare",
            "KERNELS", "kernel", "disk_moment",
-           "polar_value", "polar_gradient", "polar_moment"]
+           "polar_value", "polar_gradient", "polar_moment", "polar_disk_value", "polar_disk_moment", "polar_disk_gradient"]
