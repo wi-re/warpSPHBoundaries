@@ -66,7 +66,7 @@ obstacle. The obstacles are in the orchestration around the kernels:
 | `Scene.signed_distance(points)` → (d, n, hit) | no-penetration impulse | **done** for surface loops, SDF, implicit; not for volume representations |
 | radial kernel `W'(r)/r` | density diffusion | **not needed**: the DDT is fluid-to-fluid in warpSPH |
 | kernel `W⁵` / `W⁴∇W` | shifting tensile control | **replaced by quadrature** (polar sampling of the solid, 24 × 96); an exact kernel would remove the sampling error |
-| `p = 2` moments `∫ y_a y_b g(r)` | viscous wall term, torque | **replaced by quadrature** (1 % of a fine half-plane integral); exact weights still to do |
+| Laplacian operation (`Δλ = ∫∇²W dA`, first moments of `∇²W`) | viscous wall term with an exact boundary (replaces the pairwise `p = 2` form; user, 2026-10-02) | **replaced by quadrature of the pairwise form** (1 % of a fine half-plane integral); the exact Laplacian wall term is to do; `p = 2` weights are still needed for torque |
 | per-query vector field (mirrored free-slip velocity) | continuity, viscosity at curved walls | not done: flat-wall approximation with `n = ∇λ/|∇λ|` per body |
 | Wendland C4 (`KernelFunctions.Wendland4`) | sloshing | works in the scene layer (kernel `w4`); `DeltaSPH2D` carries the C2 / C4 pair kernels |
 
