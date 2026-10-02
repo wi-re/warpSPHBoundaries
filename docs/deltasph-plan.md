@@ -69,6 +69,33 @@ Found on the way: the pair-list bug (2 % of reverse pairs lost for lattices comm
 
 **Open decisions for the port** (decision 1 is made; these follow from it): whether the analytic obstacle needs a packing pass before the run; whether the viscous / shifting / no-penetration wall terms should be exact (new kernels) or stay quadrature-based; how the scene adjacency becomes fixed-capacity and graph-capturable.
 
+## 3b. From the 2D tiers to warpSPH, and what 3D changes (2026-10-02, with the user)
+
+**Strategy (user).** Pull the 2D tiers into warpSPH generally and make them stable everywhere first (most uses of the solver are 2D; 3D needs a proper plotting / visualisation framework and fibre-bundle experiments to demonstrate the
+solutions); 3D terms are research (derivation, then integration). Built on a solid 2D foundation (adjacency reuse, fixed capacity, graph capture, smart time stepping) the 3D runs become computationally feasible.
+
+**What carries over to 3D unchanged:** the scene interface (bodies with pose, representation lists, per-type adjacency, per-body reactions, `a0` / `a1` fields), the structure of every δ⁺ / DFSPH term (pair sums + one wall integral), the tier ladder.
+**What changes:** `Pose` (scalar angle, 2 × 2 rotation → rotation matrix / quaternion, vector ω, `ω×(ω×s) + α×s`, inertia tensor, 3-vector torque); edges → triangles (face → edge chain), triangles → tetrahedra, winding number / `inside` in 3D;
+tier 3 needs mean and Gaussian curvature (Tube Maps K sign open), trilinear SDF; tier 4: ball / capsule / slender-body series for fibres; `a1` is 3 × 3 and second moments are 3 × 3 tensors; every hard-coded 2 (polar sampling, 2 × 2 inverses and eigenvalues, `[-y, x]` rotations) must become dimension-generic.
+
+**2D shortcuts that do not scale** (the quadrature, in detail): `DeltaSPH2D._solid_samples` samples the solid on a 24 × 96 polar grid around every wall-adjacent particle and `Scene.inside` classifies the samples. It stands in for three integrals:
+(1) the viscous wall moment `M₂ = ∫_solid y⊗y W'(r)/r³ dA` (= `∫W' dr ∫ŷ⊗ŷ 1[solid] dφ`, a p = 2 weight), (2) the shifting tensile control `∫_solid W⁴ ∇W dA` (the gradient of the kernel `W⁵/5`),
+(3) the Barecasco wall counts (cover vector `∫ unit(x_i − x') 1[solid]`, exact as the gradient of the kernel `K = r`; the cone count `area(solid ∩ sector)` is a clipping problem, only `> 0.5` matters).
+(1) and (2) are the same integrals the edge machinery already does exactly for `λ`, `∇λ` and the covariance, with a different radial weight (risks: negative powers `r^-2` need the inverse-power potentials, whose downward recurrence was flagged fragile at small distance; `W⁵` is a degree-25 polynomial for C2, more for C4, and needs the exact Chebyshev compile).
+Why exact: **cost** (3D: 24 × 48 × 96 ≈ 10⁵ samples and a 3D `inside` per wall-adjacent particle, 10¹⁰–10¹¹ per step at 10⁵–10⁶ such particles, versus a few elements exactly); **consistency** (at the first row the shift is a small difference of large terms,
++2.24 fluid, −2.07 exact `G`, −0.14 tensile, net +0.03, so a 1 % sampling error in one term is a few percent of the net; the viscous term was 5.6 % off at 12 radii, ~1 % at 24); **smoothness** (the sampled force jumps as the solid edge crosses a sample, the exact integral is smooth in the position and differentiable).
+Other non-scaling items: flat-wall mirror normals (`∇λ/|∇λ|`, needs a per-query vector field at curved walls), brute-force `signed_distance` over edges (needs a spatial structure).
+
+**The main design point for fibre bundles: many small bodies.** The scene layer costs ~3 ms of launch overhead per body in a Python loop. A bundle needs one flat array of primitive instances (pose, radius or skeleton index) handled by one adjacency and one kernel launch,
+with reactions (force, torque) accumulated per instance. Build and test that in 2D first: a bundle of disks in cross-flow (tier 4 disks exist) is the natural first demo.
+
+**Cost of 3D.** Neighbours ~50 → ~270 at support 4 dx; wall integrals stay affordable only if tiers 3 / 4 give O(1) closed forms per particle away from sharp features, exact elements near them. The weakly-compressible acoustic CFL is the same per step as in 2D but each step is far more expensive,
+so the incompressible path (DFSPH, already on this scene layer) is likely preferable for many 3D cases; both need a fixed-capacity adjacency reused across steps (Verlet-style, graph-capturable).
+
+**Order.** (1) Freeze a dimension-generic interface for bodies, representations and operations (implement 2D). (2) Run the 2D tiers on Warp with reusable fixed-capacity adjacency and batched primitive instances; exact weights replace the quadrature one use at a time (quadrature stays as a checked fallback).
+(3) Integrate in warpSPH as a boundary provider replacing the `kinds == 1` wall particles (`deltasph-porting-notes.md` term map). (4) Regression suite over schemes and integrators with this session's cases (tank, wedge, dam break, sloshing, hexagon, DFSPH).
+(5) Fibre-bundle demos in 2D, in parallel with the 3D derivations (Maple: face → edge chain, tetrahedra, curvature series). **Open in 2D before the port:** the wedge layout (general packing problem, deferred), exact weights, moving bodies in δ⁺, exact force bookkeeping.
+
 ## 4. Decisions
 
 1. **Where does the solver live? — decided (2026-10-02): self-contained here** (`deltasph2d.py`, like DFSPH2D), warpSPH's `sun2017DeltaSPH` run separately as the live reference. The long-term goal is to integrate the boundary code into
