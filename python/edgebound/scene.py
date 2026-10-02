@@ -515,6 +515,33 @@ class Scene:
             for r in b.reps:
                 r.to(device) if hasattr(r, "to") else None
 
+    def inside(self, points):
+        """True where a world point lies inside the solid of any body (surface loops: winding number; SDF / implicit primitives: negative signed distance, positive = fluid; volume: inside a triangle).
+        Not an adjacency query: no support radius, any number of points (the free-surface detector samples the solid around a particle)."""
+        pts = points.to(self.device, torch.float64)
+        out = torch.zeros(len(pts), dtype=torch.bool, device=pts.device)
+        for body in self.bodies:
+            lp = body.pose.toLocal(pts)
+            for rep in body.reps:
+                if isinstance(rep, SurfaceRep):
+                    out |= rep.indicator(lp) > 0.5
+                elif isinstance(rep, SdfRep):
+                    out |= rep.signed(lp)[0] < 0
+                elif isinstance(rep, ImplicitRep):
+                    out |= rep.shape.signed(lp)[0] < 0
+                elif isinstance(rep, VolumeRep):
+                    V, E = rep.mesh.vertices, rep.mesh.elements.long()
+                    a, b, c = V[E[:, 0]], V[E[:, 1]], V[E[:, 2]]
+                    for k in range(0, len(lp), 20000):                      # chunked point x triangle test (barycentric signs)
+                        q = lp[k:k + 20000, None, :]
+                        d1 = (q[..., 0] - b[None, :, 0]) * (a[None, :, 1] - b[None, :, 1]) - (a[None, :, 0] - b[None, :, 0]) * (q[..., 1] - b[None, :, 1])
+                        d2 = (q[..., 0] - c[None, :, 0]) * (b[None, :, 1] - c[None, :, 1]) - (b[None, :, 0] - c[None, :, 0]) * (q[..., 1] - c[None, :, 1])
+                        d3 = (q[..., 0] - a[None, :, 0]) * (c[None, :, 1] - a[None, :, 1]) - (c[None, :, 0] - a[None, :, 0]) * (q[..., 1] - a[None, :, 1])
+                        neg = (d1 < 0) | (d2 < 0) | (d3 < 0)
+                        pos = (d1 > 0) | (d2 > 0) | (d3 > 0)
+                        out[k:k + 20000] |= (~(neg & pos)).any(1)
+        return out
+
     def candidates(self, body: Body, pos, sup, allowed, cells: Optional[ParticleCells] = None):
         """broadphase: support sphere vs the body OBB in the body frame (exact); with `cells` only the particles under the inflated world box of the OBB are tested."""
         lo, hi = body.obb()

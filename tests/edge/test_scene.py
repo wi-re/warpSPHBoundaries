@@ -366,3 +366,24 @@ def test_covariance_operation(device):
     sf = Scene([Body(reps=[SurfaceRep.box((-3, -3), (3, 0.0))])], device)
     ps3 = state(np.array([[0.0, 0.03], [0.1, 0.07], [-0.2, 0.12]]), device, sup=0.2)
     np.testing.assert_allclose(sceneOperation(ps3, pr, hp).cpu().numpy(), sceneOperation(ps3, pr, sf).cpu().numpy(), atol=1e-7)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_scene_inside_agrees_across_representations(device):
+    """point-in-solid: a tank wall as surface loop (background 1), as the omniSPH-style slab volume, as SDF, and a rotated hexagon body."""
+    from edgebound.dfsph2d import domain_scene
+    lo, hi, h = (0.0, 0.0), (1.0, 0.5), 0.05
+    rng = np.random.default_rng(1)
+    pts = torch.as_tensor(rng.uniform([-0.2, -0.2], [1.2, 0.7], (4000, 2)), dtype=torch.float64, device=device)
+    truth = ~((pts[:, 0] > 0) & (pts[:, 0] < 1) & (pts[:, 1] > 0) & (pts[:, 1] < 0.5))
+    near = (((pts[:, 0] - 0).abs() < 0.01) | ((pts[:, 0] - 1).abs() < 0.01) | ((pts[:, 1] - 0).abs() < 0.01) | ((pts[:, 1] - 0.5).abs() < 0.01)) 
+    inner = ~((pts[:, 0] < -0.12) | (pts[:, 0] > 1.12) | (pts[:, 1] < -0.12) | (pts[:, 1] > 0.62))      # the volume slabs have thickness 2.5 h = 0.125
+    for kind in ("surface", "volume", "sdf"):
+        sc = domain_scene(kind, lo, hi, h, device)
+        got = sc.inside(pts)
+        ok = ~near & (inner if kind != "surface" else torch.ones_like(inner))
+        assert bool((got[ok] == truth[ok]).all()), kind
+    hexa = Body(bodyId=1, center=(0.5, 0.25), angle=0.3, reps=[SurfaceRep.regularPolygon((0, 0), 0.1, 6, areaPreserving=False)])
+    sc = Scene([hexa], device)
+    c = torch.tensor([[0.5, 0.25], [0.5 + 0.08, 0.25], [0.5 + 0.2, 0.25]], dtype=torch.float64, device=device)
+    assert sc.inside(c).tolist() == [True, True, False]

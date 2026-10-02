@@ -47,7 +47,8 @@ def dwendland2(r, h):
 def neighbor_pairs(pos, h):
     """(i, j, r) for all ordered pairs |x_i - x_j| <= (h_i + h_j) / 2, including i = j (as omniSPH's neighbour lists do)."""
     dev = pos.device
-    cell = float(h.max())
+    cell = 1.01 * float(h.max())        # not exactly the support: a lattice with spacing dx | H puts particles exactly on cell borders, where the insertion and the query round differently
+                                        # and ~2 % of the reverse pairs go missing (momentum conservation is lost)
     cl = buildCellList(pos, pos, cell)
     nx, ny = cl.dims
     c = torch.floor((pos - cl.lo) / cell).long()

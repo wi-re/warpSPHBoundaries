@@ -1,6 +1,6 @@
 # δ⁺-SPH on the scene boundary layer — plan
 
-**Status:** plan, nothing implemented. Follows `dfsph-validation.md` (DFSPH2D vs omniSPH). Same pattern: a self-contained 2D torch solver `deltasph2d.py` whose boundary terms are exact kernel integrals over the scene
+**Status:** tank and wedge done (`deltasph-validation.md`: tank passes and is 10× more accurate than mDBC, wedge passes all probe checks but rings), dam break and sloshing next. Follows `dfsph-validation.md` (DFSPH2D vs omniSPH). Same pattern: a self-contained 2D torch solver `deltasph2d.py` whose boundary terms are exact kernel integrals over the scene
 (`scene-architecture.md`), validated against a live reference with identical initial particles. Reference here: warpSPH's `sun2017DeltaSPH` (δ⁺, PST on) + `fourtakas2019` DDT + `symplecticEuler` + `english2025` mDBC + free-slip, the
 Marrone 3.1 dam break (`warpSPH/scripts/probe_deltaSPHMarrone.py`: column 2H × H, H = 0.6 m, tank 5.366 H, ceiling at 1.0 m, probes P1/P2/P3 on the impact wall, c0 = 40 √(gH), H/dx = 40/80/320).
 
@@ -22,7 +22,7 @@ DFSPH had **three** wall quantities (λ, ∇λ, a hydrostatic pressure extrapola
 | 1 | density / kernel sum, continuity `dρ/dt = −ρ Σ V (v_j − v_i)·∇W` (`momentum`) | `+ρ_i (v_i·∇λ − ∫ v_b·∇W)` with the mirrored `v_b` | `Gradient` (∇λ), `Divergence` with a per-query vector field | have (per-query vector fields: check the vector case) |
 | 2 | Tait EOS | none | — | — |
 | 3 | pressure force, Antuono surface-aware (`pressure/surfaceAware`) | `−(1/ρ_i)(P_i ∇λ + ∫ P_b ∇W)` for surface rows; wall rows follow the reference's switch | `Gradient`, Symmetric, per-query `P_b` | have (this is the DFSPH wall term) |
-| 4 | density diffusion `fourtakas2019`: `δ h c ρ0 Σ V ψ_ij (r_ij·∇W)/(r² + η)`, ψ_ij = (ρ_j − ρ_i) − ½(∇ρ^L_i + ∇ρ^L_j)·r_ij − hydrostatic part | `∫ ψ(x') (y·∇W)/(y² + η) dA`: a **radial kernel `W'(r)/r`** applied to a per-query scalar field | **new kernel** `W'(r)/r` (polynomial for Wendland: no singularity) + `Interpolate`; ∇ρ^L needs 5 | new kernel |
+| 4 | density diffusion `fourtakas2019` (**fluid–fluid only in warpSPH: no wall term, no new kernel**; was planned as a W'(r)/r wall integral): `δ h c ρ0 Σ V ψ_ij (r_ij·∇W)/(r² + η)`, ψ_ij = (ρ_j − ρ_i) − ½(∇ρ^L_i + ∇ρ^L_j)·r_ij − hydrostatic part | `∫ ψ(x') (y·∇W)/(y² + η) dA`: a **radial kernel `W'(r)/r`** applied to a per-query scalar field | **new kernel** `W'(r)/r` (polynomial for Wendland: no singularity) + `Interpolate`; ∇ρ^L needs 5 | new kernel |
 | 5 | renormalised gradients `L_i = (Σ V r⊗∇W)⁻¹`, `∇ρ^L` (`density/gradRhoL`) | wall adds the first moments `∫ y⊗∇W` (g1) and `∫ (ρ_b − ρ_i) ∇W` | `Covariance`, `Gradient` per-query | have (DFSPH §6) |
 | 6 | velocity dissipation (`deltaSPH/velocityDissipation`): `α h c/ρ Σ m (v_ij·r_ij)/(r² + η) ∇W` | free-slip: `v_ij = 2 (v_i·n) n`, so `2 (v_i·n) ∫ (n·y)/(y² + η) ∇W` — a **second moment `∫ y⊗y g(r)`** | **new**: p = 2 weights (`y_a y_b` times a radial kernel; the same missing item as the torque, `dfsph-validation §5`) | new |
 | 7 | surface detection (`surfaceDetection`, Maronne/Barecasco/λ_min of `L⁻¹`) and normals | needs the wall in `Σ V ∇W`, in the covariance eigenvalue and in the completeness `Σ V W + λ` | `Density`, `Gradient`, `Covariance` | have; the *detector's* thresholds were tuned for mDBC particle walls — re-check |
@@ -52,6 +52,9 @@ video / frames in `<dir>/*_run/`. Probe numbers of the stored series (t* = t √
 These are the curves the analytic-wall run is compared with. Two observations to keep honest: (i) P1's plateau (0.35) and P2's late peak are *outside* the acceptance bands quoted in the probe's docstring (plateau 0.45–0.68, P2 peak 0.22–0.40 at
 5.2 < t* < 6.1) — I have not audited whether the stored series is what the docstring scores, so the reference's own curves, not the bands, are the target; (ii) the P3 spike (P* = 15 at t* = 3.29) is the first ceiling impact of the right-wall run-up,
 exactly where the ceiling-sticking work in warpSPH (`CEILING_STICKING_PLAN.md`) finds riders and kicked clusters. The matched initial particles are not stored: they are rebuilt from the case geometry (regular lattice, dx = 0.014925, box 3.2196 × 1.0, column 2H × H).
+
+**Order decided 2026-10-02 (user): hydrostatic tank → English wedge → dam break → sloshing.** Tank and wedge need none of the planned new scene operations (only `Scene.inside`, added); the viscous wall term, the
+`W⁵` shifting kernel and the closest-point query come with the dam break.
 
 **P1 — scene-layer additions** (kernels first, they are table entries): `W'(r)/r`, `W⁵` (and `W⁵/5` gradient form); p = 2 weights `∫ y_a y_b g(r)`; `Scene.closestPoint` / normal; per-query vector fields. Each verified against a dense
 boundary-particle lattice (the continuum limit) and, for the kernels, against the polar disk oracle (`oracle.py`) as before.

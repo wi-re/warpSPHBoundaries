@@ -20,7 +20,7 @@ Step order of one RHS call (`schemes/deltaSPH.py::_deltaSPH_rhs`) and the stages
 5. `weaklyCompressibleEOS` (`modules/eos/weaklyCompressible.py`) — unchanged.
 6. `detectFreeSurface` (`modules/surfaceDetection/wrapper.py`: Maronne / Barecasco / colour field) — the wall contributes to `Σ V W`, `Σ V ∇W` and the covariance `Σ V r⊗∇W`: `Density`, `Gradient`, `Covariance`. Thresholds were tuned against particle walls.
 7. `computeGradRho` / `computeGradRhoL` (`modules/density/gradRho.py`, `gradRhoL.py`) — wall adds `∫ (ρ_b − ρ_i) ∇W` and the g1 moments of `L`.
-8. `computeDensityDiffusion` (`modules/deltaSPH/densityDiffusion.py`, kernel `wp_densityDelta.py`) — wall adds a `W'(r)/r`-weighted integral of ψ.
+8. `computeDensityDiffusion` (`modules/deltaSPH/densityDiffusion.py`, kernel `wp_densityDelta.py`) — **fluid-to-fluid only in warpSPH** (`operationMode = FluidToFluid`, as DualSPHysics): no wall term, no new kernel. The hydrostatic part `ρ0 g·x_ij/c0²` of `fourtakas2019` keeps ψ = 0 on truncated stencils.
 9. `computeVelocityDiffusion` (`modules/deltaSPH/velocityDissipation.py`, kernel `wp_viscosityDelta.py`) — wall adds a second-moment integral (`∫ y⊗y g(r)`).
 10. `computeMomentum` (`modules/momentum/inconsistent.py`, continuity) — wall adds `ρ_i (v_i·∇λ − ∫ v_b·∇W)`.
 11. `computePressureForceSurfaceAware` (`modules/pressure/surfaceAware.py`, `wp_surfaceAware.py`) — wall adds `−(1/ρ)(P_i ∇λ + ∫ P_b ∇W)` for the rows the switch selects.
@@ -64,11 +64,12 @@ Filled in as they are built; each entry: what, where, how verified.
 | per-query scalar field `P_b(x')` with gradient (`BodyField(perQuery=True)`) | pressure force, DDT | have (DFSPH) |
 | `Covariance` (g1 moments) | `L`, surface detection | have (DFSPH §6) |
 | per-body `perBody` force output | wall force bookkeeping | have |
-| radial kernel `W'(r)/r` | DDT | to do |
+| ~~radial kernel `W'(r)/r`~~ | ~~DDT~~ | **not needed**: the DDT is fluid-to-fluid in the reference (`densityDiffusion.py` excludes boundary neighbours) |
 | kernels `W⁵` / `W⁴ ∇W` | PST | to do |
 | p = 2 moments `∫ y_a y_b g(r)` | viscosity, torque | to do |
-| `Scene.closestPoint` / normal / signed distance | no-penetration, surface normals | to do |
-| per-query vector field (mirrored free-slip velocity) | continuity, viscosity | to do (check) |
+| `Scene.inside(points)` (point in solid, all representations) | free-surface detector (wall part), later no-penetration | **done** (`scene.py`, `test_scene_inside_agrees_across_representations`) |
+| `Scene.closestPoint` / normal / signed distance | no-penetration, surface normals, curved-wall mirror | to do |
+| per-query vector field (mirrored free-slip velocity) | continuity, viscosity | not needed so far: for a flat wall `v_b − v_i = −2 (u·n) n` collapses the continuity wall term to `2 ρ_i u_n |μ∇λ|` (n = ∇λ/|∇λ|); needed for curved walls (wedge faces, corners) |
 
 ## 5. Change log
 
@@ -77,3 +78,10 @@ One line per change that matters to the port: date, what changed in *this* repo,
 | date | change here | warpSPH counterpart | deviation from the reference |
 |---|---|---|---|
 | 2026-10-02 | (start) plan and these notes | — | — |
+| 2026-10-02 | `Scene.inside` | none (wall particles are explicit) | — |
+| 2026-10-02 | `deltasph2d.py`: `DeltaSPH2D`, `hydrostatic_tank`; terms 2, 5, 10, 11, 12 (EOS, continuity + wall, Antuono pressure force + wall, gravity, α-viscosity fluid–fluid), fourtakas2019 DDT fluid–fluid, symplectic Euler, Sun-2017 dt | `_deltaSPH_rhs`, `symplecticEuler` (`warpSPHIntegrators/verlet.py`), `timestep/weaklyCompressible.py` | wall continuity uses the particle's own velocity, not the Shepard velocity at the ghost; wall pressure `P_b = P_i + ρ0 (g − a_w)·(x' − x_i)` clamped ≥ 0 (mDBC clones the ghost's pressure and may be negative); no wall term in α-viscosity (zero at rest) |
+| 2026-10-02 | free-surface detector (Barecasco) with the wall as a continuum of particles | `modules/surfaceDetection/barecascoDetection.py`, `wp_barecasco.py` | the wall's cover vector and cone count come from sampling the solid on an 8 × 48 polar grid (`Scene.inside`) with number density `μ/dx²`; the reference counts wall particles | 
+| 2026-10-02 | `neighbor_pairs` cell = 1.01 × support (shared with DFSPH) | `buildVerletList` (warpSPHCore) | warpSPH is unaffected by the border-rounding that dropped 2 % of reverse pairs here, but any port that builds a cell list with cell = support on a lattice with dx dividing the support needs the same check |
+| 2026-10-02 | `english_wedge`: smooth `SurfaceRep` triangle (exact corners) as a second body; first fluid row ≥ dp/2 from it | wedge as SDF-sampled boundary particles (`caseUtils/weaklyCompressible.py::buildObstacleSDF`) | the layout of a regular lattice is not consistent with a smooth sloped wall (first-order moment error 0.2 vs 0.01 on a flat wall at dp/2); the wall particles of warpSPH share the lattice and have no such mismatch. Port consequence: an analytic obstacle needs a body-fitted initial packing (open, docs/deltasph-validation.md §3) |
+| 2026-10-02 | `DeltaSPH2D.settle` / `pack` / `residual` (experimental layout tools), `staircase` control | none | diagnostic only |
+
