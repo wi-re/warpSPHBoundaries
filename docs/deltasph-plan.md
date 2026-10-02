@@ -100,6 +100,12 @@ so the incompressible path (DFSPH, already on this scene layer) is likely prefer
 (3) Integrate in warpSPH as a boundary provider replacing the `kinds == 1` wall particles (`deltasph-porting-notes.md` term map). (4) Regression suite over schemes and integrators with this session's cases (tank, wedge, dam break, sloshing, hexagon, DFSPH).
 (5) Fibre-bundle demos in 2D, in parallel with the 3D derivations (Maple: face → edge chain, tetrahedra, curvature series). **Open in 2D before the port:** the wedge layout (general packing problem, deferred), exact weights, moving bodies in δ⁺, exact force bookkeeping.
 
+## 3c. To investigate: openMaelstrom (user, 2026-10-02)
+
+How `~/dev/openMaelstrom` implements the surface detection (reported: cover-vector based, works with an SDF boundary), boundary friction (reported: supported) and its shifting / surface handling near boundaries (pointers and the questions are in `deltasph-resume.md`).
+Expected consequence to confirm from the code: if the cover vector and the friction term need only SDF quantities (`λ`, `∇λ`, distance), then **shifting is the only term whose wall part has no existing exact weight**. Our accounting: the viscous wall term becomes the exact Laplacian operation (§3b), the detector's cover vector is already exact
+(gradient of the kernel `K = r`) and only the cone count is a clipping problem, and the shifting tensile control is `∫W⁴∇W dA = ∇∫W⁵/5 dA`: exact in principle with a new kernel table entry (degree-25 polynomial for C2, more for C4: conditioning to be checked), so quadrature is not needed even for shifting, only a heavier kernel entry. It also depends on whether openMaelstrom's shifting has a wall term at all.
+
 ## 4. Decisions
 
 1. **Where does the solver live? — decided (2026-10-02): self-contained here** (`deltasph2d.py`, like DFSPH2D), warpSPH's `sun2017DeltaSPH` run separately as the live reference. The long-term goal is to integrate the boundary code into

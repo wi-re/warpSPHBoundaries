@@ -8,13 +8,23 @@ import sys
 import numpy as np
 
 
+class _Snap(dict):
+    files = property(lambda self: list(self.keys()))
+
+
+def _load(f):
+    """npz of a run: the keys `snap_t`, `snap_x`, ... written by `deltasph_validation` / `dfsph_runcase` are accepted as `t`, `x`, ..."""
+    z = np.load(f)
+    return _Snap({(k[5:] if k.startswith("snap_") else k): z[k] for k in z.files})
+
+
 def render(out, runs, vmax=5.0, fps=30, width=None, color="speed", t_max=None):
     """`color`: "speed" | "p", or one per panel; `vmax`: one value or one per panel.  A `poly` array in the npz (vertices [K,2]) is drawn as a static solid."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon
-    data = [(name, np.load(f)) for name, f in runs]
+    data = [(name, _load(f)) for name, f in runs]
     colors = color if isinstance(color, (list, tuple)) else [color] * len(data)
     vmaxs = vmax if isinstance(vmax, (list, tuple)) else [vmax] * len(data)
     nF = min(len(d["t"]) for _, d in data)
