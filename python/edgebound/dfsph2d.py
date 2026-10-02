@@ -170,13 +170,18 @@ class DFSPHConfig:
     maxIterations: int = 256
     divergenceMaxIterations: int = 3         # omniSPH: the divergence loop always runs exactly 4 iterations
     minIterations: int = 4
-    divergenceClamp: bool = False            # clamp the divergence pressure at >= 0 as the density pressure is (omniSPH does not; needed for many divergence iterations with a moving wall)
+    divergenceClamp: bool = False            # clamp the divergence pressure of ALL particles at >= 0 as the density pressure is (omniSPH does not: its negative divergence pressure is the cohesion that keeps
+                                             # the fluid together after a splash; clamping it expands the fluid by ~30 %).  Needed only for many divergence iterations with a moving wall
+    wallDivergenceClamp: Optional[bool] = None   # clamp the divergence pressure only where it enters the WALL acceleration (fluid-fluid terms keep the signed pressure).  None: iff the wall is in the divergence solve.
+                                             # An unclamped negative pressure there is a wall suction: with a moving body (wall in the divergence solve) a particle leaving a wall is pulled back and
+                                             # fluid sticks to every wall, ceiling included (docs/dfsph-validation.md s.8)
     boundaryInDivergence: Optional[bool] = None   # omniSPH's divergence solve ignores the wall; True adds the wall flux, alpha and wall pressure acceleration (no clamp);
                                                   # None: True iff a body moves (a moving wall has a normal velocity the divergence solve must see)
     recordForces: bool = True
     gradientCorrection: str = "none"         # 'wall': zeroth-order consistent wall closure (docs/dfsph-validation.md s.7): the wall gradient of the p_i terms is scaled so that a uniform pressure
                                              #   exerts no net force on a wall-contact particle, s_i = clip(-(sum_j V_j grad W_ij).n / |grad lambda|, 1 - kappa, 1 + kappa)
     closureLimit: float = 0.2                # kappa
+    clampWallPressure: bool = True          # p_b >= 0 (omniSPH clamps the extrapolated wall pressure in the density solve): the hydrostatic wall term can never be a suction, e.g. at a ceiling
     omega: float = 0.5
     xsph: float = 1e-4
     boundaryFriction: float = 5e-3
@@ -231,6 +236,7 @@ class DFSPH2D:
             self.sClose = self._closure()
             self.gk = self.sClose[:, None] * self.gk
             self._out1 = None
+            self._theta_q = None
         else:
             self.lam = torch.zeros_like(self.V)
             self.gk = torch.zeros_like(self.x)
@@ -307,8 +313,23 @@ class DFSPH2D:
             return torch.zeros((self.nb, len(self.x), 2) if perBody else self.x.shape, dtype=F64, device=self.dev)
         pp = p.clamp(min=0) if clamp else p
         pfac = (pp / self.rho ** 2 + pp) * self.sClose
-        out = -pfac[None, :, None] * self.gkb - self._a1_part(pp)
+        a1 = self._a1_part(pp)
+        if self.cfg.clampWallPressure and self.cfg.wallPressure == "hydrostatic":
+            a1 = a1 - self._wall_excess(pp)[:, :, None] * self.gkb
+        out = -pfac[None, :, None] * self.gkb - a1
         return out if perBody else out.sum(0)
+
+    def _wall_excess(self, pp):
+        """p_b >= 0.  To leading order the hydrostatic term mu int (a1.y) grad W is an effective wall pressure offset q (per body) times the wall gradient, q = (term . n) / |mu grad lambda|, n = grad lambda / |grad lambda|
+        (q < 0: the wall is above the particle, p_b = p_i + rho g.(x' - x_i) < p_i).  The effective wall pressure p_i + q is clamped at 0: with theta = clip(p_i / (-q), 0, 1) for q < 0 (theta = 1 where the wall is below or beside
+        the particle, or the particle's own pressure carries the offset) only the normal pressure offset is reduced, the term loses (1 - theta) q grad lambda (-> 0 continuously for q -> 0, so round-off cannot flip it; the tangential part is untouched)."""
+        if self._theta_q is None:
+            a1 = self._a1_part(pp)
+            eps = 1e-5 * self.cfg.wallMass / float(self.h.min())          # |mu grad lambda| ~ mu / h in contact: below 1e-5 of that the wall force is negligible and the ratio is round-off
+            self._theta_q = (a1 * self.gkb).sum(2) / (self.gkb * self.gkb).sum(2).clamp(min=eps * eps)
+        q = self._theta_q
+        theta = torch.where(q < 0, (pp[None, :] / (-q).clamp(min=1e-300)).clamp(0.0, 1.0), torch.ones_like(q))
+        return (1.0 - theta) * q
 
     def _a1_part(self, pp):
         """mu int (a1_i . y) grad W per body [B,N,2]."""
@@ -366,7 +387,7 @@ class DFSPH2D:
         counter = 0
         while True:
             clampP = density or cfg.divergenceClamp
-            pred = (self._boundary_accel(p2, clampP) if wall else torch.zeros_like(self.x)) + self._fluid_accel(p2)
+            pred = (self._boundary_accel(p2, density or clampP or self._clampWallDiv) if wall else torch.zeros_like(self.x)) + self._fluid_accel(p2)
             p1 = p2
             ks = dt * dt * self._sum(Vt[j] * ((pred[i] - pred[j]) * self.gW).sum(1))
             if wall:
@@ -383,7 +404,7 @@ class DFSPH2D:
                 break
         pred = self._fluid_accel(p2)
         if wall and self.scene is not None:
-            ab = self._boundary_accel(p2, density or cfg.divergenceClamp, perBody=True)                         # [B,N,2]: acceleration of the fluid by each body
+            ab = self._boundary_accel(p2, density or cfg.divergenceClamp or self._clampWallDiv, perBody=True)                         # [B,N,2]: acceleration of the fluid by each body
             pred = pred + ab.sum(0)
             self.forcePressure = self.forcePressure - (self.V[None, :, None] * ab).sum(1)    # force of the fluid on each body (m_i = V_i, rest density 1)
         if density:
@@ -395,6 +416,7 @@ class DFSPH2D:
     def step(self):
         cfg, dt = self.cfg, self.dt
         self._bdiv = cfg.boundaryInDivergence if cfg.boundaryInDivergence is not None else self._moving()
+        self._clampWallDiv = cfg.wallDivergenceClamp if cfg.wallDivergenceClamp is not None else self._bdiv
         self.forcePressure = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
         self.forceFriction = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
         self._prepare()

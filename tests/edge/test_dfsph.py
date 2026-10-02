@@ -230,3 +230,48 @@ def test_closure_keeps_the_force_bookkeeping_and_tight_solves_with_a_moving_body
         sim.step()
     assert max(h["balance"] for h in sim.history) < 1e-13
     assert torch.isfinite(sim.x).all() and float(sim.v.norm(dim=1).max()) < 5.0
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_a_particle_leaving_a_wall_is_not_pulled_back_when_a_body_moves(device):
+    """a moving body puts the wall into the divergence solve; with an unclamped divergence pressure a particle that leaves the ceiling feels the wall term as suction and is stopped (fluid sticks to every wall).
+    Isolated particle at the ceiling moving away at 1 m/s, no gravity, a rotating hexagon elsewhere in the box: the default (clamped) keeps the velocity, the unclamped solve cancels it."""
+    r = 0.006
+    h = r * np.sqrt(20.0)
+    dx = D.PACKING * h
+    cal = D.lattice_calibration(dx, dx, h)
+    H = 0.3
+    out = {}
+    for clamp in (None, False):
+        dom = D.domain_scene("surface", (0.0, 0.0), (0.4, H), h, device).bodies[0]
+        hexa = Body(bodyId=1, center=(0.3, 0.1), angularVelocity=3.0, reps=[C.hexagon(0.04, "surface")])
+        sim = D.DFSPH2D(np.array([[0.1, H - 0.5 * dx]]), np.array([[0.0, -1.0]]), cal["V"], np.array([h]), Scene([dom, hexa], device),
+                        D.DFSPHConfig(gravity=(0.0, 0.0), wallMass=cal["mu"], wallDivergenceClamp=clamp), device)
+        for _ in range(30):
+            sim.step()
+        out[clamp] = float(sim.v[0, 1])
+    assert out[None] < -0.99                    # keeps leaving the wall
+    assert out[False] > -0.1                    # the old behaviour: stopped at the wall
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_divergence_pressure_keeps_its_sign_between_fluid_particles(device):
+    """the negative divergence pressure is the cohesion of omniSPH's solver (a stretching blob is pulled back together).  With a moving body (wall in the divergence solve) the default must keep it:
+    same damping of the stretching as the wall-blind solve; clamping the divergence pressure of all particles (`divergenceClamp`) removes it and the fluid expands (mean density 0.7 after a splash)."""
+    r = 0.006
+    h = r * np.sqrt(20.0)
+    dx = D.PACKING * h
+    cal = D.lattice_calibration(dx, dx, h)
+    pos = lattice(12, 12, dx, dx, 0.2, 0.1)
+    c = pos.mean(0)
+    vr = {}
+    for name, kw in (("default", {}), ("global", dict(divergenceClamp=True)), ("blind", dict(boundaryInDivergence=False))):
+        dom = D.domain_scene("surface", (0, 0), (0.6, 0.4), h, device).bodies[0]
+        hexa = Body(bodyId=1, center=(0.45, 0.2), angularVelocity=3.0, reps=[C.hexagon(0.04, "surface")])
+        sim = D.DFSPH2D(pos, 0.5 * (pos - c), cal["V"], np.full(len(pos), h), Scene([dom, hexa], device), D.DFSPHConfig(gravity=(0, 0), wallMass=cal["mu"], **kw), device)
+        for _ in range(40):
+            sim.step()
+        d = sim.x - sim.x.mean(0)
+        vr[name] = float((((sim.v - sim.v.mean(0)) * d).sum(1) / d.norm(dim=1).clamp(min=1e-9)).mean())
+    assert abs(vr["default"] - vr["blind"]) < 0.1 * vr["blind"] + 1e-4
+    assert vr["global"] > 5 * vr["default"]
