@@ -1,6 +1,6 @@
 # δ⁺-SPH on the scene boundary layer — plan
 
-**Status:** tank, wedge and Marrone 3.1 dam break done (`deltasph-validation.md`: tank 10× more accurate than mDBC; wedge passes all probe checks but rings; dam break P1 and KE match warpSPH, P2 / ceiling probe qualitatively); sloshing next. Follows `dfsph-validation.md` (DFSPH2D vs omniSPH). Same pattern: a self-contained 2D torch solver `deltasph2d.py` whose boundary terms are exact kernel integrals over the scene
+**Status:** tank, wedge and Marrone 3.1 dam break done (`deltasph-validation.md`: tank 10× more accurate than mDBC; wedge passes all probe checks but rings; dam break P1 and KE match warpSPH, P2 / ceiling probe qualitatively); sloshing running (tank-fixed frame, rotating gravity as in warpSPH). Term-by-term status: `deltasph-porting-notes.md` §4b. Follows `dfsph-validation.md` (DFSPH2D vs omniSPH). Same pattern: a self-contained 2D torch solver `deltasph2d.py` whose boundary terms are exact kernel integrals over the scene
 (`scene-architecture.md`), validated against a live reference with identical initial particles. Reference here: warpSPH's `sun2017DeltaSPH` (δ⁺, PST on) + `fourtakas2019` DDT + `symplecticEuler` + `english2025` mDBC + free-slip, the
 Marrone 3.1 dam break (`warpSPH/scripts/probe_deltaSPHMarrone.py`: column 2H × H, H = 0.6 m, tank 5.366 H, ceiling at 1.0 m, probes P1/P2/P3 on the impact wall, c0 = 40 √(gH), H/dx = 40/80/320).
 
@@ -56,13 +56,18 @@ exactly where the ceiling-sticking work in warpSPH (`CEILING_STICKING_PLAN.md`) 
 **Order decided 2026-10-02 (user): hydrostatic tank → English wedge → dam break → sloshing.** Tank and wedge need none of the planned new scene operations (only `Scene.inside`, added); the viscous wall term, the
 `W⁵` shifting kernel and the closest-point query come with the dam break.
 
-**P1 — scene-layer additions** (kernels first, they are table entries): `W'(r)/r`, `W⁵` (and `W⁵/5` gradient form); p = 2 weights `∫ y_a y_b g(r)`; `Scene.closestPoint` / normal; per-query vector fields. Each verified against a dense
-boundary-particle lattice (the continuum limit) and, for the kernels, against the polar disk oracle (`oracle.py`) as before.
+**P1 — scene-layer additions: done in a reduced form.** Added `Scene.inside`, `Scene.signed_distance`, the C4 kernel path, per-query / covariance use; the planned `W'(r)/r` kernel was not needed (DDT is fluid-to-fluid in warpSPH) and the `W⁵` and `p = 2` weights are replaced by a polar quadrature of the solid
+(`DeltaSPH2D._solid_samples`, 24 × 96, ≤ 1 % on a half plane). Still open: exact second-moment / `W⁵` weights, per-query vector fields for curved walls, volume representations in `signed_distance`.
 
-**P2 — solver, one term at a time**, always against the particle-wall limit so that a sign or factor error shows as a mismatch with a *dense wall particle layer* rather than with the reference scheme:
-hydrostatic tank at rest (pressure profile, spurious velocity) → add DDT (ψ with the hydrostatic correction) → viscosity → PST → free surface switch → Marrone 3.1.
+**P2 — solver, one term at a time: done through the dam break.** Order followed: tank (EOS, continuity, Antuono wall, DDT, viscosity, detector) → wedge (sloped faces and corners; staircase control, ramp reproducer) → dam break (viscous wall term, time-centred continuity,
+dilated mask, shifting, no-penetration, probes) → sloshing (C4 kernel, rotating gravity, fixed dt, sensor probes). Each stage has unit tests (`tests/edge/test_deltasph.py`, 10) and a validation table in `deltasph-validation.md`.
 
-**P3 — validation and videos**: Marrone 3.1 probes P1/P2/P3 and the front against warpSPH, 2k–33k particles, tier 1/2/3 domain representations, the hexagon dam break, the same `dfsph_runcase` / `dfsph_video` tooling.
+**P3 — validation and videos: tank, wedge, dam break done; sloshing running; not done:** the dam break at H/dx = 80 and 320, tiers 1 and 3 on the dam break, the hexagon obstacle in δ⁺, a body-fitted packing for smooth sloped walls (wedge KE; deferred by the user as a general problem for airfoils / complex geometry).
+
+**Results so far.** Tank: profile error 10× below mDBC. Wedge: all probe checks pass, profile error below mDBC, settled KE 400× the reference (layout inconsistency). Dam break: P1 and KE match warpSPH, P2 and ceiling probe qualitatively.
+Found on the way: the pair-list bug (2 % of reverse pairs lost for lattices commensurate with the support), warpSPH's dilated surface mask for the Antuono switch, the reference's own failure without shifting / no-penetration at the first ceiling impact.
+
+**Open decisions for the port** (decision 1 is made; these follow from it): whether the analytic obstacle needs a packing pass before the run; whether the viscous / shifting / no-penetration wall terms should be exact (new kernels) or stay quadrature-based; how the scene adjacency becomes fixed-capacity and graph-capturable.
 
 ## 4. Decisions
 

@@ -55,21 +55,33 @@ obstacle. The obstacles are in the orchestration around the kernels:
 * **2D only.** The edge machinery is complete in 2D; the 3D face→edge chain is not done.
 * **Autodiff:** the torch/warp bridge with adjoints exists for the 2D edge integrals (`torch2d.py`, `warp2d.py`), not yet for the scene layer's per-query fields.
 
-## 4. Operations added to the scene layer for δ⁺ (and what is still missing)
-
-Filled in as they are built; each entry: what, where, how verified.
+## 4. Operations added to the scene layer for δ⁺
 
 | operation | needed by | status |
 |---|---|---|
-| per-query scalar field `P_b(x')` with gradient (`BodyField(perQuery=True)`) | pressure force, DDT | have (DFSPH) |
-| `Covariance` (g1 moments) | `L`, surface detection | have (DFSPH §6) |
-| per-body `perBody` force output | wall force bookkeeping | have |
-| ~~radial kernel `W'(r)/r`~~ | ~~DDT~~ | **not needed**: the DDT is fluid-to-fluid in the reference (`densityDiffusion.py` excludes boundary neighbours) |
-| kernels `W⁵` / `W⁴ ∇W` | PST | to do |
-| p = 2 moments `∫ y_a y_b g(r)` | viscosity, torque | to do |
-| `Scene.inside(points)` (point in solid, all representations) | free-surface detector (wall part), later no-penetration | **done** (`scene.py`, `test_scene_inside_agrees_across_representations`) |
-| `Scene.closestPoint` / normal / signed distance | no-penetration, surface normals, curved-wall mirror | to do |
-| per-query vector field (mirrored free-slip velocity) | continuity, viscosity | not needed so far: for a flat wall `v_b − v_i = −2 (u·n) n` collapses the continuity wall term to `2 ρ_i u_n |μ∇λ|` (n = ∇λ/|∇λ|); needed for curved walls (wedge faces, corners) |
+| per-query scalar field `P_b(x')` with gradient (`BodyField(perQuery=True)`) | pressure force | have (DFSPH), clamped ≥ 0 in `DeltaSPH2D._wall_excess` |
+| `Covariance` (first moments `∫ y⊗∇W`) | `L`, λ_min, shifting normals | have |
+| per-body `perBody` outputs | wall force bookkeeping | have (pressure part only) |
+| `Scene.inside(points, body=None)` | free-surface detector, viscous wall term, shifting tensile control (polar quadrature of the solid) | **done** |
+| `Scene.signed_distance(points)` → (d, n, hit) | no-penetration impulse | **done** for surface loops, SDF, implicit; not for volume representations |
+| radial kernel `W'(r)/r` | density diffusion | **not needed**: the DDT is fluid-to-fluid in warpSPH |
+| kernel `W⁵` / `W⁴∇W` | shifting tensile control | **replaced by quadrature** (polar sampling of the solid, 24 × 96); an exact kernel would remove the sampling error |
+| `p = 2` moments `∫ y_a y_b g(r)` | viscous wall term, torque | **replaced by quadrature** (1 % of a fine half-plane integral); exact weights still to do |
+| per-query vector field (mirrored free-slip velocity) | continuity, viscosity at curved walls | not done: flat-wall approximation with `n = ∇λ/|∇λ|` per body |
+| Wendland C4 (`KernelFunctions.Wendland4`) | sloshing | works in the scene layer (kernel `w4`); `DeltaSPH2D` carries the C2 / C4 pair kernels |
+
+## 4b. Status of the δ⁺ term inventory (2026-10-02)
+
+**Ported** (validated on tank, wedge, Marrone dam break; sloshing running): continuity with free-slip wall (exact `∇λ`, mirror with the particle's own velocity); isothermal EOS; Antuono pressure force with exact wall integrals and a
+clamped hydrostatic wall pressure, dilated surface mask for the switch; fourtakas2019 density diffusion (fluid-to-fluid, as warpSPH); α-viscosity, fluid pairs and wall term; Barecasco detector with the wall as a sampled continuum;
+δ⁺ shifting (Sun 2017 Eq. 7, Sun 2019 surface treatment: λ_min normals, curvature gate, λ gate, caps); no-penetration impulse; symplectic Euler with time-centred continuity; Sun-2017 time step (or a fixed dt); Wendland C2 and C4;
+time-dependent (rotating) gravity; Marrone MLS wall probes and the SPHERIC sensor probes; pressure part of the wall force on each body.
+
+**Not ported:** density-diffusion variants with renormalised ∇ρ and the renormalised pressure force; Michel-2022 and implicit shifting (warpSPH's sloshing default is Michel-2022, our run uses Sun's), `correctdrhodt` / `correctdvdt`;
+physical viscosity (Morris, ν) and the viscosity switch; no-penetration `finalize` / `derivative` placements; other EOS types (Tait is only used for the sloshing probe), RK integrators, forcing / Dirichlet hooks.
+Walls: moving or rotating bodies in δ⁺ (the no-penetration law and the viscous term assume static walls), curved-wall mirror normals, volume representations in `signed_distance`, exact second-moment and `W⁵` weights.
+Bookkeeping / infrastructure: exact momentum bookkeeping (viscous, shifting and no-penetration contributions are not booked on the bodies), torque, Verlet-style adjacency reuse and CUDA-graph capture (the torch solver is 8× slower
+than warpSPH), 3D, periodic domains, interacting bodies.
 
 ## 5. Change log
 
@@ -90,3 +102,5 @@ One line per change that matters to the port: date, what changed in *this* repo,
 | 2026-10-02 | `DeltaSPH2D.shift` (delta+ PST: Eq. 7 with the Sun-2019 surface treatment: lambda_min normals, curvature gate 15 deg, lambda gate 0.4 fluid-only, Eq. 14 cap, 0.5 dx clamp), `no_penetration` (impulse placement) | `modules/shifting/delta.py::computeDeltaShift`, `modules/shifting/wrapper.py::solveShifting`, `systems/weaklyCompressible.py::finalize`, `modules/mdbc/wp_nopenshift.py` | wall part of the tensile control `int W^4 grad W dA` by polar quadrature (no `W^5` kernel needed); normals from lambda gradients of the fluid pairs with L = (fluid + wall covariance)^-1; no-penetration law re-derived for an analytic wall at dp/2 (`f(d)`), static walls only |
 | 2026-10-02 | speed: `neighbor_pairs` uses a dense distance matrix for N <= 8000 (82 -> 4 ms at N = 3240) | `buildVerletList` | none; the remaining cost is `Scene.buildAdjacency` + 3 scene operations per RHS call (~60 ms): a port should fuse them and reuse the adjacency across the two RHS calls of a step |
 \n
+| 2026-10-02 | sloshing (`sloshing_tank`, `sloshing_probes`, `run_sloshing`): the roll is the tank-fixed frame with rotating gravity, `DeltaSPH2D.gravityFn` evaluated after every step (as warpSPH's `postStep`), constant dt; Wendland C4 through `KERNELS` | `cases/sloshingTank.py` (`_applyRollGravity`, `postStep`, `diagnostics`), `examples/sloshingTank/SPHERIC_TestCase10` | walls stay static (no moving-wall terms needed); shifting is Sun 2017 where warpSPH's case default is Michel-2022; sensor = the reference's Gaussian Tait probe plus a wall MLS probe instead of the nearest boundary particle's density |
+
