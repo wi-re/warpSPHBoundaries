@@ -47,10 +47,12 @@ hydrostatic tank at rest (pressure profile, spurious velocity) → add DDT (ψ w
 
 **P3 — validation and videos**: Marrone 3.1 probes P1/P2/P3 and the front against warpSPH, 2k–33k particles, tier 1/2/3 domain representations, the hexagon dam break, the same `dfsph_runcase` / `dfsph_video` tooling.
 
-## 4. Decisions needed
+## 4. Decisions
 
-1. **Where does the solver live?** (a) self-contained `deltasph2d.py` here, like DFSPH2D (fast to iterate, reference is warpSPH run separately), or (b) a boundary provider inside warpSPH replacing the `kinds == 1` mDBC particles
-   (reuses its CUDA graphs, integrators and the surface detector, but is intrusive and the scene layer is torch/2D today).
-2. **Free-slip semantics for the viscous and DDT wall terms**: the reference mirrors the *Shepard-interpolated* fluid velocity at the ghost node, the analytic version mirrors the particle's own velocity. Matching the reference term by term is
-   impossible; the plan matches macroscopic behaviour (probes, front). Is that the right standard here?
-3. **Wall bookkeeping**: keep exact momentum bookkeeping (as in DFSPH) at the price of dropping non-antisymmetric wall terms, or accept approximate wall forces?
+1. **Where does the solver live? — decided (2026-10-02): self-contained here** (`deltasph2d.py`, like DFSPH2D), warpSPH's `sun2017DeltaSPH` run separately as the live reference. The long-term goal is to integrate the boundary code into
+   warpSPH's core and add front-end support for such bodies; that needs a better understanding of where the boundaries touch each part of the solver, which is easier to build up outside. **`deltasph-porting-notes.md`** records,
+   term by term, where the corresponding operation lives in warpSPH, how the wall enters there, what replaces it here and what changed; it is updated with every change. (Correction of an earlier statement: the scene layer's
+   kernels are Warp float64 on torch memory already; what limits a port is data-dependent shapes / per-step adjacency rebuild / host-side branching, see the notes §3.)
+2. **Free-slip semantics for the viscous and DDT wall terms**: the reference mirrors the *Shepard-interpolated* fluid velocity at the ghost node, the analytic version mirrors the particle's own velocity. Matching the reference term
+   by term is impossible; the plan matches macroscopic behaviour (probes, front). Default taken unless told otherwise.
+3. **Wall bookkeeping**: keep exact momentum bookkeeping as in DFSPH where a term allows it, and record where it does not (the DDT and the viscous terms are not pairwise antisymmetric with a wall). Default taken unless told otherwise.
