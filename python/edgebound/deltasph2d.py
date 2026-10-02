@@ -35,6 +35,22 @@ XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D
 KSCALE = 1.897367                       # warpSPHCore sphKernelScale(Wendland2, 2D): support / smoothing length
 
 
+def wendland4(r, h):
+    """Wendland C4 in 2D, support radius h: 9/(pi h^2) (1 - q)^6 (1 + 6 q + 35 q^2 / 3)."""
+    q = r / h
+    return torch.where(q < 1, 9.0 / (math.pi * h * h) * (1 - q) ** 6 * (1 + 6 * q + 35.0 / 3.0 * q * q), torch.zeros_like(q))
+
+
+def dwendland4(r, h):
+    q = r / h
+    return torch.where(q < 1, -9.0 / (math.pi * h ** 3) * (56.0 / 3.0) * q * (1 + 5 * q) * (1 - q) ** 5, torch.zeros_like(q))
+
+
+# kernel -> (W, dW/dr, xi = warpSPHCore sphKernel_xi, kernel scale = support / smoothing length)
+KERNELS = {KernelFunctions.Wendland2: (wendland2, dwendland2, 2.8213846683502197, 1.897367),
+           KernelFunctions.Wendland4: (wendland4, dwendland4, 3.56734561920166, 2.171239)}
+
+
 @dataclass
 class DeltaSPHConfig:
     gravity: tuple = (0.0, -9.81)
@@ -65,6 +81,7 @@ class DeltaSPHConfig:
     barecascoThreshold: float = math.pi / 3
     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle (wall part of the free-surface detector)
     kernel: KernelFunctions = KernelFunctions.Wendland2
+    fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
 
 
 class DeltaSPH2D:
@@ -83,7 +100,9 @@ class DeltaSPH2D:
         self.kinds = torch.zeros(n, dtype=torch.int32, device=device)
         self.g = torch.tensor(self.cfg.gravity, dtype=F64, device=device)
         self.time = 0.0
-        self.dt = self.cfg.cfl * self.H / (self.cfg.c0 * KSCALE)
+        self.W, self.dW, self.xi, self.ks = KERNELS[self.cfg.kernel]
+        self.dt = self.cfg.fixedDt if self.cfg.fixedDt else self.cfg.cfl * self.H / (self.cfg.c0 * self.ks)
+        self.gravityFn = None                                  # t -> (gx, gy): a rolling tank as rotating gravity (SPHERIC test case 10), evaluated after every step
         self.wallForce = torch.zeros((self.nb, 2), dtype=F64, device=device)      # force of the fluid on every body (pressure part), last RHS call
         self.surface = torch.zeros(n, dtype=torch.bool, device=device)
         self.surfaceDilated = self.surface
@@ -177,7 +196,7 @@ class DeltaSPH2D:
         i, j, r = neighbor_pairs(x, self.Hvec)
         nz = i != j
         d = x[i] - x[j]
-        gW = torch.where(nz[:, None], dwendland2(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))      # grad_i W_ij
+        gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))      # grad_i W_ij
         P = cfg.c0 ** 2 * (rho - cfg.rho0)
         if self.scene is not None:
             lam, G, A = self._wall_data(x, rho)
@@ -215,7 +234,7 @@ class DeltaSPH2D:
             xij = d
             tot = (rho[j] - rho[i]) + cfg.rho0 * (xij @ self.g) / cfg.c0 ** 2
             psi = -2.0 * tot[:, None] * xij / (r * (r + 1e-14 * H)).clamp(min=1e-300)[:, None]
-            drho = drho + cfg.delta * H * cfg.c0 / XI * self._sum(torch.where(nz, V[j] * (psi * gW).sum(1), torch.zeros_like(r)), i)
+            drho = drho + cfg.delta * H * cfg.c0 / self.xi * self._sum(torch.where(nz, V[j] * (psi * gW).sum(1), torch.zeros_like(r)), i)
         # pressure force
         acc = -self._sum((V[j] * (P[j] + s[i] * P[i]))[:, None] * gW, i) / rho[:, None]
         pp = P.clamp(min=0)
@@ -231,12 +250,12 @@ class DeltaSPH2D:
         if cfg.viscosity:
             vij = v[i] - v[j]
             mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
-            fac = cfg.alpha * cfg.c0 * H / XI
+            fac = cfg.alpha * cfg.c0 * H / self.xi
             acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
         if cfg.viscosity and cfg.wallViscosity and samples is not None:
             near, (ins, u, rk, dr, dphi) = samples
-            wprime = dwendland2(rk, H) * dr                                                          # W'(r) dr  [R] (negative)
-            fac = cfg.alpha * cfg.c0 * H / XI
+            wprime = self.dW(rk, H) * dr                                                          # W'(r) dr  [R] (negative)
+            fac = cfg.alpha * cfg.c0 * H / self.xi
             for bi, b in enumerate(self.scene.bodies):
                 gm = G[bi].norm(dim=1)
                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
@@ -255,7 +274,7 @@ class DeltaSPH2D:
         i, j, r = neighbor_pairs(x, self.Hvec)
         nz = i != j
         d = x[i] - x[j]
-        gW = torch.where(nz[:, None], dwendland2(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
+        gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         V = self.m / rho
         samples, lam, G, Mw = None, torch.zeros((0, len(x)), dtype=F64, device=self.dev), None, None
         if self.scene is not None:
@@ -282,8 +301,8 @@ class DeltaSPH2D:
         st = self._surface_state(x, rho)
         i, j, r, gW, V, F = st["i"], st["j"], st["r"], st["gW"], st["V"], st["F"]
         n_ = len(x)
-        w0 = wendland2(torch.tensor([self.dx], dtype=F64, device=self.dev), H)[0]
-        Wij = wendland2(r, H)
+        w0 = self.W(torch.tensor([self.dx], dtype=F64, device=self.dev), H)[0]
+        Wij = self.W(r, H)
         coef = 0.5 * self.m / (rho[i] + rho[j]) * (1.0 + cfg.shiftR * (Wij / w0) ** 4)
         raw = self._sum(coef[:, None] * gW, i)
         if self.scene is not None:
@@ -292,14 +311,14 @@ class DeltaSPH2D:
             wall = st["G"].sum(0)
             if st["samples"] is not None:
                 near, (ins, u, rk, dr, dphi) = st["samples"]
-                Fr = wendland2(rk, H) ** 4 * dwendland2(rk, H) * rk * dr                                # W^4 W' r dr  [R]
+                Fr = self.W(rk, H) ** 4 * self.dW(rk, H) * rk * dr                                # W^4 W' r dr  [R]
                 T = -torch.einsum("bqrp,r,pa->qa", ins.to(F64), Fr, u) * dphi
                 wall = wall.index_add(0, near, cfg.wallMass * cfg.shiftR / w0 ** 4 * T)
             raw = raw + (cfg.rho0 / (4.0 * rho))[:, None] * wall
         vmax = float(v.norm(dim=1).max())
         Ma = vmax / cfg.c0
         Ma = Ma if Ma >= 1e-6 else 0.1
-        hs = H / KSCALE
+        hs = H / self.ks
         upd = raw * (-cfg.shiftCFL * Ma * 16.0 * hs ** 2)
         # ---- surface treatment
         ev_t = torch.linalg.eigvalsh(st["Mt"])
@@ -354,7 +373,7 @@ class DeltaSPH2D:
         i, j, r = neighbor_pairs(x, self.Hvec)
         nz = i != j
         d = x[i] - x[j]
-        gW = torch.where(nz[:, None], dwendland2(r, self.H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
+        gW = torch.where(nz[:, None], self.dW(r, self.H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         S = self._sum((self.m / self.rho)[j][:, None] * gW, i)
         if self.scene is not None:
             S = S + self._wall_data(x, self.rho)[1].sum(0)
@@ -391,10 +410,12 @@ class DeltaSPH2D:
     # ---------------------------------------------------------------------------------------------------------------- time stepping
     def _next_dt(self, acc):
         cfg = self.cfg
+        if cfg.fixedDt:
+            return cfg.fixedDt
         nu = cfg.alpha * cfg.c0 * self.H / (2 * 4)
-        dtv = 0.125 * self.H ** 2 / nu / KSCALE if cfg.viscosity and cfg.alpha > 0 else cfg.maxDt
-        dtc = cfg.cfl * self.H / cfg.c0 / KSCALE
-        dta = 0.25 * math.sqrt(self.H / (float(acc.norm(dim=1).max()) + 1e-7)) / KSCALE
+        dtv = 0.125 * self.H ** 2 / nu / self.ks if cfg.viscosity and cfg.alpha > 0 else cfg.maxDt
+        dtc = cfg.cfl * self.H / cfg.c0 / self.ks
+        dta = 0.25 * math.sqrt(self.H / (float(acc.norm(dim=1).max()) + 1e-7)) / self.ks
         new = min(dtv, dta, dtc, cfg.maxDt)
         new = max(new, cfg.minDt)
         if new > self.dt:
@@ -427,6 +448,8 @@ class DeltaSPH2D:
         if forces is not None:
             self.wallForce = forces
         self.time += dt
+        if self.gravityFn is not None:
+            self.g = torch.tensor(self.gravityFn(self.time), dtype=F64, device=self.dev)
         self.dt = self._next_dt(a1)
         return self.time
 
@@ -553,7 +576,7 @@ def mls_pressure(sim, q, neighbor_threshold=4):
     d = x[None, :, :] - q[:, None, :]                                           # [M,N,2]
     r = d.norm(dim=2)
     inside = r < H
-    w = torch.where(inside, V[None] * wendland2(r, H), torch.zeros_like(r))     # [M,N]
+    w = torch.where(inside, V[None] * sim.W(r, H), torch.zeros_like(r))     # [M,N]
     nn = inside.sum(1)
     y = d / H
     B = torch.stack([torch.ones_like(r), y[..., 0], y[..., 1]], 2)              # [M,N,3]
@@ -579,3 +602,49 @@ def wall_probes(sim, info, heights=(0.16, 0.584, 1.0), disc=0.045, inset=0.0):
         ws = w.sum(1)
         out.append(torch.where(ws > 0, (val * w).sum(1) / ws.clamp(min=1e-12), torch.zeros_like(ws)) / (sim.cfg.rho0 * info["g"] * info["H"]))
     return out[0].cpu().numpy(), out[1].cpu().numpy()
+
+
+# ---------------------------------------------------------------------------------------------------------------------------- SPHERIC test case 10 (sloshing tank)
+SPHERIC_DIR = "/home/lu26029/dev/warpSPH/examples/sloshingTank/SPHERIC_TestCase10/data_files"
+
+
+def load_roll(path=None):
+    """SPHERIC roll table lateral_water_1x.txt -> (t [s], theta [rad], measured sensor pressure [Pa]); columns t, p [mbar], smoothed roll angle [deg], ..."""
+    raw = np.genfromtxt(path or SPHERIC_DIR + "/lateral_water_1x.txt", delimiter="\t", skip_header=1)
+    return raw[:, 0], np.radians(raw[:, 2]), raw[:, 1] * 100.0
+
+
+def sloshing_tank(nx=200, T_unused=None, domain="surface", device="cuda:0", cfg: Optional[DeltaSPHConfig] = None, rollFile=None, **cfgkw):
+    """SPHERIC test case 10, lateral water, as warpSPH's `sloshingTank` case (`examples/sloshingTank`): tank 0.9 x 0.508 m, still water 0.093 m (rows of dx = 0.9/nx up to the fill depth), Wendland C4, support 4 dx,
+    c0 = 20, constant dt = 1e-4, isothermal EOS, alpha = 0.02, time-centred continuity, free-slip walls.  The tank is NOT moved: it rolls in the tank-fixed frame by rotating gravity,
+    g(t) = 9.81 (-sin theta(t), -cos theta(t)), theta from the measured roll table, updated after every step (as warpSPH's `postStep`).  Sensor 1 at (-0.45, 0.093) on the left wall."""
+    from .dfsph2d import domain_scene
+    L, Ht, fill, g = 0.9, 0.508, 0.093, 9.81
+    dx = L / nx
+    nrow = int(round(fill / dx))
+    X, Y = np.meshgrid(-L / 2 + dx * (np.arange(nx) + 0.5), dx * (np.arange(nrow) + 0.5), indexing="ij")
+    pos = np.stack([X.ravel(), Y.ravel()], 1)
+    scene = domain_scene(domain, (-L / 2, 0.0), (L / 2, Ht), 4 * dx, device)
+    cfg = cfg or DeltaSPHConfig(gravity=(0.0, -g), c0=20.0, alpha=0.02, kernel=KernelFunctions.Wendland4, fixedDt=1e-4, timeCentred=True, **cfgkw)
+    sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, device)
+    t, th, pexp = load_roll(rollFile)
+    sim.gravityFn = lambda tt: (-g * math.sin(float(np.interp(tt, t, th))), -g * math.cos(float(np.interp(tt, t, th))))
+    sim.g = torch.tensor(sim.gravityFn(0.0), dtype=F64, device=device)
+    return sim, dict(g=g, L=L, Ht=Ht, fill=fill, dx=dx, sensor=(-L / 2, fill), roll=(t, th, pexp), rho0Phys=1000.0)
+
+
+def sloshing_probes(sim, info, radius=0.02):
+    """Sensor-1 pressure in Pa: (a) warpSPH's `sensorPressureProbe`: Gaussian Shepard average (exp(-(r / (radius / 2))^2), fluid particles within `radius`) of the Tait pressure rho0 c0^2 / 7 ((rho / rho0)^7 - 1) x rho0Phys;
+    (b) first-order MLS of the (linear) EOS pressure at the wall point of the sensor.  NaN where fewer than 3 neighbours."""
+    c0, rho0, rp = sim.cfg.c0, sim.cfg.rho0, info["rho0Phys"]
+    q = torch.tensor(info["sensor"], dtype=F64, device=sim.dev)
+    r = (sim.x - q[None]).norm(dim=1)
+    near = r < radius
+    if int(near.sum()) >= 3:
+        w = torch.exp(-(r[near] / (0.5 * radius)) ** 2)
+        tait = rp * rho0 * c0 ** 2 / 7.0 * ((sim.rho[near] / rho0) ** 7 - 1.0)
+        pg = float((w * tait).sum() / w.sum())
+    else:
+        pg = float("nan")
+    val, nn = mls_pressure(sim, q[None])
+    return pg, float(val[0]) * rp

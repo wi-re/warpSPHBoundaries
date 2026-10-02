@@ -10,7 +10,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `scene-architecture.md` | scene layer: bodies with pose + OBB, surface / volume / implicit / SDF representations, per-type adjacency and operations, reactions, DFSPH mapping | [V] 2D |
 | `dfsph-validation.md` | omniSPH-style DFSPH on the scene layer, validation against the compiled omniSPH (tank, dam break), domain body as tier 1 / 2 / 3, findings | [V] 2D |
 | `deltasph-porting-notes.md` | living notes for porting the analytic boundaries into warpSPH: where each δ⁺ term lives there, what replaces it, what changed | notes |
-| `deltasph-validation.md` | δ⁺-SPH on analytic walls vs warpSPH + mDBC: flat tank (10× better profile), English wedge (passes, rings), Marrone 3.1 dam break (matches P1 / KE), pair-list bug | [V] 2D |
+| `deltasph-validation.md` | δ⁺-SPH on analytic walls vs warpSPH + mDBC: flat tank (10× better profile), English wedge (passes, rings), Marrone 3.1 dam break (matches P1 / KE), SPHERIC sloshing (flow and impact times match warpSPH), pair-list bug | [V] 2D |
 | `deltasph-plan.md` | plan: δ⁺-SPH (Marrone 3.1) on the scene boundary layer — term inventory, new scene operations, phases, open decisions | plan |
 | `tier-selection-2d.md` | which tier for which obstacle size (2D disk), jumps at switches | [V] |
 | `autodiff-and-gpu.md` | torch autodiff vs analytic, shape adjoint, Warp float64 kernels, throughput | [V] |

@@ -72,7 +72,7 @@ obstacle. The obstacles are in the orchestration around the kernels:
 
 ## 4b. Status of the δ⁺ term inventory (2026-10-02)
 
-**Ported** (validated on tank, wedge, Marrone dam break; sloshing running): continuity with free-slip wall (exact `∇λ`, mirror with the particle's own velocity); isothermal EOS; Antuono pressure force with exact wall integrals and a
+**Ported** (validated on tank, wedge, Marrone dam break, sloshing): continuity with free-slip wall (exact `∇λ`, mirror with the particle's own velocity); isothermal EOS; Antuono pressure force with exact wall integrals and a
 clamped hydrostatic wall pressure, dilated surface mask for the switch; fourtakas2019 density diffusion (fluid-to-fluid, as warpSPH); α-viscosity, fluid pairs and wall term; Barecasco detector with the wall as a sampled continuum;
 δ⁺ shifting (Sun 2017 Eq. 7, Sun 2019 surface treatment: λ_min normals, curvature gate, λ gate, caps); no-penetration impulse; symplectic Euler with time-centred continuity; Sun-2017 time step (or a fixed dt); Wendland C2 and C4;
 time-dependent (rotating) gravity; Marrone MLS wall probes and the SPHERIC sensor probes; pressure part of the wall force on each body.

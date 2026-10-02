@@ -1,5 +1,6 @@
 """Validation of DeltaSPH2D against warpSPH's `sun2017DeltaSPH`/`deltaSPH` + mDBC.   python -m edgebound.deltasph_validation tank [dp] [T] [domain]
 
+ sloshing : SPHERIC test case 10 (warpSPH `examples/sloshingTank`): rolling tank as rotating gravity, Sensor-1 pressure
  dambreak : Marrone et al. 2011 s.3.1 (warpSPH `probe_deltaSPHMarrone.py`): probes P1-P3, front, KE
  wedge : the same with the sharp wedge on the bed (`probe_englishWedge.py --wedge`): face / apex / base-corner bands of the probe
  tank : English et al. 2022 s.4.1 still water in a flat tank (warpSPH `scripts/probe_englishWedge.py --no-wedge`): per-particle p/(rho0 g H) against the hydrostatic line, kinetic energy history.
@@ -12,7 +13,7 @@ import time
 import numpy as np
 import torch
 
-from .deltasph2d import english_wedge, hydrostatic_tank, marrone_dambreak, triangle_distance, wall_probes
+from .deltasph2d import english_wedge, hydrostatic_tank, marrone_dambreak, sloshing_probes, sloshing_tank, triangle_distance, wall_probes
 
 
 def score_tank(sim, info, dp, L=2.4, t=None, ke=None):
@@ -156,6 +157,31 @@ def report_dambreak(res, ref=None):
                 print(f"  {name} {label:6s} {src:8s} first P*>0.05 at t*={arr:.2f} | mean[3.2,4.8] {p[m1].mean() if m1.any() else float('nan'):.3f} | mean[5.2,6.1] {p[m2].mean() if m2.any() else float('nan'):.3f} | max {np.nanmax(p):.3f} at t*={t[ok][np.nanargmax(p[ok])]:.2f}")
 
 
+def run_sloshing(nx=200, T=7.0, every=10, snapDt=None, out=None, verbose=True, **cfgkw):
+    """SPHERIC test case 10: Sensor-1 pressure series every `every` steps (dt = 1e-4: 1 ms), kinetic energy, density range, roll angle, optional snapshots.  Keys follow warpSPH's series file where they exist
+    (`t`, `sensorPressureProbe` = the Gaussian Tait probe, `rollAngleDeg`, `kineticEnergy`, `maxVelocity`, `minDensity`, `maxDensity`); `sensorPressureMLS` is the wall MLS probe."""
+    sim, info = sloshing_tank(nx=nx, **cfgkw)
+    rows, snaps, nxt, k, t0 = [], dict(t=[], x=[], v=[], rho=[], p=[]), 0.0, 0, time.time()
+    troll, throll, _ = info["roll"]
+    while sim.time < T:
+        if snapDt and sim.time >= nxt - 1e-12:
+            for key, val in (("t", sim.time), ("x", sim.x.cpu().numpy().copy()), ("v", sim.v.cpu().numpy().copy()), ("rho", sim.rho.cpu().numpy().copy()), ("p", sim.pressure().cpu().numpy().copy())):
+                snaps[key].append(val)
+            nxt += snapDt
+        sim.step()
+        k += 1
+        if k % every == 0:
+            pg, pm = sloshing_probes(sim, info)
+            rows.append([sim.time, pg, pm, math.degrees(float(np.interp(sim.time, troll, throll))), sim.kinetic(), float(sim.v.norm(dim=1).max()), float(sim.rho.min()), float(sim.rho.max())])
+            if verbose and k % (every * 200) == 0:
+                print(f"t={sim.time:.3f} p_probe={pg:.0f} Pa roll={rows[-1][3]:.2f} deg KE={rows[-1][4]:.3e} vmax={rows[-1][5]:.2f} rho[{rows[-1][6]:.3f},{rows[-1][7]:.3f}] {time.time() - t0:.0f}s", flush=True)
+    a = np.array(rows)
+    res = dict(t=a[:, 0], sensorPressureProbe=a[:, 1], sensorPressureMLS=a[:, 2], rollAngleDeg=a[:, 3], kineticEnergy=a[:, 4], maxVelocity=a[:, 5], minDensity=a[:, 6], maxDensity=a[:, 7], steps=k, wall=time.time() - t0)
+    if out:
+        np.savez(out, **res, **({f"snap_{key}": np.array(v) for key, v in snaps.items()} if snapDt else {}), lo=np.array([-info["L"] / 2, 0.0]), hi=np.array([info["L"] / 2, 0.25]), r=info["dx"] / 2, h=4 * info["dx"])
+    return sim, info, res
+
+
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "tank"
     if what == "tank":
@@ -165,6 +191,13 @@ if __name__ == "__main__":
         sim, info, s = run_tank(dp, T, dom)
         print(f"\nflat tank, dp = {dp}, domain = {dom}, {s['steps']} steps, {s['wall']:.0f} s")
         report_tank(s)
+    if what == "sloshing":
+        nx = int(sys.argv[2]) if len(sys.argv) > 2 else 200
+        T = float(sys.argv[3]) if len(sys.argv) > 3 else 7.0
+        out = sys.argv[4] if len(sys.argv) > 4 else None
+        kw = {k: (v == "True" if v in ("True", "False") else (v if not v.replace(".", "").replace("e-", "").isdigit() else float(v))) for k, v in (a.split("=") for a in sys.argv[5:])}
+        sim, info, res = run_sloshing(nx, T, snapDt=(1 / 60) if out else None, out=out, **kw)
+        print(f"{res['steps']} steps, {res['wall']:.0f} s")
     if what == "dambreak":
         nx = int(sys.argv[2]) if len(sys.argv) > 2 else 67
         T = float(sys.argv[3]) if len(sys.argv) > 3 else 1.9

@@ -1,6 +1,6 @@
 # δ⁺-SPH on analytic walls: still-water validation against warpSPH + mDBC (2D)
 
-**Status:** [V] tank, wedge (one open item, §3), Marrone 3.1 dam break (§6). Solver `python/edgebound/deltasph2d.py`, scoring `python -m edgebound.deltasph_validation tank|wedge`, tests `tests/edge/test_deltasph.py` (10).
+**Status:** [V] tank, wedge (one open item, §3), Marrone 3.1 dam break (§5), SPHERIC sloshing (§6). Solver `python/edgebound/deltasph2d.py`, scoring `python -m edgebound.deltasph_validation tank|wedge`, tests `tests/edge/test_deltasph.py` (10).
 Plan and order of the test cases: `deltasph-plan.md` (tank → English wedge → dam break → sloshing). Porting notes for warpSPH: `deltasph-porting-notes.md`.
 Reference: warpSPH `scripts/probe_englishWedge.py --dp 0.02 [--no-wedge] --tLimit 4` (scheme `deltaSPH`, isothermal EOS, Wendland C2, h/dp = 2, δ = 0.1, α = 0.01, fourtakas2019 DDT, Antuono pressure force,
 symplectic Euler, mDBC + free-slip walls, hydrostatic density initialisation, no shifting). English et al. 2022 §4.1: tank 2.4 × 1.2 m, water 0.5 m, wedge 0.24 m high on the bed.
@@ -93,7 +93,28 @@ analytic wall: `v_n ← v_n(1 − f)`, `f = 3 − 4 clip(½ + d/dp, ¼, 1)` for 
 * Deviations that remain (docs/deltasph-porting-notes.md): the free-slip mirror uses the particle's own velocity (the reference mirrors the Shepard velocity at the ghost); the normals and λ of the shifting surface treatment come from the
   fluid pairs with the renormalisation matrix of fluid + wall; the wall counts in the free-surface detector, the viscous term and the tensile control by polar sampling of the solid; the x-spacing of the initial lattice is 0.13 % larger.
 
-## 6. Next
+## 6. SPHERIC test case 10 (sloshing, lateral water)
+
+Reference: warpSPH `examples/sloshingTank/run_sloshingTank.py --scheme wcsph --tLimit 7` (nx = 200, dx = 4.5 mm, Wendland C4, isothermal EOS c0 = 20, α = 0.02, fourtakas2019, symplectic Euler with time-centred continuity,
+no-penetration impulse, constant dt = 1e-4, **Michel-2022 shifting**: warpSPH's case default; its Sun variant is not exposed). 70001 steps in 2050 s, not diverged, max|v| 7.7, ρ ∈ [0.82, 1.33].
+Ours: `sloshing_tank(nx=200)`, tier-2 surface loop for the 0.9 × 0.508 m tank, 4200 particles, **Sun-2017 shifting** + no-penetration impulse, same dt. The tank is not moved: it rolls in the tank-fixed frame by rotating gravity,
+`g(t) = 9.81 (−sin θ, −cos θ)` from the measured roll table, updated after every step exactly as warpSPH's `postStep`, so all walls are static and no moving-wall term is involved. 70001 steps in 5439 s, max|v| 5.8, ρ ∈ [0.83, 1.20].
+
+| smoothed (10 ms) Sensor-1 peak, kPa @ s | measured | warpSPH + mDBC | analytic, Gaussian probe |
+|---|---|---|---|
+| impact 1 (2.4 s) | 1.80 @ 2.39 (raw 3.7) | 4.87 @ 2.34 | 4.29 @ 2.36 |
+| impact 2 (4.1 s) | 2.32 @ 4.07 (raw 3.9) | 5.16 @ 4.00 | 3.83 @ 4.00 |
+| impact 3 (5.7 s) | 1.17 @ 5.70 (raw 2.7) | 5.30 @ 5.56 | 7.47 @ 5.59 |
+
+* **The flow agrees with warpSPH through all 7 s**: the kinetic energy curves overlap (within ~10–30 % at the minima after the first impacts, same phase), the three impacts arrive at the same times (both 0.03–0.15 s early against the measurement:
+  warpSPH −0.053 s, ours −0.047 s cross-correlation lag; ours vs warpSPH +0.024 s, correlation 0.84), the density stays within a few percent bar the impacts.
+* **Impact magnitudes are of the same order as warpSPH and 1.5–4 × the measured smoothed peaks**; the measured raw peaks (3.7, 3.9, 2.7 kPa) are inside the same scatter band as in warpSPH's own plan (2.2–13 kPa). The third impact is higher than warpSPH's (7.5 vs 5.3 kPa) and the probe
+  shows a negative excursion of about −1 kPa after it. These are single-impact, thin-sheet quantities; no claim of better or worse than the mDBC reference is made.
+* **The sensor model is the weak part.** Our Gaussian probe is the reference's own `sensorPressureProbe` (Tait pressure Shepard-averaged over fluid particles within 2 cm) and is NaN when fewer than three particles are near (43 % of the record here, 47 % in warpSPH's);
+  its full-length `sensorPressure` (nearest boundary particle's density) has no counterpart with analytic walls. The **wall MLS probe** (first-order MLS of the fluid pressure at the sensor point, as the Marrone probes) is erratic here (8.6, 15.5 and 66 kPa
+  spikes at the impacts): at a point at the free-surface level with few, one-sided neighbours the linear fit extrapolates wildly. A usable wall pressure for analytic walls should come from the wall model itself (the hydrostatic closure `P_b`, or the pressure force on the wall per length).
+* Not compared: the shifting scheme (Sun vs Michel), nx = 100 / 400, the no-shift variant, the experimental repeatability band, the dilated-mask effect.
+## 7. Next
 
 * sloshing (SPHERIC TC10): the rolling tank is a prescribed rotating body (`Body.angularVelocity`, `accelerationAt`, wall velocity in the free-slip mirror, the viscous wall term and the no-penetration law relative to the moving wall: the static-wall
   assumptions in `no_penetration` and `rhs` must be lifted); sensor pressure on the left wall.
