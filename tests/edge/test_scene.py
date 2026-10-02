@@ -387,3 +387,26 @@ def test_scene_inside_agrees_across_representations(device):
     sc = Scene([hexa], device)
     c = torch.tensor([[0.5, 0.25], [0.5 + 0.08, 0.25], [0.5 + 0.2, 0.25]], dtype=torch.float64, device=device)
     assert sc.inside(c).tolist() == [True, True, False]
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_signed_distance_and_normal(device):
+    """tank (surface loop, solid outside), a rotated hexagon and the SDF box agree with the exact distances; the normal points from the wall into the fluid."""
+    from edgebound.dfsph2d import domain_scene
+    lo, hi = (0.0, 0.0), (1.0, 0.5)
+    pts = torch.tensor([[0.5, 0.05], [0.02, 0.3], [0.97, 0.45], [0.5, 0.49], [1.05, 0.2], [0.5, 0.25]], dtype=torch.float64, device=device)
+    d_true = torch.tensor([0.05, 0.02, 0.03, 0.01, -0.05, 0.25], dtype=torch.float64, device=device)
+    n_true = torch.tensor([[0, 1], [1, 0], [-1, 0], [0, -1], [-1, 0], [0, -1]], dtype=torch.float64, device=device)
+    for kind in ("surface", "sdf"):
+        sc = domain_scene(kind, lo, hi, 0.05, device)
+        d, n, hit = sc.signed_distance(pts)
+        assert bool(hit.all())
+        tol = 1e-12 if kind == "surface" else 2e-3
+        assert float((d - d_true).abs().max()) < tol, kind
+        assert float((n[:5] - n_true[:5]).abs().max()) < (1e-12 if kind == "surface" else 0.05), kind
+    hexa = Body(bodyId=1, center=(0.5, 0.25), angle=0.4, reps=[SurfaceRep.regularPolygon((0, 0), 0.1, 6, areaPreserving=False)])
+    sc = Scene([hexa], device)
+    q = torch.tensor([[0.5 + 0.2, 0.25], [0.5, 0.25 + 0.3], [0.5, 0.25]], dtype=torch.float64, device=device)
+    d, n, hit = sc.signed_distance(q)
+    assert d[2] < 0 and d[0] > 0.1 and d[1] > 0.19
+    assert float((n[0] - torch.tensor([1.0, 0.0], dtype=torch.float64, device=device)).norm()) < 0.7       # roughly +x (rotated hexagon)

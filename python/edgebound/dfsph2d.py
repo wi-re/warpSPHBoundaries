@@ -44,9 +44,16 @@ def dwendland2(r, h):
     return torch.where(q < 1, -7.0 / (math.pi * h ** 3) * 20.0 * q * (1 - q) ** 3, torch.zeros_like(q))
 
 
+DENSE_PAIRS_MAX = 8000
+
+
 def neighbor_pairs(pos, h):
     """(i, j, r) for all ordered pairs |x_i - x_j| <= (h_i + h_j) / 2, including i = j (as omniSPH's neighbour lists do)."""
     dev = pos.device
+    if len(pos) <= DENSE_PAIRS_MAX:                       # small systems: one distance matrix is much faster than the cell loop (launch / sync bound)
+        r = torch.cdist(pos, pos)
+        i, j = torch.nonzero(r <= 0.5 * (h[:, None] + h[None, :]), as_tuple=True)
+        return i, j, r[i, j]
     cell = 1.01 * float(h.max())        # not exactly the support: a lattice with spacing dx | H puts particles exactly on cell borders, where the insertion and the query round differently
                                         # and ~2 % of the reverse pairs go missing (momentum conservation is lost)
     cl = buildCellList(pos, pos, cell)

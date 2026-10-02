@@ -1,16 +1,18 @@
 """Validation of DeltaSPH2D against warpSPH's `sun2017DeltaSPH`/`deltaSPH` + mDBC.   python -m edgebound.deltasph_validation tank [dp] [T] [domain]
 
+ dambreak : Marrone et al. 2011 s.3.1 (warpSPH `probe_deltaSPHMarrone.py`): probes P1-P3, front, KE
  wedge : the same with the sharp wedge on the bed (`probe_englishWedge.py --wedge`): face / apex / base-corner bands of the probe
  tank : English et al. 2022 s.4.1 still water in a flat tank (warpSPH `scripts/probe_englishWedge.py --no-wedge`): per-particle p/(rho0 g H) against the hydrostatic line, kinetic energy history.
         Scored exactly as the probe's `_score`: bulk = 2 dx below the surface and off every wall, near wall = within 2 dx of the bed or a side wall, settled KE = mean over the last 25 % of the record.
 """
+import math
 import sys
 import time
 
 import numpy as np
 import torch
 
-from .deltasph2d import english_wedge, hydrostatic_tank, triangle_distance
+from .deltasph2d import english_wedge, hydrostatic_tank, marrone_dambreak, triangle_distance, wall_probes
 
 
 def score_tank(sim, info, dp, L=2.4, t=None, ke=None):
@@ -111,6 +113,49 @@ def report_wedge(s):
     return ok and all(g for _, g, _ in rows)
 
 
+def run_dambreak(nx=67, T=1.9, every=10, snapDt=None, out=None, verbose=True, **cfgkw):
+    """Marrone 3.1: probe series P1-P3 (disc-averaged first-order MLS at the impact wall and 1 dx in), kinetic energy, front, mean height, density range; optional snapshots every `snapDt` s.
+    Saved to `out` (.npz) with the keys of warpSPH's probe output where they exist (`tStar`, `pProbe{k}Star`, `pProbe{k}In1Star`, `kineticEnergy`, `maxVelocity`, `minDensity`, `maxDensity`)."""
+    sim, info = marrone_dambreak(nx=nx, **cfgkw)
+    rows, snaps, nxt, k, t0 = [], dict(t=[], x=[], v=[], rho=[], p=[]), 0.0, 0, time.time()
+    while sim.time < T:
+        if snapDt and sim.time >= nxt - 1e-12:
+            for key, val in (("t", sim.time), ("x", sim.x.cpu().numpy().copy()), ("v", sim.v.cpu().numpy().copy()), ("rho", sim.rho.cpu().numpy().copy()), ("p", sim.pressure().cpu().numpy().copy())):
+                snaps[key].append(val)
+            nxt += snapDt
+        sim.step()
+        k += 1
+        if k % every == 0:
+            pw, pi = wall_probes(sim, info)
+            xs = sim.x
+            rows.append([sim.time, sim.time * math.sqrt(info["g"] / info["H"]), sim.kinetic(), float(sim.v.norm(dim=1).max()), float(sim.rho.min()), float(sim.rho.max()),
+                         float(xs[:, 0].max()), float(xs[:, 1].mean()), float(sim.dt), *pw, *pi])
+            if verbose and k % (every * 100) == 0:
+                print(f"t={sim.time:.3f} t*={rows[-1][1]:.2f} KE={rows[-1][2]:.3f} vmax={rows[-1][3]:.2f} rho[{rows[-1][4]:.4f},{rows[-1][5]:.4f}] P*={pw.round(3)} {time.time() - t0:.0f}s", flush=True)
+    a = np.array(rows)
+    res = dict(t=a[:, 0], tStar=a[:, 1], kineticEnergy=a[:, 2], maxVelocity=a[:, 3], minDensity=a[:, 4], maxDensity=a[:, 5], front=a[:, 6], meanY=a[:, 7], dt=a[:, 8], steps=k, wall=time.time() - t0)
+    for q in range(3):
+        res[f"pProbe{q}Star"], res[f"pProbe{q}In1Star"] = a[:, 9 + q], a[:, 12 + q]
+    if out:
+        np.savez(out, **res, **({f"snap_{key}": np.array(v) for key, v in snaps.items()} if snapDt else {}), lo=np.array([info["xl"], info["yb"]]), hi=np.array([info["xr"], info["yt"]]), r=info["dx"] / 2, h=4 * info["dx"])
+    return sim, info, res
+
+
+def report_dambreak(res, ref=None):
+    ts = res["tStar"]
+    print(f"{res['steps']} steps, {res['wall']:.0f} s; rho in [{res['minDensity'].min():.4f}, {res['maxDensity'].max():.4f}], max|v| {res['maxVelocity'].max():.2f}")
+    for q, name in enumerate(("P1", "P2", "P3")):
+        for suffix, label in (("Star", "wall"), ("In1Star", "1dx in")):
+            for src, r_ in (("ours", res), ("warpSPH", ref)):
+                if r_ is None:
+                    continue
+                p, t = np.asarray(r_[f"pProbe{q}{suffix}"]), np.asarray(r_["tStar"])
+                ok = np.isfinite(p)
+                arr = t[ok][np.argmax(p[ok] > 0.05)] if (ok & (p > 0.05)).any() else float("nan")
+                m1, m2 = ok & (t >= 3.2) & (t <= 4.8), ok & (t >= 5.2) & (t <= 6.1)
+                print(f"  {name} {label:6s} {src:8s} first P*>0.05 at t*={arr:.2f} | mean[3.2,4.8] {p[m1].mean() if m1.any() else float('nan'):.3f} | mean[5.2,6.1] {p[m2].mean() if m2.any() else float('nan'):.3f} | max {np.nanmax(p):.3f} at t*={t[ok][np.nanargmax(p[ok])]:.2f}")
+
+
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "tank"
     if what == "tank":
@@ -120,6 +165,13 @@ if __name__ == "__main__":
         sim, info, s = run_tank(dp, T, dom)
         print(f"\nflat tank, dp = {dp}, domain = {dom}, {s['steps']} steps, {s['wall']:.0f} s")
         report_tank(s)
+    if what == "dambreak":
+        nx = int(sys.argv[2]) if len(sys.argv) > 2 else 67
+        T = float(sys.argv[3]) if len(sys.argv) > 3 else 1.9
+        out = sys.argv[4] if len(sys.argv) > 4 else None
+        kw = {k: (v == "True" if v in ("True", "False") else (v if not v.replace(".", "").replace("e-", "").isdigit() else float(v))) for k, v in (a.split("=") for a in sys.argv[5:])}
+        sim, info, res = run_dambreak(nx, T, snapDt=(1 / 60) if out else None, out=out, **kw)
+        report_dambreak(res)
     if what == "wedge":
         dp = float(sys.argv[2]) if len(sys.argv) > 2 else 0.02
         T = float(sys.argv[3]) if len(sys.argv) > 3 else 4.0

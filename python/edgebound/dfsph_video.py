@@ -9,11 +9,14 @@ import numpy as np
 
 
 def render(out, runs, vmax=5.0, fps=30, width=None, color="speed", t_max=None):
+    """`color`: "speed" | "p", or one per panel; `vmax`: one value or one per panel.  A `poly` array in the npz (vertices [K,2]) is drawn as a static solid."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon
     data = [(name, np.load(f)) for name, f in runs]
+    colors = color if isinstance(color, (list, tuple)) else [color] * len(data)
+    vmaxs = vmax if isinstance(vmax, (list, tuple)) else [vmax] * len(data)
     nF = min(len(d["t"]) for _, d in data)
     if t_max is not None:
         nF = min(nF, int(np.searchsorted(data[0][1]["t"], t_max)) + 1)
@@ -30,19 +33,21 @@ def render(out, runs, vmax=5.0, fps=30, width=None, color="speed", t_max=None):
     w_px = axs[0].get_window_extent().width
     pt = (2 * r * 1.0) / (hi[0] - lo[0] + 2 * pad) * w_px * 72 / fig.dpi
     sc = []
-    for ax, (name, d) in zip(axs, data):
+    for ax, (name, d), vm in zip(axs, data, vmaxs):
         ax.set_xlim(lo[0] - pad, hi[0] + pad)
         ax.set_ylim(lo[1] - pad, hi[1] + padTop)
         ax.set_aspect("equal")
         ax.plot([lo[0], hi[0], hi[0], lo[0], lo[0]], [lo[1], lo[1], hi[1], hi[1], lo[1]], "k-", lw=1.2)
         ax.set_xticks([])
         ax.set_yticks([])
-        s = ax.scatter(d["x"][0][:, 0], d["x"][0][:, 1], s=pt ** 2, c=np.zeros(len(d["x"][0])), cmap="viridis", vmin=0, vmax=vmax, marker="o", linewidths=0)
+        s = ax.scatter(d["x"][0][:, 0], d["x"][0][:, 1], s=pt ** 2, c=np.zeros(len(d["x"][0])), cmap="viridis", vmin=0, vmax=vm, marker="o", linewidths=0)
         lab = ax.text(0.005, 0.995, name, transform=ax.transAxes, va="top", ha="left", fontsize=10, fontweight="bold")
         tt = ax.text(0.995, 0.995, "", transform=ax.transAxes, va="top", ha="right", fontsize=10)
         lab.set_in_layout(False)
         tt.set_in_layout(False)
         sc.append((s, lab))
+        if "poly" in d.files:
+            ax.add_patch(Polygon(d["poly"], closed=True, facecolor="0.55", edgecolor="k", lw=1.0, zorder=3))
         if "body" in d.files:                                                       # hexagonal obstacle (circumradius 0.06, pose [cx, cy, angle]) as a patch
             ax.add_patch(Polygon(np.zeros((6, 2)), closed=True, facecolor="0.55", edgecolor="k", lw=1.0, zorder=3))
     fig.tight_layout(pad=0.4)
@@ -53,9 +58,9 @@ def render(out, runs, vmax=5.0, fps=30, width=None, color="speed", t_max=None):
            "-vf", f"crop={W}:{H}:0:0", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", out]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for f in range(nF):
-        for (s, _), ax, (name, d) in zip(sc, axs, data):
+        for (s, _), ax, (name, d), col in zip(sc, axs, data, colors):
             s.set_offsets(d["x"][f])
-            val = np.linalg.norm(d["v"][f], axis=1) if color == "speed" else d["p"][f]
+            val = np.linalg.norm(d["v"][f], axis=1) if col == "speed" else d["p"][f]
             s.set_array(val)
             ax.texts[-1].set_text(f"t = {d['t'][f]:.3f} s")
             if "body" in d.files:

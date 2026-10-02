@@ -123,3 +123,74 @@ def test_pair_list_is_complete_for_a_lattice_whose_spacing_divides_the_support(d
     sim.scene, sim.nb = None, 0
     a_ff = sim.rhs(x, torch.zeros_like(x), sim.rho)[0] - sim.g[None]       # fluid-fluid pressure force without gravity
     assert float((sim.m * a_ff.sum(0)).abs().max()) < 1e-12                # momentum conservation
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_wall_viscous_term_matches_the_half_plane_integral(device):
+    """a particle dp/2 above a flat wall moving into it at u_n: the free-slip alpha-viscosity wall term is  (alpha c0 H / xi) (2 u_n / rho) mu M2nn n  with M2nn = int_{y_n > d} int W'(r) y_n^2 / r^3 dy_t dy_n
+    (checked against a fine tensor-grid quadrature of the half plane); it decelerates the approach, is zero for tangential motion, and vanishes without viscosity."""
+    from edgebound.dfsph2d import dwendland2
+    sim, info = small_tank(device)
+    sim.cfg.ddt = False
+    sim.cfg.delta = 0.0
+    dp, bed = sim.dx, info["bed"]
+    x = torch.tensor([[0.0, bed + 0.5 * dp]], dtype=F64, device=device)
+    rho = torch.ones(1, dtype=F64, device=device)
+    sim.Hvec = torch.full((1,), sim.H, dtype=F64, device=device)
+    sim.kinds = torch.zeros(1, dtype=torch.int32, device=device)
+    got = {}
+    for name, v in (("into", (0.0, -1.0)), ("along", (1.0, 0.0))):
+        vel = torch.tensor([v], dtype=F64, device=device)
+        sim.cfg.wallViscosity = True
+        a_on = sim.rhs(x, vel, rho)[0]
+        sim.cfg.wallViscosity = False
+        a_off = sim.rhs(x, vel, rho)[0]
+        got[name] = (a_on - a_off)[0]
+    d, H = 0.5 * dp, sim.H
+    yn = torch.linspace(d, H, 4001, dtype=F64, device=device)
+    yt = torch.linspace(-H, H, 8001, dtype=F64, device=device)
+    YN, YT = torch.meshgrid(yn, yt, indexing="ij")
+    R = torch.sqrt(YN ** 2 + YT ** 2)
+    f = torch.where(R < H, dwendland2(R, H) * YN ** 2 / R.clamp(min=1e-300) ** 3, torch.zeros_like(R))
+    M2nn = float(torch.trapezoid(torch.trapezoid(f, yt, dim=1), yn))
+    expect = (sim.cfg.alpha * sim.cfg.c0 * H / D.XI) * 2.0 * 1.0 * M2nn * sim.cfg.wallMass          # u_n = +1 (into the wall: the bed lies below, n points down), force along n
+    assert abs(float(got["into"][1])) > 0
+    assert float(got["into"][1]) > 0                                                                # pushes the particle away from the wall (up), against the approach
+    assert abs(-float(got["into"][1]) - expect) < 0.03 * abs(expect)                                # n = -y, M2nn n = -M2nn y: expect = -accel_y... sign handled by magnitude
+    assert float(got["along"].norm()) < 1e-9
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_no_penetration_impulse_follows_the_mdbc_law(device):
+    """v_n <- v_n (1 - f), f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) for a closing particle with d < dp/4: f = 0.6 at d = 0.1 dp, 1.4 (reflection) at d = -0.1 dp, nothing at d = 0.3 dp, nothing for an opening or tangential velocity."""
+    sim, info = small_tank(device, noPen="impulse")
+    dp, bed = sim.dx, info["bed"]
+    ys = torch.tensor([0.1, -0.1, 0.3, 0.1, 0.1], dtype=F64, device=device) * dp + bed
+    sim.x = torch.stack([torch.linspace(-0.2, 0.2, 5, dtype=F64, device=device), ys], 1)
+    sim.v = torch.tensor([[0.0, -1.0], [0.0, -1.0], [0.0, -1.0], [0.0, 1.0], [1.0, 0.0]], dtype=F64, device=device)
+    sim.rho = torch.ones(5, dtype=F64, device=device)
+    sim.Hvec = torch.full((5,), sim.H, dtype=F64, device=device)
+    sim.kinds = torch.zeros(5, dtype=torch.int32, device=device)
+    sim.no_penetration()
+    vy = sim.v[:, 1].tolist()
+    assert abs(vy[0] - (-1.0 * (1 - 0.6))) < 1e-9 and abs(vy[1] - (-1.0 * (1 - 1.4))) < 1e-9
+    assert vy[2] == -1.0 and vy[3] == 1.0 and sim.v[4].tolist() == [1.0, 0.0]
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_particle_shift_vanishes_in_the_bulk_and_is_normal_and_small_at_a_flat_wall(device):
+    sim, info = small_tank(device, Hw=0.5, Ht=0.8, shifting=True)
+    sim.rho = torch.ones_like(sim.rho)                              # a density gradient (hydrostatic init) shifts through the m/(rho_i + rho_j) weight
+    upd = sim.shift(sim.dt)
+    x = sim.x
+    bed, top = info["bed"], info["bed"] + info["Hwater"]
+    bulk = (x[:, 1] > bed + 4.5 * sim.dx) & (x[:, 1] < top - 4.5 * sim.dx) & (x[:, 0].abs() < 0.4 - 4.5 * sim.dx)
+    assert bool(bulk.any()) and float(upd[bulk].norm(dim=1).max()) < 1e-9 * sim.dx
+    first = (x[:, 1] < bed + 0.6 * sim.dx) & (x[:, 0].abs() < 0.2)
+    assert float(upd[first, 1].abs().max()) < 0.01 * sim.dx          # a first row at its natural dx/2 spacing is (almost) at the PST equilibrium: fluid sum, wall gradient and tensile term balance
+    assert float(upd[first, 0].abs().max()) < 1e-9 * sim.dx         # no tangential component on a flat wall
+    # a particle pushed into the wall region is pushed back out: move the first row 0.3 dx closer
+    sim.x = sim.x.clone()
+    sim.x[first, 1] -= 0.3 * sim.dx
+    upd2 = sim.shift(sim.dt)
+    assert bool((upd2[first, 1] > 0).all())

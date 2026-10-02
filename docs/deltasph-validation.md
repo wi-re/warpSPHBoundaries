@@ -1,6 +1,6 @@
 # δ⁺-SPH on analytic walls: still-water validation against warpSPH + mDBC (2D)
 
-**Status:** [V] tank, wedge (with one open item, §3). Solver `python/edgebound/deltasph2d.py`, scoring `python -m edgebound.deltasph_validation tank|wedge`, tests `tests/edge/test_deltasph.py` (7).
+**Status:** [V] tank, wedge (one open item, §3), Marrone 3.1 dam break (§6). Solver `python/edgebound/deltasph2d.py`, scoring `python -m edgebound.deltasph_validation tank|wedge`, tests `tests/edge/test_deltasph.py` (10).
 Plan and order of the test cases: `deltasph-plan.md` (tank → English wedge → dam break → sloshing). Porting notes for warpSPH: `deltasph-porting-notes.md`.
 Reference: warpSPH `scripts/probe_englishWedge.py --dp 0.02 [--no-wedge] --tLimit 4` (scheme `deltaSPH`, isothermal EOS, Wendland C2, h/dp = 2, δ = 0.1, α = 0.01, fourtakas2019 DDT, Antuono pressure force,
 symplectic Euler, mDBC + free-slip walls, hydrostatic density initialisation, no shifting). English et al. 2022 §4.1: tank 2.4 × 1.2 m, water 0.5 m, wedge 0.24 m high on the bed.
@@ -11,8 +11,7 @@ Same: kernel, support 4 dx, mass ρ0 dx², isothermal EOS with c0 = 20 √(g H) 
 α-viscosity, Antuono pressure-force switch, Barecasco free-surface detector, symplectic Euler (k0 at tⁿ, half step, k1), the Sun-2017 time step (dt = 2.856e-4 for the tank in both codes; 14008 vs 14006 steps).
 
 Different: **no boundary particles.** The wall enters through λ = ∫W, ∇λ, the hydrostatic wall pressure `P_b = P_i + ρ0 (g − a_w)·(x' − x_i)` (clamped ≥ 0) as a per-query field, the free-slip mirror
-in continuity (`2 ρ u_n |μ∇λ|`, n = ∇λ/|∇λ|), and the wall as a continuum of particles in the free-surface detector (`Scene.inside`). The first fluid row sits dx/2 from every wall. Not yet: wall term of the α-viscosity (zero at rest),
-no-penetration, shifting (not used in these cases).
+in continuity (`2 ρ u_n |μ∇λ|`, n = ∇λ/|∇λ|), and the wall as a continuum of particles in the free-surface detector (`Scene.inside`). The first fluid row sits dx/2 from every wall. The wall term of the α-viscosity, the no-penetration impulse and the shifting (§5) are not used in the tank / wedge runs (zero at rest; shifting off as in the reference probe).
 
 ## 2. Flat tank (the hydrostatic baseline)
 
@@ -63,8 +62,39 @@ What was found (all runs in `.tmp/delta`, reproducer `ramp_build.py`):
 went missing**: the pairwise antisymmetric forces no longer conserved momentum (the fluid–fluid pressure force summed to 3.6 % of the weight in the wedge). Cell = 1.01 × support fixes it; the pair list now equals the brute-force list
 (`test_pair_list_is_complete_for_a_lattice_whose_spacing_divides_the_support`, fails with the old cell size). DFSPH uses non-commensurate lattices (spacing 0.399 h) and is unaffected (its 12 tests pass).
 
-## 5. Next
+## 5. Marrone 3.1 dam break (the third case)
 
-* wedge KE: a consistent packing (above); then the dp = 0.01 wedge.
-* dam break (Marrone 3.1): needs the wall term of the α-viscosity (second moments `∫ y⊗y g(r)`), the δ⁺ particle-shifting kernel (`W⁵`), no-penetration (closest point), the Barecasco detector with moving fluid, and probes P1–P3.
-* sloshing (SPHERIC TC10): the moving-wall terms (`a_w`, free-slip relative to the wall velocity) are implemented but untested for δ⁺.
+Reference: warpSPH `probe_deltaSPHMarrone.py --nx 67 --c0Ratio 40` (H/dx = 40.2, scheme `sun2017DeltaSPH`: δ⁺ with Sun-2017 shifting and Sun-2019 surface treatment, `noPenShiftMode='impulse'`, time-centred continuity,
+fourtakas2019 DDT, Antuono, free-slip mDBC walls, c0 = 97.04, 3240 fluid particles, 147 s). Ours: `marrone_dambreak(nx=67)`, tier-2 surface loop for the closed tank (ceiling 0.985 m above the bed), the same lattice up to the 0.13 % x-spacing,
+same probes (first-order MLS of the fluid pressure at the impact wall and 1 dx in, 7-point disc average, P* = P/ρ0 g H). 19533 steps (warpSPH 19551), 1222 s in torch (warpSPH's Warp/CUDA-graph step is 8× faster).
+
+New terms for this case: wall term of the α-viscosity (free-slip mirror, `(α c0 H/ξ)(2/ρ) u_n M₂ n`, `M₂ = ∫W'(r)dr ∫ŷ⊗ŷ 1[solid]dφ` by 24 × 96 polar quadrature of the solid, 1 % of a fine half-plane integral, tested),
+time-centred continuity, the dilated surface mask for the Antuono switch, δ⁺ shifting (wall part: `G` exact + the tensile-control `∫W⁴∇W dA` by the same quadrature), no-penetration impulse (the mDBC law reduced to an
+analytic wall: `v_n ← v_n(1 − f)`, `f = 3 − 4 clip(½ + d/dp, ¼, 1)` for a closing particle with `d < dp/4`; `Scene.signed_distance`), the probes.
+
+| quantity | warpSPH + mDBC | analytic, no shifting / noPen (A) | **analytic, shifting + noPen (B)** |
+|---|---|---|---|
+| P1 first P* > 0.05 | t* = 2.48 | 2.47 | **2.49** |
+| P1 mean, t* ∈ [3.2, 4.8] | 0.353 | 0.574 | **0.319** |
+| P1 mean, t* ∈ [5.2, 6.1] | 0.478 | 0.656 | **0.456** |
+| P1 maximum (t*) | 1.08 (6.37) | 2.40 (6.12) | **1.09 (6.48)** |
+| P1 at t* = 4 / 5 / 5.5 / 6.5 | 0.352 / 0.454 / 0.457 / 0.648 | 0.652 / 0.759 / 0.691 / 0.770 | **0.348 / 0.452 / 0.458 / 0.652** |
+| P2 first > 0.05 / mean [5.2, 6.1] / max | 4.31 / 0.211 / 1.28 | 3.39 / 0.267 / 3.12 | 4.50 / 0.168 / 1.40 |
+| P3 (ceiling) first > 0.05 / max (t*) | 3.25 / 15.1 (3.29) | 3.15 / 1042 (4.26) | 3.17 / 23.6 (3.66) |
+| kinetic energy at t* = 2 / 3 / 4 / 5 / 6 / 7 | 0.78 / 1.02 / 0.93 / 0.74 / 0.75 / 0.58 | 0.75 / 1.00 / 0.94 / 0.80 / 0.78 / 0.59 | 0.75 / 1.01 / 0.96 / 0.77 / 0.73 / 0.60 |
+| density range, max \|v\| | [0.983, 1.028], 9.6 | [0.577, 1.554], 37.6 | [0.972, 1.025], 6.8 |
+
+* **B reproduces the reference**: the P1 curve overlaps it (arrival, the slow rise, the peak and the t* = 6–7.5 oscillation), the kinetic energy is within 3 % at all times, the density stays within 3 %, the ceiling spike (P3) has the right
+  time and order. The weaker agreement is P2 (a thin run-up sheet on the wall: arrival 0.2 t* late, plateau 20 % low, a later and higher final peak) and the ceiling probe's magnitude (23.6 vs 15.1): both are sheet / splash quantities
+  where single particles decide and the flow is chaotic after the ceiling impact.
+* **A shows what the two corrections are for.** Without shifting the near-wall layer is disordered and P1 reads 1.6× high (the probe code documents the same bias for warpSPH without PST); at the two ceiling impacts (t* ≈ 4.2 and 4.8)
+  particles are flung at 34–37 m/s with the density down to 0.58 and 1.55 and the ceiling probe reads 1000 P*. warpSPH itself, run with shifting and no-penetration off, develops a 116 m/s particle at the first ceiling impact and never
+  recovers (stopped at t = 1.34 s, its step collapsing); our run recovers after each spike and completes. With the ceiling-sticking lessons of `dfsph-validation.md` §7 the analytic wall carries `P_b ≥ 0` and never pulls.
+* Deviations that remain (docs/deltasph-porting-notes.md): the free-slip mirror uses the particle's own velocity (the reference mirrors the Shepard velocity at the ghost); the normals and λ of the shifting surface treatment come from the
+  fluid pairs with the renormalisation matrix of fluid + wall; the wall counts in the free-surface detector, the viscous term and the tensile control by polar sampling of the solid; the x-spacing of the initial lattice is 0.13 % larger.
+
+## 6. Next
+
+* sloshing (SPHERIC TC10): the rolling tank is a prescribed rotating body (`Body.angularVelocity`, `accelerationAt`, wall velocity in the free-slip mirror, the viscous wall term and the no-penetration law relative to the moving wall: the static-wall
+  assumptions in `no_penetration` and `rhs` must be lifted); sensor pressure on the left wall.
+* wedge KE: a consistent packing (§3); higher resolution dam break (nx = 134) and the 3D question.

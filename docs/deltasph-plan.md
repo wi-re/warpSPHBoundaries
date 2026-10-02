@@ -1,6 +1,6 @@
 # δ⁺-SPH on the scene boundary layer — plan
 
-**Status:** tank and wedge done (`deltasph-validation.md`: tank passes and is 10× more accurate than mDBC, wedge passes all probe checks but rings), dam break and sloshing next. Follows `dfsph-validation.md` (DFSPH2D vs omniSPH). Same pattern: a self-contained 2D torch solver `deltasph2d.py` whose boundary terms are exact kernel integrals over the scene
+**Status:** tank, wedge and Marrone 3.1 dam break done (`deltasph-validation.md`: tank 10× more accurate than mDBC; wedge passes all probe checks but rings; dam break P1 and KE match warpSPH, P2 / ceiling probe qualitatively); sloshing next. Follows `dfsph-validation.md` (DFSPH2D vs omniSPH). Same pattern: a self-contained 2D torch solver `deltasph2d.py` whose boundary terms are exact kernel integrals over the scene
 (`scene-architecture.md`), validated against a live reference with identical initial particles. Reference here: warpSPH's `sun2017DeltaSPH` (δ⁺, PST on) + `fourtakas2019` DDT + `symplecticEuler` + `english2025` mDBC + free-slip, the
 Marrone 3.1 dam break (`warpSPH/scripts/probe_deltaSPHMarrone.py`: column 2H × H, H = 0.6 m, tank 5.366 H, ceiling at 1.0 m, probes P1/P2/P3 on the impact wall, c0 = 40 √(gH), H/dx = 40/80/320).
 

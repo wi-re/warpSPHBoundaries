@@ -515,14 +515,16 @@ class Scene:
             for r in b.reps:
                 r.to(device) if hasattr(r, "to") else None
 
-    def inside(self, points):
+    def inside(self, points, body=None):
         """True where a world point lies inside the solid of any body (surface loops: winding number; SDF / implicit primitives: negative signed distance, positive = fluid; volume: inside a triangle).
-        Not an adjacency query: no support radius, any number of points (the free-surface detector samples the solid around a particle)."""
+        Not an adjacency query: no support radius, any number of points (the free-surface detector samples the solid around a particle).  `body`: index of one body only."""
         pts = points.to(self.device, torch.float64)
         out = torch.zeros(len(pts), dtype=torch.bool, device=pts.device)
-        for body in self.bodies:
-            lp = body.pose.toLocal(pts)
-            for rep in body.reps:
+        for bi, bd in enumerate(self.bodies):
+            if body is not None and bi != body:
+                continue
+            lp = bd.pose.toLocal(pts)
+            for rep in bd.reps:
                 if isinstance(rep, SurfaceRep):
                     out |= rep.indicator(lp) > 0.5
                 elif isinstance(rep, SdfRep):
@@ -541,6 +543,54 @@ class Scene:
                         pos = (d1 > 0) | (d2 > 0) | (d3 > 0)
                         out[k:k + 20000] |= (~(neg & pos)).any(1)
         return out
+
+    def signed_distance(self, points, body=None):
+        """(d [M], n [M,2], hit [M]) of world points to the solid of one body (or the nearest of all): d > 0 in the fluid, n the unit normal pointing from the wall into the fluid at the closest wall point.
+        Surface loops: nearest edge (brute force over the edges, fine for a few dozen); SDF representations: the sampled distance and its gradient; implicit primitives: their own `signed`.  `hit` is False where
+        no representation could answer (volume representations)."""
+        pts = points.to(self.device, torch.float64)
+        M = len(pts)
+        best = torch.full((M,), float("inf"), dtype=torch.float64, device=pts.device)
+        normal = torch.zeros((M, 2), dtype=torch.float64, device=pts.device)
+        hit = torch.zeros(M, dtype=torch.bool, device=pts.device)
+        for bi, bd in enumerate(self.bodies):
+            if body is not None and bi != body:
+                continue
+            lp = bd.pose.toLocal(pts)
+            for rep in bd.reps:
+                if isinstance(rep, SurfaceRep):
+                    V = rep.vertices
+                    a, b = V[rep.edges[:, 0].long()], V[rep.edges[:, 1].long()]                      # [E,2]
+                    e = b - a
+                    t = (((lp[:, None, :] - a[None]) * e[None]).sum(2) / (e * e).sum(1)[None]).clamp(0.0, 1.0)
+                    c = a[None] + t[..., None] * e[None]                                              # closest points [M,E,2]
+                    dist = (lp[:, None, :] - c).norm(dim=2)
+                    k = dist.argmin(1)
+                    dmin = dist.gather(1, k[:, None])[:, 0]
+                    cp = c[torch.arange(M, device=pts.device), k]
+                    ins = rep.indicator(lp) > 0.5
+                    d = torch.where(ins, -dmin, dmin)
+                    # the wall normal into the fluid: the left normal of the edge points INTO the solid (solid on the left), so the fluid normal is the right normal
+                    ek = e[k] / e[k].norm(dim=1, keepdim=True)
+                    n_loc = torch.stack([ek[:, 1], -ek[:, 0]], 1)
+                    # near a vertex the normal is the direction from the closest point to the particle (smooth across corners)
+                    dirv = lp - cp
+                    dn = dirv.norm(dim=1, keepdim=True)
+                    n_loc = torch.where((dn > 1e-12) & (~ins[:, None]), dirv / dn.clamp(min=1e-300), n_loc)
+                    n = bd.pose.vecToWorld(n_loc)
+                elif isinstance(rep, SdfRep):
+                    d, n_loc, _, _ = rep.signed(lp)
+                    n = bd.pose.vecToWorld(n_loc)
+                elif isinstance(rep, ImplicitRep):
+                    d, n_loc, _ = rep.shape.signed(lp)
+                    n = bd.pose.vecToWorld(n_loc)
+                else:
+                    continue
+                better = d < best
+                best = torch.where(better, d, best)
+                normal = torch.where(better[:, None], n, normal)
+                hit |= True
+        return best, normal, hit
 
     def candidates(self, body: Body, pos, sup, allowed, cells: Optional[ParticleCells] = None):
         """broadphase: support sphere vs the body OBB in the body frame (exact); with `cells` only the particles under the inflated world box of the OBB are tested."""
