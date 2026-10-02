@@ -39,6 +39,20 @@ The pair sums (fluid–fluid) are plain torch (`neighbor_pairs`), checked agains
 probe's docstring (P1 arrival 2.5 < t* < 3.0, plateau P* 0.45–0.68, P2 peak 0.22–0.40 at 5.2 < t* < 6.1). Also record how the reference behaves at the ceiling: its own `CEILING_STICKING_PLAN.md` documents ceiling riders and
 kicked clusters with mDBC, so the analytic wall may well *differ* from it there (that would be a result, not a mismatch).
 
+**P0 result (2026-10-02, done).** `cd ~/dev/warpSPH && python scripts/probe_deltaSPHMarrone.py --nx 67 --c0Ratio 40 --video --out <dir> --no-show` (warpSPH branch `dev`, unmodified): H/dx = 40.2, 10272 particles incl. wall layers,
+c0 = 97.04, M = 0.049, 19551 steps, 147 s on the RTX PRO 6000, not diverged, ρ ∈ [0.983, 1.028], max|v| 9.6 m/s, max penetration 0.096 dx. Stored in `<dir>/sun2017DeltaSPH_nx67_c40.npz` (probe series, no particle snapshots) and the
+video / frames in `<dir>/*_run/`. Probe numbers of the stored series (t* = t √(g/H), P* = P/(ρ0 g H); estimators `Star` / `In1Star` / `ShepStar` agree within 3 %):
+
+| probe | first P* > 0.05 | mean P*, t* ∈ [3.2, 4.8] | mean P*, t* ∈ [5.2, 6.1] | maximum |
+|---|---|---|---|---|
+| P1 (z = 0.16 m, impact wall) | t* = 2.48 | 0.353 | 0.478 | 1.08 at t* = 6.37 |
+| P2 (z = 0.584 m) | t* = 4.31 | 0.035 | 0.211 | 1.28 at t* = 6.92 |
+| P3 (z = 1.0 m, **ceiling height**) | t* = 3.25 | 0.596 | 0.010 | **15.1 at t* = 3.29** |
+
+These are the curves the analytic-wall run is compared with. Two observations to keep honest: (i) P1's plateau (0.35) and P2's late peak are *outside* the acceptance bands quoted in the probe's docstring (plateau 0.45–0.68, P2 peak 0.22–0.40 at
+5.2 < t* < 6.1) — I have not audited whether the stored series is what the docstring scores, so the reference's own curves, not the bands, are the target; (ii) the P3 spike (P* = 15 at t* = 3.29) is the first ceiling impact of the right-wall run-up,
+exactly where the ceiling-sticking work in warpSPH (`CEILING_STICKING_PLAN.md`) finds riders and kicked clusters. The matched initial particles are not stored: they are rebuilt from the case geometry (regular lattice, dx = 0.014925, box 3.2196 × 1.0, column 2H × H).
+
 **P1 — scene-layer additions** (kernels first, they are table entries): `W'(r)/r`, `W⁵` (and `W⁵/5` gradient form); p = 2 weights `∫ y_a y_b g(r)`; `Scene.closestPoint` / normal; per-query vector fields. Each verified against a dense
 boundary-particle lattice (the continuum limit) and, for the kernels, against the polar disk oracle (`oracle.py`) as before.
 
