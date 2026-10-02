@@ -33,14 +33,14 @@ Wedge = `SurfaceRep` triangle with exact corners (apex 0.24 m above the bed, hal
 
 | check (dp = 0.02, 4 s) | warpSPH + mDBC | analytic walls |
 |---|---|---|
-| bulk RMSE | 0.0225 | **0.0090** |
-| near wall / bed RMSE (max) | 0.0274 (0.033) | 0.0358 (0.076) |
+| bulk RMSE | 0.0225 | **0.0091** |
+| near wall / bed RMSE (max) | 0.0274 (0.033) | 0.0357 (0.084) |
 | wedge faces RMSE (≤ 0.05) | 0.0259 | **0.0136** |
-| apex RMSE, max (≤ 0.03) | 0.0226, 0.024 | **0.0078**, 0.027 |
-| base corners RMSE, max (≤ 0.03) | 0.0287, 0.031 | **0.0161**, 0.032 |
-| settled KE (tail mean) | **1.06e-6** | 3.99e-4 (peak 1.36e-3, decaying, 2.9e-4 at 4 s) |
+| apex RMSE, max (≤ 0.03) | 0.0226, 0.024 | **0.0061**, 0.018 |
+| base corners RMSE, max (≤ 0.03) | 0.0287, 0.031 | **0.0212**, 0.037 |
+| settled KE (tail mean) | **1.06e-6** | 3.8e-4 (peak 1.2e-3, decaying) |
 
-All eight checks pass; the profile near the wedge is about twice as accurate as with mDBC. **Open item: the kinetic energy.** The settled KE is 400 × the reference's: a slow circulation (u ≈ ±0.08 m/s converging on the wedge,
+All eight checks pass (numbers from the final code, after the dam-break additions; the earlier run gave apex 0.0078, corners 0.0161); the profile near the wedge is better than with mDBC. **Open item: the kinetic energy.** The settled KE is 400 × the reference's: a slow circulation (u ≈ ±0.08 m/s converging on the wedge,
 symmetric about the apex, the second sloshing mode of the pool) is excited in the first second and decays with α = 0.01 over several seconds.
 
 What was found (all runs in `.tmp/delta`, reproducer `ramp_build.py`):
