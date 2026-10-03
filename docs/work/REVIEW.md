@@ -28,13 +28,19 @@ Title, branch, log/report names · context (≤ 10 lines) · starting state with
 
 ## Planned sequence (HANDOFF.md Part A, adjusted after each review)
 * WORK-001 (regression harness, step profile, exact cover vector formula): **done, accepted** (`logs/REVIEW-001.md`).
-* WORK-002: Q3a into the solver behind `cfg.coverExact` (no Warp change needed: `cone` kernel), physics-level gate + `--cfg` in the harness, detector comparison on real states, **Q2 conditioning study** (`W⁵`: fine for C2, not for C4 with the current plan).
-* WORK-003: Q3b (angular clip: cone area + all-neighbour count, closed form per edge) and Q2 implementation (Chebyshev basis in the Warp plan for degree 40, then the `W⁵/5` kernel in `shift`), both behind switches.
-* WORK-004: Q1 Laplacian derivation + operation (`Δλ`, first moments of `∇²W`), calibration of `ν_eff` against the pairwise form.
-* WORK-005: all switches on, delete `_solid_samples` / `surfaceSamples`, re-validate the A2 cases in full (dam break, sloshing), re-record the bit-level baseline.
+* WORK-002 (Q3a into the solver behind `cfg.coverExact`, physics gate + `--cfg` in the harness, detector comparison, Q2 conditioning study): **done, accepted** (`logs/REVIEW-002.md`; one wrong number in `docs/q2-conditioning.md` corrected).
+* WORK-003: Q3b closed-form cone area (`cone_area.py`, scene wrapper, `cfg.coneExact`) and the exact tensile term for Wendland C2 (`tensile.py`, `cfg.tensileExact`), both behind switches, tests + detector comparison + physics gate runs.
+* WORK-004: Chebyshev-basis plan in `warpbc.py` (needed for Wendland C4: `W⁵` is degree 40; the np2d `stable=(16,8)` route is the reference; `(8,6)` loses accuracy near vertices) and `tensileExact` for C4 (sloshing).
+* WORK-005: Q1 Laplacian derivation + operation (`Δλ`, first moments of `∇²W`), calibration of `ν_eff` against the pairwise form.
+* WORK-006: all switches on, delete `_solid_samples` / `surfaceSamples`, re-validate the A2 cases in full (dam break, sloshing), re-record the bit-level baseline.
 * then phase 2 (adjacency: 4 builds ≈ 4.2 ms each is the largest item once `Scene.inside` is gone), driven by `docs/deltasph-profile.md`.
 
 ## Lessons for writing work documents (from REVIEW-001)
 * Verify every "must fail" claim and every smoke number with a throw-away script **before** issuing the document (WORK-001's negative control was mis-specified; the model caught it, but a model that does not would have forced a pass or stalled). Keep such probes in `docs/work/refs/`.
 * Say what a gate is *sensitive to*: the bit-level harness fails for any physics change, the physics gate (5 % KE, 0.05 t*) does not see a shifting switch; give a negative control that is valid for the gate in question.
 * When a task says "compare against the old quadrature", state the quadrature's own error beforehand (measured), otherwise the tolerance is either vacuous or false.
+
+## Lessons for writing work documents (from REVIEW-002)
+* A conversion factor that appears in both the implementation and its test proves nothing: add an **absolute** check (a plain-numpy grid integral at a geometry with a known answer). WORK-002's doc had a wrong factor (1e7 off) that its own tests could not have caught.
+* Probe the degenerate geometry (tangent `z == H`, particle on an edge / at a vertex) before issuing a spec for a piecewise formula; the reviewer's own probe had a tangent-case bug that a midpoint sanity check exposed.
+* A physics gate with a loose band is a *do-no-harm* check; say in the work document what carries the correctness evidence instead (tests, detector comparison), and which gate items are insensitive (`steps`).

@@ -2,6 +2,8 @@
 
 Status: [V] (numbers from `python -m edgebound.q2_conditioning`, log `docs/work/logs/LOG-002.md`).
 
+*Reviewer correction (REVIEW-002):* the model's T_y values (−6.8e-8 / −4.9e-8) used the factor (c2/c25)⁵/π⁴, which is wrong (c2⁵ / (π⁴ c25) is right); the sign statement was and is correct. Corrected values: −0.14101158 (w2) and −0.19782376 (w4), each confirmed by an independent midpoint-grid integral of W⁴ ∂W/∂y over the half disk (−0.14101146, −0.19782346; `docs/work/refs/q2_review_probe.py`). The "vertex finding" below is localised to within ~0.01 H of a vertex (same probe), i.e. it does not matter for particles that sit ≥ dx/√2 from a corner.
+
 ## Derivation
 
 1. The wall part of the delta+ tensile control is  T_i = ∫_solid W⁴(x, x′) ∇_i W(x, x′) dA′  (the solver's `shift()`, polar quadrature today).
@@ -14,13 +16,13 @@ Status: [V] (numbers from `python -m edgebound.q2_conditioning`, log `docs/work/
 **Sign / units.** W decreases with r (W′ < 0), so ∇_i W = W′(r) (x − x′)/r points from the particle TOWARD the solid: T has the direction of ∇λ, i.e. it points INTO the wall, like G = μ∇λ in `shift`. Verification at the flat-floor point (0, 0.3), support 1, solid below y = 0 (the square [−2,2] × [−2,0] is exactly the half-plane inside the disk; mpmath reference at 150 + GUARD digits):
 
 ```
-w2: g0_y = -1.5485900248e-01   T_y = (1/5)(c2/c2^5)^5/pi^4 * g0_y = -6.8366791491e-08   T_y < 0: True
-w4: g0_y = -7.3201280751e-02   T_y = (1/5)(c2/c2^5)^5/pi^4 * g0_y = -4.8836588922e-08   T_y < 0: True
+w2: g0_y = -1.5485900248e-01   T_y = (1/5) c2^5 / (pi^4 c25) * g0_y = -0.14101158   T_y < 0: True   (c2 = 7,  c25 = 37.8968)
+w4: g0_y = -7.3201280751e-02   T_y = (1/5) c2^5 / (pi^4 c25) * g0_y = -0.19782376   T_y < 0: True   (c2 = 9,  c25 = 44.8625)
 ```
 
 ## Setup
 
-Unit square, support h = 1, point set = the 6 probe points of `docs/work/refs/q2_probe.py` + 200 random points in [−0.5, 1.5]² (seed 5) + the 4 vertices and 4 edge midpoints (214 points). Routes: (A) Warp `warpbc.edge_channels` (the current monomial-basis plan — the solver's route), (B) `np2d.gradient` float64 plain, (C) `np2d.gradient` stable=(8,6), (D) `np2d.gradient` stable=(16,8); reference: `core.block_grad` at 150 + GUARD dps. All return ∇_x ∫_solid (π W^k) dA′. Kernels: w2p{k} = (shape_w2)^k (degree 5k), w4p{k} = (shape_w4)^k (degree 8k), each renormalised on its own (`c2_pi`); the physical T differs from the g0 of the registered W⁵ kernel only by the fixed factor (1/5)(c2/c2⁽⁵⁾)⁵/π⁴, so the RELATIVE errors below are the ones that matter.
+Unit square, support h = 1, point set = the 6 probe points of `docs/work/refs/q2_probe.py` + 200 random points in [−0.5, 1.5]² (seed 5) + the 4 vertices and 4 edge midpoints (214 points). Routes: (A) Warp `warpbc.edge_channels` (the current monomial-basis plan — the solver's route), (B) `np2d.gradient` float64 plain, (C) `np2d.gradient` stable=(8,6), (D) `np2d.gradient` stable=(16,8); reference: `core.block_grad` at 150 + GUARD dps. All return ∇_x ∫_solid (π W^k) dA′. Kernels: w2p{k} = (shape_w2)^k (degree 5k), w4p{k} = (shape_w4)^k (degree 8k), each renormalised on its own (`c2_pi`); the physical T (h = 1) differs from the g0 of the registered W⁵ kernel only by the fixed factor (1/5) c2⁵ / (π⁴ c25), c2 = `c2_pi` of the family, c25 = `c2_pi` of `W⁵` (for support H: times H⁻⁸), so the RELATIVE errors below are the ones that matter.
 
 ## Results
 
