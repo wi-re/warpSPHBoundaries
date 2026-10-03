@@ -84,10 +84,27 @@ class _PlanBuilder:
             self.value(ch, R, 1, gate, P, scale)
 
 
-@lru_cache(maxsize=None)
-def build_plan(kernel):
-    """flatten all nine channels of the P1 weights for `kernel` (exact rationals -> float64 constants)."""
-    pb = _PlanBuilder(kernel)
+class _ChebBuilder(_PlanBuilder):
+    """same term list as _PlanBuilder, but every coefficient range holds the CHEBYSHEV coefficients of the profile on [0, R]
+    (exact Fractions via np2d.cheb_coeffs, float64 only at the end, times the term scale).  Edge-term profile is P; the value-term
+    profile is Q = P/(n+2) (what the monomial kernel integrates as cc[k]/(cn[k]+2) r^cn[k]); mR is from the UNSCALED monomial P.  No cn."""
+
+    def _cheb(self, P, R, scale):
+        c0 = len(self.cc)
+        self.cc.extend(float(x) * scale for x in np2d.cheb_coeffs(P, R))
+        return c0, len(self.cc)
+
+    def edge(self, ch, i, beta, R, var, gate, P, scale=1.0):
+        self.E.append((ch, i, beta[0], beta[1], self.R(R), var, gate, *self._cheb(P, R, scale)))
+
+    def value(self, ch, R, var, gate, P, scale=1.0):
+        mR = sum(c * Fraction(R) ** (n + 2) / (n + 2) for n, c in P.items())
+        Q = {n: c / (n + 2) for n, c in P.items()}
+        self.V.append((ch, self.R(R), var, gate, *self._cheb(Q, R, scale), float(mR) * scale))
+
+
+def _build_terms(pb, kernel):
+    """fill the term lists of builder `pb` (moments, g_alpha channels, gates, inner forms); return the innermost-radius index."""
     # moments
     for ch, al in enumerate(ALPHAS):
         pb.moment_plan(ch, al, 1.0, 0)
@@ -107,7 +124,22 @@ def build_plan(kernel):
             if al[j]:
                 beta = (al[0] - (j == 0), al[1] - (j == 1))
                 pb.profile_moment_plan(ch, Q, Rin, beta, float(al[j]), 2)
-    rin_idx = pb.R(Rin)
+    return pb.R(Rin)
+
+
+@lru_cache(maxsize=None)
+def build_plan(kernel):
+    """flatten all nine channels of the P1 weights for `kernel` (exact rationals -> float64 constants)."""
+    pb = _PlanBuilder(kernel)
+    rin_idx = _build_terms(pb, kernel)
+    return pb, rin_idx
+
+
+@lru_cache(maxsize=None)
+def build_cheb_plan(kernel):
+    """same term list as build_plan, but each coefficient range holds the Chebyshev coefficients of the profile on [0, R] (exact compile -> float64)."""
+    pb = _ChebBuilder(kernel)
+    rin_idx = _build_terms(pb, kernel)
     return pb, rin_idx
 
 
@@ -140,6 +172,28 @@ class DevicePlan:
         gx, gw = np.polynomial.legendre.leggauss(GAUSS_N)
         self.gx = wp.array((gx + 1) / 2, dtype=f64, device=device)
         self.gw = wp.array(gw / 2, dtype=f64, device=device)
+
+
+class ChebPlan:
+    """the Chebyshev-quadrature plan arrays resident on one device (the opt-in `stable=` route of edge_channels): the same term
+    arrays as DevicePlan (Chebyshev coefficient ranges, no cn) plus the Gauss-Legendre nodes/weights on [-1, 1]; `panels` is a
+    launch argument of the kernel, not part of the arrays."""
+
+    def __init__(self, kernel, device, nodes=16, panels=8):
+        pb, rin_idx = build_cheb_plan(kernel)
+        self.rin_idx = rin_idx
+        self.nodes = nodes
+        self.panels = panels
+        self.nE, self.nV = len(pb.E), len(pb.V)
+        i32 = lambda rows, k: wp.array(np.array([r[k] for r in rows] or [0], dtype=np.int32), dtype=int, device=device)
+        self.radii = wp.array(np.array(pb.radii, dtype=np.float64), dtype=f64, device=device)
+        self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np.float64), dtype=f64, device=device)
+        self.e = [i32(pb.E, k) for k in range(9)]          # ch, i, a, b, R, var, gate, c0, c1
+        self.v = [i32(pb.V, k) for k in range(6)]          # ch, R, var, gate, c0, c1 (+ mR below)
+        self.v_mR = wp.array(np.array([r[6] for r in pb.V] or [0.0], dtype=np.float64), dtype=f64, device=device)
+        gx, gw = np.polynomial.legendre.leggauss(nodes)
+        self.gx = wp.array(gx, dtype=f64, device=device)       # on [-1, 1]
+        self.gw = wp.array(gw, dtype=f64, device=device)
 
 
 # ------------------------------------------------------------------------------------------------ the pair kernel
@@ -434,6 +488,67 @@ def pair_weights(pair_q, pair_e, positions, supports, vertices, elements, kernel
 # A closed boundary needs no triangles: every channel is  (edge-local part)  +  (indicator of the body) x u,  the indicator being a BODY-level quantity.
 # `edge_channels` returns the edge-local parts; `indicator_vector(kernel)` is u.  Only the compact-potential (truncated) forms are used: the inner
 # potentials rely on the constant dropping out over a CLOSED polygon, which a single edge does not provide.
+
+
+# ---- the Chebyshev-quadrature (opt-in `stable=`) route: the algorithm of `np2d stable=(nodes, panels)`, moved to Warp.
+# The edge profile is compiled EXACTLY (Fractions) into its Chebyshev series on [0, R] (amplification ~1.2 instead of 1e2..2e4 for the
+# monomial basis) and integrated by Gauss-Legendre on dyadic panels around the foot point; the angle term stays closed form.
+@wp.func
+def _clenshaw(cc: wp.array(dtype=f64), c0: int, c1: int, x: f64) -> f64:
+    """sum_k a_k T_k(x), a_k = cc[c0 + k], k = 0 .. c1 - c0 - 1."""
+    b1 = f64(0.0)
+    b2 = f64(0.0)
+    for k in range(c1 - c0 - 1):
+        t = f64(2.0) * x * b1 - b2 + cc[c1 - 1 - k]
+        b2 = b1
+        b1 = t
+    return x * b1 - b2 + cc[c0]
+
+
+@wp.func
+def _cheb_integral(a: int, b: int, lo: f64, hi: f64, z: f64, R: f64, n0: f64, n1: f64, t0: f64, t1: f64,
+                   cc: wp.array(dtype=f64), c0: int, c1: int, gx: wp.array(dtype=f64), gw: wp.array(dtype=f64),
+                   nn: int, panels: int) -> f64:
+    """int_lo^hi y0^a y1^b P(r) ds  (y = z n + s t, r = sqrt(s^2 + z^2), P = the Chebyshev series cc[c0:c1] on [0, R]) by Gauss-Legendre
+    (nn nodes per panel) on the dyadic panels of the chord around the foot point s = 0: per side, breakpoints 0, |z|, 2|z|, ..., 2^(panels-1)|z|
+    (clipped to the side's chord end, last panel up to the end; empty panels skipped)."""
+    az = wp.abs(z)
+    tot = f64(0.0)
+    for side in range(2):
+        sg = f64(1.0)
+        t_lo = wp.max(lo, f64(0.0))
+        t_hi = wp.max(hi, f64(0.0))
+        if side == 1:
+            sg = f64(-1.0)
+            t_lo = wp.max(-hi, f64(0.0))
+            t_hi = wp.max(-lo, f64(0.0))
+        for j in range(panels + 1):
+            ba = f64(0.0)
+            if j >= 1:
+                ba = az * wp.pow(f64(2.0), f64(j - 1))
+            bb = t_hi
+            if j < panels:
+                bb = az * wp.pow(f64(2.0), f64(j))        # Bs[j + 1] = |z| 2^j  (Bs[1] = |z|)
+            pa = wp.clamp(ba, t_lo, t_hi)
+            pb = wp.clamp(bb, t_lo, t_hi)
+            if pb > pa:
+                half = (pb - pa) / f64(2.0)
+                mid = (pa + pb) / f64(2.0)
+                for k in range(nn):
+                    s = sg * (mid + half * gx[k])
+                    r = wp.sqrt(s * s + z * z)
+                    xx = wp.clamp(f64(2.0) * r / R - f64(1.0), f64(-1.0), f64(1.0))
+                    y0 = z * n0 + s * t0
+                    y1 = z * n1 + s * t1
+                    m = f64(1.0)
+                    for _ in range(a):
+                        m = m * y0
+                    for _ in range(b):
+                        m = m * y1
+                    tot += half * gw[k] * m * _clenshaw(cc, c0, c1, xx)
+    return tot
+
+
 @wp.kernel
 def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
                           pos: wp.array(dtype=wp.vec2d), sup: wp.array(dtype=f64),
@@ -495,6 +610,66 @@ def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=in
         cout[tid, k] = inv_pi * ch[k]
 
 
+@wp.kernel
+def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
+                               pos: wp.array(dtype=wp.vec2d), sup: wp.array(dtype=f64),
+                               verts: wp.array(dtype=wp.vec2d), edges: wp.array(dtype=wp.vec2i),
+                               radii: wp.array(dtype=f64), inv_pi: f64,
+                               e_ch: wp.array(dtype=int), e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int),
+                               e_R: wp.array(dtype=int), e_var: wp.array(dtype=int), e_gate: wp.array(dtype=int),
+                               e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int), n_e: int,
+                               v_ch: wp.array(dtype=int), v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
+                               v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=f64), n_v: int,
+                               cc: wp.array(dtype=f64), gx: wp.array(dtype=f64), gw: wp.array(dtype=f64), nn: int, panels: int,
+                               cout: wp.array2d(dtype=f64)):
+    """a copy of _edge_channels_kernel with the monomial `_edge_integral` replaced by the Chebyshev-quadrature `_cheb_integral`
+    (the value term is `z * _cheb_integral(0, 0, ...) - mR * _dangle`); the chord clip, the gates, the n_i factor and the 1/pi are unchanged."""
+    tid = wp.tid()
+    qi = pair_q[tid]
+    ed = edges[pair_e[tid]]
+    h = sup[qi]
+    xv = pos[qi]
+    p = (verts[ed[0]] - xv) / h
+    q = (verts[ed[1]] - xv) / h
+    d = q - p
+    ell = wp.sqrt(d[0] * d[0] + d[1] * d[1])
+    if ell == f64(0.0):
+        return
+    t0 = d[0] / ell
+    t1 = d[1] / ell
+    n0 = t1                                   # outward (fluid-side) normal of a counter-clockwise boundary
+    n1 = -t0
+    z = (p[0] * q[1] - p[1] * q[0]) / ell     # positive when x lies on the solid side
+    s0 = (d[0] * p[0] + d[1] * p[1]) / ell
+    s1 = (d[0] * q[0] + d[1] * q[1]) / ell
+    ch = wp.vector(f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0))
+    az = wp.abs(z)
+    for t in range(n_e):
+        if (e_var[t] != 1) and (e_gate[t] != 2):
+            R = radii[e_R[t]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    ni = n0
+                    if e_i[t] == 1:
+                        ni = n1
+                    ch[e_ch[t]] = ch[e_ch[t]] + ni * _cheb_integral(e_a[t], e_b[t], lo, hi, z, R, n0, n1, t0, t1, cc, e_c0[t], e_c1[t], gx, gw, nn, panels)
+    for t in range(n_v):
+        if (v_var[t] != 1) and (v_gate[t] != 2):
+            R = radii[v_R[t]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    poly = _cheb_integral(0, 0, lo, hi, z, R, n0, n1, t0, t1, cc, v_c0[t], v_c1[t], gx, gw, nn, panels)
+                    ch[v_ch[t]] = ch[v_ch[t]] + z * poly - v_mR[t] * _dangle(z, lo, hi)
+    for k in range(9):
+        cout[tid, k] = inv_pi * ch[k]
+
+
 def indicator_vector(kernel):
     """u[9]: channel value of a body that contains the whole support (indicator 1) -- (1,0,0, 0,0, 1,0, 0,1): lambda = 1, g_(1,0)_x = g_(0,1)_y = lambda."""
     pb, _ = build_plan(kernel)
@@ -505,10 +680,58 @@ def indicator_vector(kernel):
     return u
 
 
-def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, device="cuda:0", plan=None, as_torch=True):
-    """edge-local channels c[P,9] (dimensionless, units of h) of every (query, edge) pair; edges [E,2] counter-clockwise around the solid (solid on the left).
-    The total of a closed body is  sum_edges c + indicator * indicator_vector(kernel)."""
+# ---- the opt-in stable (Chebyshev-quadrature) registry: kernel name -> (nodes, panels).  Empty by default (the monomial plan stays the
+# default of edge_channels); the tensile term (tensile.py) registers w2p5 / w4p5.  Chebyshev plans are cached per (kernel, device, nodes).
+STABLE_KERNELS = {}
+_Cheb_plan_cache = {}
+
+
+def _cheb_plan_for(kernel, device, nodes):
+    key = (kernel, device, nodes)
+    plan = _Cheb_plan_cache.get(key)
+    if plan is None:
+        plan = ChebPlan(kernel, device, nodes=nodes)
+        _Cheb_plan_cache[key] = plan
+    return plan
+
+
+def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, nodes, panels, plan=None, as_torch=True):
+    """the Chebyshev-quadrature route of edge_channels (plan from `plan` or the (kernel, device, nodes) cache, launched with `panels`)."""
     import torch
+    plan = plan if plan is not None else _cheb_plan_for(kernel, device, nodes)
+    P = len(pair_q)
+    cout = torch.zeros((max(P, 1), NCH), dtype=torch.float64, device=device)
+    if P:
+        keep = []
+        wq, a = _wp_from(pair_q, wp.int32, device, torch.int32); keep.append(a)
+        we, a = _wp_from(pair_e, wp.int32, device, torch.int32); keep.append(a)
+        wpos, a = _wp_from(positions, wp.vec2d, device, torch.float64); keep.append(a)
+        wsup, a = _wp_from(supports, f64, device, torch.float64); keep.append(a)
+        wv, a = _wp_from(vertices, wp.vec2d, device, torch.float64); keep.append(a)
+        wed, a = _wp_from(edges, wp.vec2i, device, torch.int32); keep.append(a)
+        wp.launch(_edge_channels_cheb_kernel, dim=P, device=device, inputs=[
+            wq, we, wpos, wsup, wv, wed, plan.radii, f64(1 / np.pi),
+            *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV,
+            plan.cc, plan.gx, plan.gw, nodes, panels, wp.from_torch(cout, dtype=f64)])
+        wp.synchronize_device(device)
+    c = cout[:P]
+    return c if as_torch else c.cpu().numpy()
+
+
+def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, device="cuda:0", plan=None, as_torch=True, stable=None):
+    """edge-local channels c[P,9] (dimensionless, units of h) of every (query, edge) pair; edges [E,2] counter-clockwise around the solid (solid on the left).
+    The total of a closed body is  sum_edges c + indicator * indicator_vector(kernel).  `stable` selects the route: a tuple (nodes, panels)
+    -> the Chebyshev-quadrature plan at that resolution; False -> the monomial plan; None -> a passed ChebPlan / a STABLE_KERNELS entry, else the
+    monomial plan (the default, unchanged)."""
+    import torch
+    if isinstance(stable, tuple):
+        return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, stable[0], stable[1], as_torch=as_torch)
+    if stable is None:
+        if plan is not None and isinstance(plan, ChebPlan):
+            return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, plan.nodes, plan.panels, plan=plan, as_torch=as_torch)
+        if plan is None and STABLE_KERNELS.get(kernel) is not None:
+            return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, *STABLE_KERNELS[kernel], as_torch=as_torch)
+    # monomial path (unchanged)
     plan = plan or DevicePlan(kernel, device)
     P = len(pair_q)
     cout = torch.zeros((max(P, 1), NCH), dtype=torch.float64, device=device)
