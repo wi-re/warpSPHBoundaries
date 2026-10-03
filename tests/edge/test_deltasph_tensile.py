@@ -77,13 +77,3 @@ def test_tensile_exact_switch(device):
         sim.cfg.tensileExact = False
     for a in (sim.x, sim.v, sim.rho):
         assert torch.isfinite(a).all()
-
-
-@pytest.mark.parametrize("device", DEVICES)
-def test_tensile_exact_wendland4_raises(device):
-    """(e) guard: a Wendland C4 tank built with tensileExact = True raises NotImplementedError from shift (the C4 W^5
-    needs the Chebyshev plan)."""
-    sim4, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device,
-                               cfg=DeltaSPHConfig(kernel=KernelFunctions.Wendland4, tensileExact=True))
-    with pytest.raises(NotImplementedError, match="Wendland C2 only"):
-        sim4.shift(sim4.dt)

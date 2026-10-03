@@ -85,7 +85,7 @@ class DeltaSPHConfig:
     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle (wall part of the free-surface detector)
     coverExact: bool = False            # wall part of the Barecasco cover vector from the exact edge reduction (cover.cover_vector_scene) instead of the polar quadrature; the cone count still uses the samples (Q3b)
     coneExact: bool = False               # wall part of the Barecasco cone count (and of the all-neighbour count) from the closed-form area (cone_area.cone_area_scene) instead of the polar samples
-    tensileExact: bool = False            # wall part of the delta+ tensile term from the exact edge reduction (tensile.tensile_vector_scene, Wendland C2 only) instead of the polar quadrature
+    tensileExact: bool = False            # wall part of the delta+ tensile term from the exact edge reduction (tensile.tensile_vector_scene, Wendland C2 and C4) instead of the polar quadrature
     kernel: KernelFunctions = KernelFunctions.Wendland2
     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
 
@@ -325,8 +325,9 @@ class DeltaSPH2D:
             if st["samples"] is not None:
                 near, (ins, u, rk, dr, dphi) = st["samples"]
                 if cfg.tensileExact:
-                    if cfg.kernel != KernelFunctions.Wendland2:  raise NotImplementedError("tensileExact: Wendland C2 only (C4 needs the Chebyshev plan)")
-                    T = tensile_vector_scene(self.scene, x[near], H)
+                    family = {KernelFunctions.Wendland2: "w2", KernelFunctions.Wendland4: "w4"}.get(cfg.kernel)
+                    if family is None:  raise NotImplementedError("tensileExact: Wendland C2 and C4 only")
+                    T = tensile_vector_scene(self.scene, x[near], H, family)
                 else:
                     Fr = self.W(rk, H) ** 4 * self.dW(rk, H) * rk * dr                                # W^4 W' r dr  [R]
                     T = -torch.einsum("bqrp,r,pa->qa", ins.to(F64), Fr, u) * dphi
