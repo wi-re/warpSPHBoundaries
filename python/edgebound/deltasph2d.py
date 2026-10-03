@@ -32,6 +32,7 @@ from .cone_area import cone_area_scene
 from .cover import cover_vector_scene
 from .dfsph2d import F64, dwendland2, neighbor_pairs, wendland2
 from .scene import BodyField, Scene, buildCellList, sceneOperation  # noqa: F401  (buildCellList re-exported for callers)
+from .tensile import tensile_vector_scene
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
 KSCALE = 1.897367                       # warpSPHCore sphKernelScale(Wendland2, 2D): support / smoothing length
@@ -84,6 +85,7 @@ class DeltaSPHConfig:
     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle (wall part of the free-surface detector)
     coverExact: bool = False            # wall part of the Barecasco cover vector from the exact edge reduction (cover.cover_vector_scene) instead of the polar quadrature; the cone count still uses the samples (Q3b)
     coneExact: bool = False               # wall part of the Barecasco cone count (and of the all-neighbour count) from the closed-form area (cone_area.cone_area_scene) instead of the polar samples
+    tensileExact: bool = False            # wall part of the delta+ tensile term from the exact edge reduction (tensile.tensile_vector_scene, Wendland C2 only) instead of the polar quadrature
     kernel: KernelFunctions = KernelFunctions.Wendland2
     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
 
@@ -322,8 +324,12 @@ class DeltaSPH2D:
             wall = st["G"].sum(0)
             if st["samples"] is not None:
                 near, (ins, u, rk, dr, dphi) = st["samples"]
-                Fr = self.W(rk, H) ** 4 * self.dW(rk, H) * rk * dr                                # W^4 W' r dr  [R]
-                T = -torch.einsum("bqrp,r,pa->qa", ins.to(F64), Fr, u) * dphi
+                if cfg.tensileExact:
+                    if cfg.kernel != KernelFunctions.Wendland2:  raise NotImplementedError("tensileExact: Wendland C2 only (C4 needs the Chebyshev plan)")
+                    T = tensile_vector_scene(self.scene, x[near], H)
+                else:
+                    Fr = self.W(rk, H) ** 4 * self.dW(rk, H) * rk * dr                                # W^4 W' r dr  [R]
+                    T = -torch.einsum("bqrp,r,pa->qa", ins.to(F64), Fr, u) * dphi
                 wall = wall.index_add(0, near, cfg.wallMass * cfg.shiftR / w0 ** 4 * T)
             raw = raw + (cfg.rho0 / (4.0 * rho))[:, None] * wall
         vmax = float(v.norm(dim=1).max())
