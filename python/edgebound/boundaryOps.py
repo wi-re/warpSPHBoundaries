@@ -34,7 +34,12 @@ _KERNEL_NAMES = {KernelFunctions.CubicSpline: "cubic", KernelFunctions.QuarticSp
                  KernelFunctions.Wendland2: "w2", KernelFunctions.Wendland4: "w4", KernelFunctions.Wendland6: "w6"}
 
 
-def kernelName(kernel: KernelFunctions) -> str:
+def kernelName(kernel: "KernelFunctions | str") -> str:
+    if isinstance(kernel, str):                                            # a registered kernel name (edgebound.kernels.KERNELS)
+        from . import kernels
+        if kernel in kernels.KERNELS:
+            return kernel
+        raise KeyError(f"unknown kernel {kernel!r}; expected one of {sorted(kernels.KERNELS)}")
     try:
         return _KERNEL_NAMES[kernel]
     except KeyError:

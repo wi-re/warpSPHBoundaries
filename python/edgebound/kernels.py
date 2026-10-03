@@ -179,6 +179,8 @@ KERNELS["quintic"] = _from_terms("quintic", [(1, _F(1), 5), (-6, _F(2, 3), 5), (
 KERNELS["b7"] = _from_terms("b7", [(1, _F(1), 6), (-7, _F(5, 7), 6), (21, _F(3, 7), 6), (-35, _F(1, 7), 6)])
 KERNELS["b8"] = _from_terms("b8", [(1, _F(1), 7), (-8, _F(3, 4), 7), (28, _F(1, 2), 7), (-56, _F(1, 4), 7)])
 KERNELS["poly6"] = _poly6()
+# cone: shape (1 - q), i.e. K(r) = (r - H) 1[r <= H] = -H (1 - q) at h = H; used by cover.cover_vector_scene (Q3a); normalisation 3
+KERNELS["cone"] = _from_terms("cone", [(1, _F(1), 1)])
 
 # 2D normalisation constants C2 * pi of warpSPHCore (kernel_specs.yaml), the independent check of the exact normalisation above
 WARPSPH_C2_PI = {"quartic": Fraction(46875, 2398), "quintic": Fraction(15309, 478), "b7": Fraction(5764801, 113149),

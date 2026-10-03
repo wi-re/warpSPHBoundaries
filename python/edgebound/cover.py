@@ -114,3 +114,33 @@ def cover_vector_np(points, verts_or_edges, H):
         out[valid, 0] += -ne[0] * contrib
         out[valid, 1] += -ne[1] * contrib
     return out[0] if single else out
+
+
+def cover_vector_scene(scene, positions, H, adjacency=None):
+    """grad_x int_{solid} K dA' for `positions` [N,2] (units length^2), the scene-layer route (Q3a): the unmodified
+    Warp edge kernel with the degree-1 kernel `cone`,  W_cone = 3 (1 - q) / (pi h^2)  (normalisation 3),  so that
+    W_cone = -3 K(r) / (pi H^3) for  K(r) = (r - H) 1[r <= H]  at h = H  and  grad_x int K dA' = -(pi H^3 / 3) * g0,
+    g0 the Gradient-operation result of `cone` at support H.  `H` is the support radius = the cover radius.
+    Same sign and units as `cover_vector_np`:  C_w = n_w * this,  positive component = +x,  a particle just above a
+    flat floor (solid below it) gets a vector pointing UP (away from the wall).  SurfaceRep bodies only.
+    Torch / warpSPHCore / scene are imported here so the numpy and mpmath functions stay importable without torch."""
+    import math
+    import torch
+    from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
+
+    from .scene import BodyField, SurfaceRep, sceneOperation
+    for body in scene.bodies:
+        for rep in body.reps:
+            if not isinstance(rep, SurfaceRep):
+                raise NotImplementedError("cover_vector_scene: SurfaceRep bodies only")
+    dev = scene.device
+    pos = positions.to(dev, torch.float64) if isinstance(positions, torch.Tensor) else torch.as_tensor(np.asarray(positions), dtype=torch.float64, device=dev)
+    n = pos.shape[0]
+    ps = ParticleState(positions=pos, supports=torch.full((n,), float(H), dtype=torch.float64, device=dev),
+                       masses=torch.ones(n, dtype=torch.float64, device=dev), kinds=torch.zeros(n, dtype=torch.int32, device=dev),
+                       densities=torch.ones(n, dtype=torch.float64, device=dev))
+    pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
+                             operationMode=OperationDirection.BoundaryToFluid)
+    one = BodyField(torch.tensor(1.0, dtype=torch.float64, device=dev))
+    out = sceneOperation(ps, pr, scene, adjacency, None, [one] * len(scene.bodies), perBody=True)
+    return -(math.pi * float(H) ** 3 / 3) * out.sum(0)
