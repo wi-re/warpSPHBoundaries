@@ -28,6 +28,7 @@ import torch
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
+from .cone_area import cone_area_scene
 from .cover import cover_vector_scene
 from .dfsph2d import F64, dwendland2, neighbor_pairs, wendland2
 from .scene import BodyField, Scene, buildCellList, sceneOperation  # noqa: F401  (buildCellList re-exported for callers)
@@ -82,6 +83,7 @@ class DeltaSPHConfig:
     barecascoThreshold: float = math.pi / 3
     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle (wall part of the free-surface detector)
     coverExact: bool = False            # wall part of the Barecasco cover vector from the exact edge reduction (cover.cover_vector_scene) instead of the polar quadrature; the cone count still uses the samples (Q3b)
+    coneExact: bool = False               # wall part of the Barecasco cone count (and of the all-neighbour count) from the closed-form area (cone_area.cone_area_scene) instead of the polar samples
     kernel: KernelFunctions = KernelFunctions.Wendland2
     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
 
@@ -182,13 +184,19 @@ class DeltaSPH2D:
         count = self._sum(inCone.to(F64), ii)
         if sample is not None:
             near, u, wt = sample
-            cn = (u[None] * c[near][:, None, :]).sum(2)                                              # [Q,P]
-            cone = (torch.acos(cn.clamp(-1.0, 1.0)) <= cfg.barecascoThreshold / 2).to(F64)
-            count = count.index_add(0, near, nw * (wt * cone[:, None, :]).sum((1, 2)))
+            if cfg.coneExact:
+                count = count.index_add(0, near, nw * cone_area_scene(self.scene, x[near], c[near], cfg.barecascoThreshold / 2, self.H))
+            else:
+                cn = (u[None] * c[near][:, None, :]).sum(2)                                          # [Q,P]
+                cone = (torch.acos(cn.clamp(-1.0, 1.0)) <= cfg.barecascoThreshold / 2).to(F64)
+                count = count.index_add(0, near, nw * (wt * cone[:, None, :]).sum((1, 2)))
         allcount = self._sum(torch.ones_like(rr), ii)
         if sample is not None:                                                                       # C = 0: all neighbours count (wall particles too)
             near, u, wt = sample
-            allcount = allcount.index_add(0, near, nw * wt.sum((1, 2)))
+            if cfg.coneExact:
+                allcount = allcount.index_add(0, near, nw * cone_area_scene(self.scene, x[near], c[near], math.pi, self.H))
+            else:
+                allcount = allcount.index_add(0, near, nw * wt.sum((1, 2)))
         count = torch.where(norm > 1e-12, count, allcount)
         return count < 0.5
 
