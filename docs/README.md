@@ -14,6 +14,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `deltasph-resume.md` | resume note: state, how to reproduce, artefacts, ranked open items, openMaelstrom investigation | notes |
 | `deltasph-plan.md` | plan: δ⁺-SPH (Marrone 3.1) on the scene boundary layer — term inventory, new scene operations, phases, open decisions | plan |
 | `deltasph-profile.md` | measured profile of one Δ⁺-SPH step (WORK-001 T0.2): per-call inclusive/self times, buildAdjacency (4/step) and Scene.inside (24×96 polar) cost, fluid-pair share, torch.profiler top entries | [V] 2D |
+| `q2-conditioning.md` | Q2 (WORK-002 T2.4): the shifting tensile term T = (1/5)∇∫W⁵ as the W⁵ g(0,0) gradient channel — Warp plan vs np2d (plain/stable) vs mpmath reference, classification at k = 5, flat-floor sign, stable-route vertex finding | [V] |
 | `work/` | local-model work packages: `KICKOFF.md` (protocol), `WORK-NNN.md`, `REVIEW.md`, logs and reports | process |
 | `tier-selection-2d.md` | which tier for which obstacle size (2D disk), jumps at switches | [V] |
 | `autodiff-and-gpu.md` | torch autodiff vs analytic, shape adjoint, Warp float64 kernels, throughput | [V] |
