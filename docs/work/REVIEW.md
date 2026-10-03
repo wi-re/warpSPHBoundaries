@@ -29,8 +29,8 @@ Title, branch, log/report names · context (≤ 10 lines) · starting state with
 ## Planned sequence (HANDOFF.md Part A, adjusted after each review)
 * WORK-001 (regression harness, step profile, exact cover vector formula): **done, accepted** (`logs/REVIEW-001.md`).
 * WORK-002 (Q3a into the solver behind `cfg.coverExact`, physics gate + `--cfg` in the harness, detector comparison, Q2 conditioning study): **done, accepted** (`logs/REVIEW-002.md`; one wrong number in `docs/q2-conditioning.md` corrected).
-* WORK-003: Q3b closed-form cone area (`cone_area.py`, scene wrapper, `cfg.coneExact`) and the exact tensile term for Wendland C2 (`tensile.py`, `cfg.tensileExact`), both behind switches, tests + detector comparison + physics gate runs.
-* WORK-004: Chebyshev-basis plan in `warpbc.py` (needed for Wendland C4: `W⁵` is degree 40; the np2d `stable=(16,8)` route is the reference; `(8,6)` loses accuracy near vertices) and `tensileExact` for C4 (sloshing).
+* WORK-003: Q3b closed-form cone area (`cone_area.py`, scene wrapper, `cfg.coneExact`) and the exact tensile term for Wendland C2 (`tensile.py`, `cfg.tensileExact`), both behind switches, tests + detector comparison + physics gate runs: **done, accepted** (`logs/REVIEW-003.md`; one vacuous negative control corrected).
+* WORK-004: Chebyshev-quadrature edge plan in `warpbc.py` (opt-in through `STABLE_KERNELS` / `stable=`; the algorithm of `np2d stable=(16,8)`, prototyped by the reviewer in `refs/stable_plan_probe.py`), `tensile_vector_scene` for C2 and C4 on it, `tensileExact` for C4 (`W⁵` is degree 40), gates incl. a truncated sloshing run.
 * WORK-005: Q1 Laplacian derivation + operation (`Δλ`, first moments of `∇²W`), calibration of `ν_eff` against the pairwise form.
 * WORK-006: all switches on, delete `_solid_samples` / `surfaceSamples`, re-validate the A2 cases in full (dam break, sloshing), re-record the bit-level baseline.
 * then phase 2 (adjacency: 4 builds ≈ 4.2 ms each is the largest item once `Scene.inside` is gone), driven by `docs/deltasph-profile.md`.
@@ -44,3 +44,9 @@ Title, branch, log/report names · context (≤ 10 lines) · starting state with
 * A conversion factor that appears in both the implementation and its test proves nothing: add an **absolute** check (a plain-numpy grid integral at a geometry with a known answer). WORK-002's doc had a wrong factor (1e7 off) that its own tests could not have caught.
 * Probe the degenerate geometry (tangent `z == H`, particle on an edge / at a vertex) before issuing a spec for a piecewise formula; the reviewer's own probe had a tangent-case bug that a midpoint sanity check exposed.
 * A physics gate with a loose band is a *do-no-harm* check; say in the work document what carries the correctness evidence instead (tests, detector comparison), and which gate items are insensitive (`steps`).
+
+## Lessons for writing work documents (from REVIEW-003)
+* When the risky part of a package is new device code, **prototype it** (reviewer probe in `refs/`) and measure every number the document quotes (accuracy, controls at coarser resolutions, which of two routes is right where they disagree) — WORK-004's design decisions (resolution `(16, 8)`, tolerance 5e-9 against the monomial plan) all come from probe measurements, one of which (a 1.3e-10 disagreement) turned out to be the *old* route's error.
+* A negative control that compares a result with a scaled copy of itself (`1.01·T` vs `T`) is arithmetic, not a check: the control must be compared with the *independent* value. Say so in the document (WORK-003 T3.4 (c) had it; the model deviated silently from "the grid value").
+* A work document that deliberately removes behaviour pinned by an accepted test must name the test and authorise the edit; otherwise KICKOFF rule 2 forces a stop.
+* Check the cost of a validation case (`ms/step × steps`) before putting it into a package; give a truncation (here T = 1.5 s) and a hard timeout, and say that a timeout is *not* a blocker.

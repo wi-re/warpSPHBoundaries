@@ -16,4 +16,4 @@ described there. Carry out WORK-001 task by task, in order, following KICKOFF.md
 me questions; if you are blocked, write the BLOCKED report as KICKOFF.md section 5/6 says.
 Work until the Definition of done of WORK-001 is met, then write REPORT-001.md, commit it, and stop.
 ```
-Single shared branch `local-model` for all packages. Before launching: commit the reviewer files (`HANDOFF.md`, `docs/README.md`, `docs/work/`, reviewer corrections) on `local-model` as `REVIEW-NNN: ...` so the package starts from a clean tree; the model never commits them. `docs/work/refs/` holds the reviewer's throw-away probes (read-only for the model). Current package: WORK-002 (change the number in the launch prompt).
+Single shared branch `local-model` for all packages. Before launching: commit the reviewer files (`HANDOFF.md`, `docs/README.md`, `docs/work/`, reviewer corrections) on `local-model` as `REVIEW-NNN: ...` so the package starts from a clean tree; the model never commits them. `docs/work/refs/` holds the reviewer's throw-away probes (read-only for the model). Current package: WORK-004 (change the number in the launch prompt; WORK-001…003 reviewed and accepted).

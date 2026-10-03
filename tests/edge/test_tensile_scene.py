@@ -104,13 +104,14 @@ def test_magnitude_and_sign_are_real(device):
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])
     sc = Scene([body], device)
     T = tensile_vector_scene(sc, np.array([[0.0, 0.3]]), 1.0).cpu().numpy()[0]
-    s = float(np.abs(T).max())
-    assert s > 0.0
-    d_scale = float(np.abs(1.01 * T - T).max())
-    d_neg = float(np.abs(-T - T).max())
+    grid = dense_T(0.0, 0.3, 1.0)                    # the independent value of (b); the controls are compared with IT (REVIEW-003: comparing 1.01*T with T is arithmetic, not a check)
+    s = float(np.abs(grid).max())
+    assert float(np.abs(T - grid).max()) <= 5e-5 * s       # the real result agrees (the control below is only meaningful if it does)
+    d_scale = float(np.abs(1.01 * T - grid).max())
+    d_neg = float(np.abs(-T - grid).max())
     assert d_scale > 1e-3 * s, d_scale
     assert d_neg > 1e-3 * s, d_neg
-    print("(c) 1.01*T - T: max|.| = %.4e   -T - T: max|.| = %.4e   (scale %.4e)" % (d_scale, d_neg, s))
+    print("(c) 1.01*T - grid: max|.| = %.4e   -T - grid: max|.| = %.4e   (scale %.4e)" % (d_scale, d_neg, s))
 
 
 @pytest.mark.parametrize("device", DEVICES)
