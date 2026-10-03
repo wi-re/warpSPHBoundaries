@@ -81,8 +81,11 @@ pair reductions). Dam break: **3.4910 ms/step = 7.87 %** of the step. Sloshing: 
 
 **(d) Against the stored series.** `dambreak_B_nx67_series.npz`: `wall = 1222.02 s`, `steps = 19533`
 → **62.562 ms/step**. Profiled dam-break step = **44.383 ms/step**. **Ratio profiled / series =
-0.709.** The series run is slower per step because it is the full validation run (per-sample probes / MLS
-pressure every 10 steps, front tracking, etc.), whereas the profile is the bare `step`.
+0.709.** (Reviewer's note: the reason for the gap — the validation run also evaluates probes every 10 steps, and
+the machine load differed — was not measured; the reviewer's `deltasph_regress check` re-run took 342 s for the
+same 6683 steps that took 857 s at record time, so wall time on this machine varies by more than 2x with GPU load.
+Compare ms/step only between runs made back to back.) The "sum of self times = 100 %" statement above holds by construction (`step` is tracked), it is not a check; the check
+is timer 44.383 ms vs wall 44.387 ms.
 
 **(e) Three largest single costs** (self ms/step). Dam break: `Scene.buildAdjacency` = 16.6334, `Scene.inside`
 = 15.9943, `DeltaSPH2D.shift` = 2.1522. Sloshing: `Scene.inside` = 34.5581, `Scene.buildAdjacency` =

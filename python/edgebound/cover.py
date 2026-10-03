@@ -27,9 +27,12 @@ scales as H^2 under a uniform scaling of the geometry).  The detector's wall cov
     C_w = n_w * (this result),
 
 and the sign convention is: a positive component points to +x; for a particle just above a
-flat floor (solid below it) the result points UP (+y), away from the wall.  (The discontinuous
-kernel r 1[r <= H] would carry an extra circle term, so the edge-only formula is wrong for it.
-)
+flat floor (solid below it) the result points UP (+y), away from the wall.
+
+Why K = (r - H) 1[r <= H] and not r 1[r <= H]: the edge-only formula  -sum_e n_e int_chord f ds  is the exact
+gradient of  int_solid f(|x - x'|) dA'  for ANY locally integrable f.  For f = r 1[r <= H] that gradient is
+int_solid (unit(x - x') 1[r <= H] + H unit(x - x') delta(r - H)) dA', i.e. cover vector PLUS a circle term; K
+vanishes at r = H, so for K the circle term is absent and the edge formula gives the cover vector alone.
 """
 import numpy as np
 import mpmath as mp

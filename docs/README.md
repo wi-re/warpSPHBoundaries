@@ -14,6 +14,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `deltasph-resume.md` | resume note: state, how to reproduce, artefacts, ranked open items, openMaelstrom investigation | notes |
 | `deltasph-plan.md` | plan: δ⁺-SPH (Marrone 3.1) on the scene boundary layer — term inventory, new scene operations, phases, open decisions | plan |
 | `deltasph-profile.md` | measured profile of one Δ⁺-SPH step (WORK-001 T0.2): per-call inclusive/self times, buildAdjacency (4/step) and Scene.inside (24×96 polar) cost, fluid-pair share, torch.profiler top entries | [V] 2D |
+| `work/` | local-model work packages: `KICKOFF.md` (protocol), `WORK-NNN.md`, `REVIEW.md`, logs and reports | process |
 | `tier-selection-2d.md` | which tier for which obstacle size (2D disk), jumps at switches | [V] |
 | `autodiff-and-gpu.md` | torch autodiff vs analytic, shape adjoint, Warp float64 kernels, throughput | [V] |
 | `exactness-and-approximations.md` | stage-2 numpy results: what is exact, accuracy/cost of cheap approximations (float32, Gauss, tiny elements) | [V] |
@@ -31,7 +32,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `derivations/tet-face-edge-chain.md` | 3D tetrahedra | [P] |
 
 Two tracks meet here: `PLAN.md` (curvature-aware exact/series results; tier 3 and
-the oracles for the others) and `HANDOFF.md` (edge reductions, tiers 1/2/4, FEM
+the oracles for the others) and `HANDOFF.md` (Part A: state and the work plan towards the warpSPH port; Part B: edge reductions, tiers 1/2/4, FEM
 fields). See `PLAN.md` "Relation to HANDOFF.md" for how they fit.
 
 Rule for derivation files: each lists the checks it needs; those checks are the
