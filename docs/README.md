@@ -13,6 +13,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `deltasph-validation.md` | δ⁺-SPH on analytic walls vs warpSPH + mDBC: flat tank (10× better profile), English wedge (passes, rings), Marrone 3.1 dam break (matches P1 / KE), SPHERIC sloshing (flow and impact times match warpSPH), pair-list bug | [V] 2D |
 | `deltasph-resume.md` | resume note: state, how to reproduce, artefacts, ranked open items, openMaelstrom investigation | notes |
 | `deltasph-plan.md` | plan: δ⁺-SPH (Marrone 3.1) on the scene boundary layer — term inventory, new scene operations, phases, open decisions | plan |
+| `deltasph-profile.md` | measured profile of one Δ⁺-SPH step (WORK-001 T0.2): per-call inclusive/self times, buildAdjacency (4/step) and Scene.inside (24×96 polar) cost, fluid-pair share, torch.profiler top entries | [V] 2D |
 | `tier-selection-2d.md` | which tier for which obstacle size (2D disk), jumps at switches | [V] |
 | `autodiff-and-gpu.md` | torch autodiff vs analytic, shape adjoint, Warp float64 kernels, throughput | [V] |
 | `exactness-and-approximations.md` | stage-2 numpy results: what is exact, accuracy/cost of cheap approximations (float32, Gauss, tiny elements) | [V] |
