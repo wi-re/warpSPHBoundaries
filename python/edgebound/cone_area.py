@@ -93,8 +93,8 @@ def cone_area(points, axes, half_angle, H, vertices, edges, background=0):
     dev = points.device if isinstance(points, torch.Tensor) else torch.device("cpu")
     p = torch.as_tensor(points, dtype=torch.float64, device=dev)
     ax = torch.as_tensor(axes, dtype=torch.float64, device=dev)
-    V = torch.as_tensor(np.asarray(vertices, float), dtype=torch.float64, device=dev)
-    E = torch.as_tensor(np.asarray(edges, int), dtype=torch.int64, device=dev)
+    V = vertices.to(dev, torch.float64) if isinstance(vertices, torch.Tensor) else torch.as_tensor(np.asarray(vertices, float), dtype=torch.float64, device=dev)
+    E = edges.to(dev, torch.int64) if isinstance(edges, torch.Tensor) else torch.as_tensor(np.asarray(edges, int), dtype=torch.int64, device=dev)
     Hf = float(H)
     al = float(half_angle)
     a = V[E[:, 0]]                                   # [E,2]
@@ -133,3 +133,22 @@ def cone_area(points, axes, half_angle, H, vertices, edges, background=0):
     out = (total * valid_edge).sum(1)                                 # [N]
     out = out + background * 0.5 * Hf * Hf * (2 * al if al < math.pi else two_pi)
     return out
+
+
+def cone_area_scene(scene, points, axes, half_angle, H):
+    """area(solid ∩ disk(point, H) ∩ wedge(point, axis, half_angle)) for the SurfaceRep bodies of a `Scene`, summed over the bodies and their reps (units length²; `n_w · result` is a count; `half_angle >= π` = the full disk). The world vertices are `body.pose.toWorld(rep.vertices)`, recomputed on every call, so a moved body works without rebuilding the scene. Overlapping bodies are not supported (the sum would count their overlap twice)."""
+    from .scene import SurfaceRep
+    for body in scene.bodies:
+        for rep in body.reps:
+            if not isinstance(rep, SurfaceRep):
+                raise NotImplementedError("cone_area_scene: SurfaceRep bodies only")
+    dev = scene.device
+    total = None
+    for body in scene.bodies:
+        for rep in body.reps:
+            world = body.pose.toWorld(rep.vertices.to(dev))
+            term = cone_area(points, axes, half_angle, H, world, rep.edges, rep.background)
+            total = term if total is None else total + term
+    if total is None:
+        total = torch.zeros(points.shape[0] if isinstance(points, torch.Tensor) else len(points), dtype=torch.float64, device=dev)
+    return total
