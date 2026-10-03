@@ -28,6 +28,7 @@ import torch
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
+from .cover import cover_vector_scene
 from .dfsph2d import F64, dwendland2, neighbor_pairs, wendland2
 from .scene import BodyField, Scene, buildCellList, sceneOperation  # noqa: F401  (buildCellList re-exported for callers)
 
@@ -80,6 +81,7 @@ class DeltaSPHConfig:
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
     barecascoThreshold: float = math.pi / 3
     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle (wall part of the free-surface detector)
+    coverExact: bool = False            # wall part of the Barecasco cover vector from the exact edge reduction (cover.cover_vector_scene) instead of the polar quadrature; the cone count still uses the samples (Q3b)
     kernel: KernelFunctions = KernelFunctions.Wendland2
     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
 
@@ -169,7 +171,8 @@ class DeltaSPH2D:
             near, (ins, u, rk, dr, dphi) = samples
             area = (rk * dr * dphi)[:, None]                                                        # [R,1]
             wt = ins.any(0).to(F64) * area[None]                                                    # solid area per sample [Q,R,P]
-            Cw = -nw * (wt[..., None] * u[None, None]).sum((1, 2))                                  # sum unit(x_i - p) = -u
+            if cfg.coverExact:  Cw = nw * cover_vector_scene(self.scene, x[near], self.H)        # grad int K = int unit(x - x'), no minus
+            else:               Cw = -nw * (wt[..., None] * u[None, None]).sum((1, 2))           # sum unit(x_i - p) = -u
             C = C.index_add(0, near, Cw)
             sample = (near, u, wt)
         norm = C.norm(dim=1)
