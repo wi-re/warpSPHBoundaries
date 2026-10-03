@@ -4,25 +4,28 @@ The wall part of the shifting tensile term (Sun 2017 Eq. 7, in `DeltaSPH2D.shift
 
     T_i = int_solid W^4 grad_x W dA'
 
-(the integral of W^4 times the kernel gradient over the solid within the support of particle i).  This
-module gives it in closed form for the Wendland C2 kernel, from the identity
+(the integral of W^4 times the kernel gradient over the solid within the support of particle i).  This module
+gives it in closed form for the Wendland C2 and C4 kernels, from the identity (which holds for both families)
 
     grad_x W^5 = 5 W^4 grad_x W,
 
-with W^5 vanishing at the support edge (so no boundary term when the gradient is moved inside the integral):
+with W^5 vanishing WITH ITS FIRST DERIVATIVE at the support edge ((1-q)^20 for C2, (1-q)^30 for C4), so there is
+no boundary term when the gradient is moved inside the integral:
 
     T = int_solid W^4 grad_x W dA' = (1/5) grad_x int_solid W^5 dA'.
 
-W^5 is the degree-25 truncated-power kernel `w2p5` (the 5th power of the Wendland C2 shape), registered in
-`kernels.KERNELS` on first use.  With c2 the Wendland C2 normalisation (c2*pi) and c25 the w2p5 normalisation
-(c25*pi),  W^5(r; H) = (c2^5 / (pi^4 c25 H^8)) w2p5(r; H),  so
+W^5 is the truncated-power kernel `{family}p5` (the 5th power of the Wendland shape; degree 25 for C2, 40 for C4),
+registered in `kernels.KERNELS` on first use and always routed through the Chebyshev-quadrature edge plan
+(`warpbc.STABLE_KERNELS[family + "p5"] = (16, 8)`).  With c the family normalisation (c*pi) and c5 the
+`{family}p5` normalisation (c5*pi),  W^5(r; H) = (c^5 / (pi^4 c5 H^8)) {family}p5(r; H),  so
 
-    T = (1/5) c2^5 / (pi^4 c25 H^8)  *  g,
+    T = (1/5) c^5 / (pi^4 c5 H^8)  *  g,
 
-g the Gradient-operation result of the `w2p5` kernel at support H -- the same scene operation `cover_vector_scene`
-uses for the `cone` kernel.  Sign: T points INTO the wall (a particle just above a flat floor, solid below it,
-gets T_y < 0).  Units: the integral over the solid (a 1/length^9 quantity for a 2D kernel).  Wendland C2 only:
-the C4 W^5 (degree 40) needs the Chebyshev plan, so `family != "w2"` raises.
+g the Gradient-operation result of the `{family}p5` kernel at support H -- the same scene operation
+`cover_vector_scene` uses for the `cone` kernel.  Sign: T points INTO the wall (a particle just above a flat floor,
+solid below it, gets T_y < 0).  Units: the integral over the solid (a 1/length^9 quantity for a 2D kernel).  The
+Chebyshev plan is what makes the degree-40 C4 W^5 usable in float64 (the monomial plan is ~1e-3 off there);
+`family not in ("w2", "w4")` raises.
 
 Torch / warpSPHCore / scene are imported here so the module stays importable without them (as in cover.py).
 """
@@ -31,35 +34,39 @@ import math
 import numpy as np
 
 
-def _register_w2p5():
-    """idempotently register the W^5 kernel (degree-25 truncated powers of the Wendland C2 shape) as `w2p5` in kernels.KERNELS."""
-    from . import kernels
-    if "w2p5" not in kernels.KERNELS:
+def _register(family):
+    """idempotently register the W^5 kernel (degree 25/40 truncated powers of the Wendland `family` shape) as
+    `{family}p5` in kernels.KERNELS, and always route it through the Chebyshev-quadrature plan (warpbc.STABLE_KERNELS)."""
+    from . import kernels, warpbc
+    name = family + "p5"
+    if name not in kernels.KERNELS:
         from .q2_conditioning import terms
-        kernels.KERNELS["w2p5"] = kernels._from_terms("w2p5", terms(5, "w2"))
+        kernels.KERNELS[name] = kernels._from_terms(name, terms(5, family))
+    warpbc.STABLE_KERNELS[name] = (16, 8)
 
 
-def tensile_factor(H):
-    """the constant (1/5) c2^5 / (pi^4 c25 H^8) turning the w2p5 Gradient result into the tensile integral T = int W^4 grad W dA'."""
+def tensile_factor(H, family="w2"):
+    """the constant (1/5) c^5 / (pi^4 c5 H^8)  (c = the family normalisation, c5 = the `{family}p5` normalisation)
+    turning the `{family}p5` Gradient result into the tensile integral T = int W^4 grad W dA'."""
     from . import kernels
-    _register_w2p5()
-    c2 = float(kernels.KERNELS["w2"].c2_pi)
-    c25 = float(kernels.KERNELS["w2p5"].c2_pi)
-    return (1.0 / 5.0) * c2 ** 5 / (math.pi ** 4 * c25 * float(H) ** 8)
+    _register(family)
+    c = float(kernels.KERNELS[family].c2_pi)
+    c5 = float(kernels.KERNELS[family + "p5"].c2_pi)
+    return (1.0 / 5.0) * c ** 5 / (math.pi ** 4 * c5 * float(H) ** 8)
 
 
 def tensile_vector_scene(scene, positions, H, family="w2"):
     """T_i = int_solid W^4 grad_x W dA' for `positions` [N,2] (the wall part of the shifting tensile control, Q2), the
-    scene-layer route: the exact edge kernel W^5 (the kernel `w2p5`) in the Gradient operation,
+    scene-layer route: the exact edge kernel W^5 (the kernel `{family}p5`) in the Gradient operation,
 
-        T = (1/5) c2^5 / (pi^4 c25 H^8) * grad_x int_solid W^5 dA'.
+        T = (1/5) c^5 / (pi^4 c5 H^8) * grad_x int_solid W^5 dA'.
 
-    Identity: grad_x W^5 = 5 W^4 grad_x W and W^5 vanishes at the support edge (no boundary term).  Sign: T points
+    Identity: grad_x W^5 = 5 W^4 grad_x W and W^5 vanishes with its first derivative at the support edge (no boundary
+    term); both families are routed through the Chebyshev-quadrature plan (warpbc.STABLE_KERNELS).  Sign: T points
     INTO the wall (a particle just above a flat floor, solid below it, gets T_y < 0).  Units: the integral over the
-    solid.  Wendland C2 only (the C4 W^5 needs the Chebyshev plan).  SurfaceRep bodies only.  Returns [N,2] float64
-    on scene.device."""
-    if family != "w2":
-        raise NotImplementedError("tensile_vector_scene: Wendland C2 only (C4 needs the Chebyshev plan)")
+    solid.  SurfaceRep bodies only.  Returns [N,2] float64 on scene.device."""
+    if family not in ("w2", "w4"):
+        raise NotImplementedError("tensile_vector_scene: Wendland C2 and C4 only")
     import torch
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
     from .scene import BodyField, SurfaceRep, sceneOperation
@@ -67,15 +74,15 @@ def tensile_vector_scene(scene, positions, H, family="w2"):
         for rep in body.reps:
             if not isinstance(rep, SurfaceRep):
                 raise NotImplementedError("tensile_vector_scene: SurfaceRep bodies only")
-    _register_w2p5()
+    _register(family)
     dev = scene.device
     pos = positions.to(dev, torch.float64) if isinstance(positions, torch.Tensor) else torch.as_tensor(np.asarray(positions), dtype=torch.float64, device=dev)
     n = pos.shape[0]
     ps = ParticleState(positions=pos, supports=torch.full((n,), float(H), dtype=torch.float64, device=dev),
                        masses=torch.ones(n, dtype=torch.float64, device=dev), kinds=torch.zeros(n, dtype=torch.int32, device=dev),
                        densities=torch.ones(n, dtype=torch.float64, device=dev))
-    pr = OperationProperties(kernel="w2p5", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
+    pr = OperationProperties(kernel=family + "p5", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
     one = BodyField(torch.tensor(1.0, dtype=torch.float64, device=dev))
     out = sceneOperation(ps, pr, scene, None, None, [one] * len(scene.bodies), perBody=True)
-    return tensile_factor(H) * out.sum(0)
+    return tensile_factor(H, family) * out.sum(0)

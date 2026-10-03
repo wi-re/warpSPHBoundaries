@@ -121,8 +121,8 @@ def test_non_w2_and_non_surface_raise(device):
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])
     sc = Scene([body], device)
     pts = np.array([[0.0, 0.3]])
-    with pytest.raises(NotImplementedError, match="Wendland C2 only"):
-        tensile_vector_scene(sc, pts, 1.0, family="w4")
+    with pytest.raises(NotImplementedError, match="Wendland C2 and C4 only"):
+        tensile_vector_scene(sc, pts, 1.0, family="w9")
     si = Scene([Body(bodyId=0, reps=[ImplicitRep(DiskBody(center=(0.5, 0.5), radius=0.5))])], device)
     with pytest.raises(NotImplementedError, match="SurfaceRep bodies only"):
         tensile_vector_scene(si, pts, 1.0)

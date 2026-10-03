@@ -78,3 +78,16 @@ For w2, A is 6.18e-08 — above the 1e-8 GOOD line by a factor ~6 (the reviewer'
 
 - **w2:** route A (the Warp monomial plan) is usable as is at k = 5 — 6.2e-8 worst (ACCEPTABLE), within 3.4× of the reviewer's 6-point value; no change needed.
 - **w4:** route A is not usable at k = 5 (1.7e-3); using the exact edge reduction for the w4 tensile term needs the stable basis in the Warp plan (`warpbc.py`, out of scope here) — the np2d stable route is a drop-in reference for the target accuracy (2.7e-12 on the full 214 set) but carries the vertex caveat above.
+
+## Resolution (WORK-004)
+
+WORK-004 T4.1 adds the stable Chebyshev-quadrature edge plan to `warpbc.py` (opt-in: `STABLE_KERNELS` / the
+`stable=(nodes, panels)` argument of `edge_channels`; the monomial plan is the unchanged default). T4.2 routes the tensile
+term through it for **both** Wendland families: `tensile.tensile_factor` / `tensile_vector_scene` now take `family` in
+`("w2", "w4")` and always set `warpbc.STABLE_KERNELS[family + "p5"] = (16, 8)`, so the C4 W^5 (degree 40) is usable.
+
+Measured this work (`tests/edge/test_warpbc_stable.py` (a), unit square, 214 points, vs the mpmath reference): `w4p5`
+g(0,0) worst |err|/max|ref| = **9.43e-16** at the 206 generic points and **2.69e-12** over all 214 (the vertex (0,0) limit,
+identical in np2d); `w2p5` = 7.80e-16 both.  The C4 flat-floor tensile value (T4.2 (b)) is `T_y(H = 1, (0, 0.3)) =
+-0.1978237590`, `T_y(H = 0.5, (0, 0.15)) = -101.2857646` (T_x = 0, T_y < 0; the 2000^2 midpoint grid is 6.13e-6 off, its own
+quadrature error).  This closes the "w4 route A not usable" finding above.
