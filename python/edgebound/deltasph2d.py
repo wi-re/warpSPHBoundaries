@@ -80,7 +80,7 @@ class DeltaSPHConfig:
     shiftCurvatureAngle: float = 15.0   # degrees
     noPen: str = "off"                  # 'impulse': once per step, closing particles within dp/4 of a wall get v_n <- v_n (1 - f(d)), f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) (warpSPH mDBC no-penetration, 'impulse' placement)
     wallViscosity: bool = True          # wall term of the alpha-viscosity (free-slip mirror), form: wallViscosityForm
-    wallViscosityForm: str = "laplacian"   # "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples)
+    wallViscosityForm: str = "laplacian"   # "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples) | "noslip": no-slip wall (v_w = body velocity): Chiron-style flux term -2 nu_eff (v - v_w) |G| / (rho d), nu_eff = alpha c0 H/(8 xi), d = max(distance to the wall, 0.25 dx)
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
     barecascoThreshold: float = math.pi / 3
@@ -259,12 +259,19 @@ class DeltaSPH2D:
             elif cfg.wallViscosityForm == "pairwise":
                 ins, u, rk, dr, dphi = self._solid_samples(x, near)                                         # the polar grid exists only for this form
                 wprime = self.dW(rk, H) * dr                                                          # W'(r) dr  [R] (negative)
+            elif cfg.wallViscosityForm == "noslip":
+                pass                                                                          # per body below
             else:
-                raise ValueError("wallViscosityForm must be 'laplacian' or 'pairwise', got %r" % (cfg.wallViscosityForm,))
+                raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise' or 'noslip', got %r" % (cfg.wallViscosityForm,))
             for bi, b in enumerate(self.scene.bodies):
                 gm = G[bi].norm(dim=1)
                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
                 un = ((v - b.velocityAt(x)) * nb_).sum(1)
+                if cfg.wallViscosityForm == "noslip":
+                    d, _, hit = self.scene.signed_distance(x[near], body=bi)                           # d_signed > 0 in the fluid; hit False only for volume representations
+                    dd = d.clamp(min=0.25 * self.dx)                                                   # the 1/d floor (the no-penetration law keeps particles at d >= ~0.25 dx)
+                    acc = acc.index_add(0, near, torch.where(hit[:, None], -2.0 * (fac / 8.0) * (v - b.velocityAt(x))[near] * (gm[near] / (rho[near] * dd))[:, None], torch.zeros_like(v[near])))   # fac/8 = nu_eff; gm = |G_b|; all-components relative velocity (no-slip)
+                    continue
                 if cfg.wallViscosityForm == "laplacian":
                     acc = acc.index_add(0, near, (-2.0 * (fac / 8.0) * cfg.wallMass * un[near] / rho[near] * dl[bi])[:, None] * nb_[near])   # fac/8 = fac/(2(d+2)), d = 2: moment identity, viscosity.py
                 else:
