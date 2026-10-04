@@ -140,6 +140,33 @@ Sloshing (SPHERIC 10, nx = 200, C4, truncated at T = 1.5 s, `viscosityExact` onl
 
 **Effect.**  The switch changes the operator near the wall, and the trajectories follow at the bit level (the bit-level lines FAIL by design), but only far inside every gate band: the dam-break P1 arrival moves from 2.48970315022 t\* (baseline) to 2.47397042889 t\* (≈ 0.0157 t\* earlier; \|arrival − 2.49\| = 0.0160, gate ≤ 0.05); the dam-break KE vs `dambreak_B_nx67` is 3.9892e-4 relative (single switch) / 3.5344e-4 (all four) (gate ≤ 0.05); the tank gate metrics move by ≈ 1e-7 relative (rmseBulk 1.49929753837e-3 vs baseline 1.49929879553e-3, gate ≤ 1.25 × baseline; the all-four run agrees with the single-switch tank to within 1 in the last displayed digit).  The sloshing KE moves by 0.03 % over 1.5 s.  The default stays the pairwise form (`cfg.viscosityExact` off); whether to keep the pairwise form or switch the default is a user decision after these numbers, not a regression verdict.
 
+## Exact wall operations by default (WORK-006)
+
+The four exact wall operations are now the **only** wall path: `cfg.coverExact`, `coneExact`, `tensileExact`, `viscosityExact` and the polar branches of the surface detector and of the delta+ shift are gone (T6.1). The wall viscosity form is chosen by `cfg.wallViscosityForm = "laplacian"` (default, exact wall Laplacian, Wendland C2/C4) or `"pairwise"` (the warpSPH free-slip-mirror form, polar quadrature, kept). `DeltaSPH2D` therefore requires `SurfaceRep` walls: the polar branches were the only path that stepped `VolumeRep`/`ImplicitRep` walls, and `domain="volume"` now raises `NotImplementedError` (scene-layer representation independence lives in `test_scene.py` / `test_dfsph.py`; the solver-level guard is in `test_deltasph.py`).
+
+**(1) The new default reproduces the WORK-005 all-switches run (T6.1(8)).** `check --physics --cases tank,dambreak` with the new defaults (`.tmp/w006_t61_equiv.log`): tank rmseBulk 0.00149929753837, rmseNear 0.00181340794898, keLast 7.2843795517e-07, rhoMin 1.00008342046, rhoMax 1.00246989449, 3502 steps; dam break KE vs `dambreak_B_nx67` 3.5344e-4 (668 samples), P1 arrival 2.47397042889 t\* (|diff| vs 2.49 = 0.0160), ke_tstar 1 / 2 / 2.5 = 0.357363651811 / 0.754228393303 / 0.922766940745, maxVelocityMax 6.59792039874, minDensityMin 0.999428350557, maxDensityMax 1.00603117793, 6683 steps; **PHYSICS GATE: PASS**. Every line agrees with the WORK-005 T5.3(1b) all-four-switches numbers to ≤ 1e-6 relative (most identical to the last printed digit) — the primary evidence that the refactor changed nothing.
+
+**(2) The pairwise alternative still works (T6.3(1)).** `check --physics --cases tank,dambreak --cfg wallViscosityForm=pairwise` (`.tmp/w006_t63_pairwise.log`) — with exact cover/cone/tensile this is the WORK-004 configuration: tank rmseBulk 0.00149879553508, rmseNear 0.00181374508459, keLast 7.00604738264e-07, rhoMin 1.00008277812, rhoMax 1.00246999588, 3502 steps (every gate line PASS); dam break KE vs B 2.4098e-5 (668 samples, gate ≤ 0.05), P1 arrival **2.4897 t\*** (reference 2.49, |diff| 0.0003 — it equals the old baseline's 2.48970315022 to the full printed precision), ke_tstar 1 / 2 / 2.5 = 0.357284798075 / 0.754059943541 / 0.922531956854, maxVelocityMax 6.67866530633, minDensityMin 0.999436862861 (gate ≥ 0.97), maxDensityMax 1.00628666806 (gate ≤ 1.03), 6683 steps (drift 0); **PHYSICS GATE: PASS**.
+
+**(3) The baseline re-recorded for the new default (T6.3(2)).** `record --cases tank,dambreak` (spread of the two record runs: every tol/|value| ≤ 1.4e-6, `steps` spread 0; `.tmp/w006_t63_record.log`):
+
+| line | new baseline (exact default) | old baseline (polar default) |
+|---|---|---|
+| tank rmseBulk | 0.001499297538 | 0.00149879553509 |
+| tank rmseNear | 0.001813407949 | 0.00181374508459 |
+| tank keLast | 7.284379552e-07 | 7.00604738263e-07 |
+| tank rhoMin / rhoMax | 1.00008342 / 1.002469894 | 1.00008277812 / 1.00246999588 |
+| tank steps | 3502 | 3502 |
+| dam break ke_tstar 1 / 2 / 2.5 | 0.3573636518 / 0.7542283933 / 0.9227669407 | 0.357285986624 / 0.754074340911 / 0.922537582805 |
+| dam break P1 arrival | 2.473970429 t\* | 2.48970315022 t\* |
+| dam break maxVelocityMax | 6.597920399 | 6.68104559177 |
+| dam break minDensityMin / maxDensityMax | 0.9994283506 / 1.006031178 | 0.999437856696 / 1.00630752117 |
+| dam break steps | 6683 | 6683 |
+
+The move is the expected operator change, not noise: the arrival is 0.0157 t\* earlier (the WORK-005 all-switches value), the dam-break ke_tstar lines move by ≈ 2e-4 relative, the tank metrics by ≈ 3–5e-7 absolute, and the step counts are identical. `check --cases tank,dambreak` against the new baseline: **OVERALL: PASS** (bit-level, every line PASS); `check --physics --cases tank,dambreak`: **PHYSICS GATE: PASS** (tank rmseBulk ≤ 1.25 × baseline, rmseNear ≤ 1.25 ×, keLast ≤ 5 ×, rhoMin ≥ 0.99, rhoMax ≤ 1.01; dam break KE ≤ 0.05, |arrival − 2.49| ≤ 0.05, minDensity ≥ 0.97, maxDensity ≤ 1.03, steps drift 0).
+
+**(4) Sloshing with the new defaults (T6.3(3)).** SPHERIC 10, nx = 200, C4, T = 1.5 s (`.tmp/slosh_default.py`): 15001 steps, wall 1085 s; KE max-relative vs `slosh_B_nx200` **2.8102e-5** (1500 samples, gate 5 %), maxVelocity max **0.5920**, densities **[0.99928, 1.00490]**. The stored series is the OLD default, so 2.8102e-5 (0.0028 % over 1.5 s) is the effect of the whole WORK-006 default change — 10× below the WORK-005 `viscosityExact`-only 2.8231e-4 (0.5919, [0.99928, 1.00489]) and far below the 5e-3 finding threshold; maxVelocity and the densities agree with both the old default (0.5921, [0.99929, 1.00487]) and the WORK-005 run to the last printed digit.
+
 ## 7. Next
 
 * sloshing (SPHERIC TC10): the rolling tank is a prescribed rotating body (`Body.angularVelocity`, `accelerationAt`, wall velocity in the free-slip mirror, the viscous wall term and the no-penetration law relative to the moving wall: the static-wall
