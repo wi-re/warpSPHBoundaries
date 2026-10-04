@@ -1,0 +1,30 @@
+diff --git a/python/edgebound/deltasph2d.py b/python/edgebound/deltasph2d.py
+index 5ea9dec..ebf736c 100644
+--- a/python/edgebound/deltasph2d.py
++++ b/python/edgebound/deltasph2d.py
+@@ -85,6 +85,7 @@ class DeltaSPHConfig:
+     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle (wall part of the free-surface detector)
+     coverExact: bool = False            # wall part of the Barecasco cover vector from the exact edge reduction (cover.cover_vector_scene) instead of the polar quadrature; the cone count still uses the samples (Q3b)
+     coneExact: bool = False               # wall part of the Barecasco cone count (and of the all-neighbour count) from the closed-form area (cone_area.cone_area_scene) instead of the polar samples
++    viscosityExact: bool = False
+     tensileExact: bool = False            # wall part of the delta+ tensile term from the exact edge reduction (tensile.tensile_vector_scene, Wendland C2 and C4) instead of the polar quadrature
+     kernel: KernelFunctions = KernelFunctions.Wendland2
+     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
+@@ -269,10 +270,17 @@ class DeltaSPH2D:
+             near, (ins, u, rk, dr, dphi) = samples
+             wprime = self.dW(rk, H) * dr                                                          # W'(r) dr  [R] (negative)
+             fac = cfg.alpha * cfg.c0 * H / self.xi
++            if getattr(cfg, "viscosityExact", False):
++                import sys; sys.path.insert(0, "/home/lu26029/dev/curvatureBoundaries/docs/work/refs")
++                from lap_scene_probe import delta_lambda_scene
++                dl = delta_lambda_scene(self.scene, x[near], H, {KernelFunctions.Wendland2: "w2", KernelFunctions.Wendland4: "w4"}[cfg.kernel])
+             for bi, b in enumerate(self.scene.bodies):
+                 gm = G[bi].norm(dim=1)
+                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
+                 un = ((v - b.velocityAt(x)) * nb_).sum(1)
++                if getattr(cfg, "viscosityExact", False):
++                    acc = acc.index_add(0, near, (-2.0 * (fac / 8.0) * cfg.wallMass * un[near] / rho[near] * dl[bi])[:, None] * nb_[near])
++                    continue
+                 yy = u[:, :, None] * u[:, None, :]                                                   # [P,2,2]
+                 M2 = torch.einsum("qrp,r,pab->qab", ins[bi].to(F64), wprime, yy) * dphi              # int W' dr int yhat (x) yhat 1[solid] dphi
+                 accv = (fac * cfg.wallMass * 2.0 * un[near] / rho[near])[:, None] * torch.einsum("qab,qb->qa", M2, nb_[near])
