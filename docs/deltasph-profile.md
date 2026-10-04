@@ -139,3 +139,83 @@ Top 15 by **CPU** time (`key_averages().table(sort_by="cpu_time_total")`):
 The `cudaStreamSynchronize` (45 %) / `cudaLaunchKernel` (14 %) CPU entries are the launch/sync
 overhead of the many small kernels (48,460 kernel launches over 20 steps ≈ 2423/step); the heavy CUDA
 work is the `aten::index`/gather pair reductions and the scene `_edge_channels_kernel`.
+
+## After WORK-006 (exact wall operations, default form)
+
+Same profiler, re-run after WORK-006 (2026-10-04, same machine, the local LLM's ~69 GiB still
+resident): the exact wall operations (cover, cone area, tensile C2/C4, wall-Laplacian viscosity,
+`wallViscosityForm = "laplacian"`) are now the only path, so `DeltaSPH2D._solid_samples` and the polar
+`Scene.inside` grid are gone from the default step. Step times are **information, not a gate** (the
+reviewer's estimate: dam break ≈ 55 ms/step, sloshing ≈ 70 ms/step; the measured 57.515 / 71.307 are
+consistent with it). Wall time on this machine varies with GPU load (see (d) of the first section), so
+compare the two sections only as back-to-back measurements of the same profiler.
+
+### Dam break — `marrone_dambreak(nx=67)`, `shifting=True`, `noPen="impulse"`
+
+N particles = 3240, dx = 0.01493, H = 0.05970, 1 body. **57.515 ms/step** (timer; wall 57.520);
+before WORK-006: **44.383 ms/step**.
+
+| name | calls/step | inclusive ms/step | self ms/step | % of step |
+|---|---:|---:|---:|---:|
+| `DeltaSPH2D.step` | 1.000 | 57.5149 | 0.5493 | 100.00 |
+| `DeltaSPH2D.rhs` | 2.000 | 28.5518 | 2.3548 | 49.64 |
+| `DeltaSPH2D.shift` | 1.000 | 22.8826 | 2.2648 | 39.79 |
+| `DeltaSPH2D.no_penetration` | 1.000 | 5.5312 | 0.1925 | 9.62 |
+| `DeltaSPH2D._wall_data` | 3.000 | 13.6406 | 0.4360 | 23.72 |
+| `DeltaSPH2D._surface_state` | 1.000 | 9.8639 | 0.3904 | 17.15 |
+| `DeltaSPH2D._detect_surface` | 3.000 | 13.4488 | 5.1661 | 23.38 |
+| `DeltaSPH2D._solid_samples` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `deltasph2d.neighbor_pairs` | 3.000 | 2.1019 | 2.1019 | 3.65 |
+| `deltasph2d.sceneOperation` | 12.000 | 1.5092 | 1.5092 | 2.62 |
+| `Scene.buildAdjacency` | 10.000 | 41.8279 | 41.8279 | 72.73 |
+| `Scene.inside` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `Scene.signed_distance` | 1.000 | 0.7221 | 0.7221 | 1.26 |
+
+**(a)** 10 `buildAdjacency` calls/step (12 `sceneOperation` minus the 2 inside `lap_lambda_scene`,
+which builds one adjacency per call — T6.2); 12 `sceneOperation` calls/step, as before. **(b)** 0
+positions through `Scene.inside` per step (was 3,234,816); `Scene.inside` = 0.00 %. **(c)** Fluid pair
+sums (`rhs` minus its scene/detector children) = 10.5219 ms/step = 18.29 % of the step. **(d)** Stored
+`dambreak_B_nx67_series.npz`: 62.562 ms/step; profiled 57.515 ms/step; ratio profiled / series =
+0.919 (before WORK-006 the profiled step was 44.383, ratio 0.709). **(e)** Three largest single costs
+(self ms/step): `Scene.buildAdjacency` = 41.8279, `DeltaSPH2D._detect_surface` = 5.1661,
+`DeltaSPH2D.rhs` = 2.3548 — the per-edge kernel moments (`buildAdjacency`) are now by far the largest
+single cost (72.73 % of the step).
+
+### Sloshing — `sloshing_tank(nx=200)`, `shifting=True`, `noPen="impulse"`
+
+N particles = 4200, dx = 0.00450, H = 0.01800, 1 body. **71.307 ms/step** (timer; wall 71.313);
+before WORK-006: **72.095 ms/step**.
+
+| name | calls/step | inclusive ms/step | self ms/step | % of step |
+|---|---:|---:|---:|---:|
+| `DeltaSPH2D.step` | 1.000 | 71.3075 | 1.1040 | 100.00 |
+| `DeltaSPH2D.rhs` | 2.000 | 35.0846 | 2.7217 | 49.20 |
+| `DeltaSPH2D.shift` | 1.000 | 28.3911 | 2.7148 | 39.81 |
+| `DeltaSPH2D.no_penetration` | 1.000 | 6.7279 | 0.1983 | 9.44 |
+| `DeltaSPH2D._wall_data` | 3.000 | 17.7040 | 0.4555 | 24.83 |
+| `DeltaSPH2D._surface_state` | 1.000 | 11.7896 | 0.4540 | 16.53 |
+| `DeltaSPH2D._detect_surface` | 3.000 | 13.6597 | 5.3426 | 19.16 |
+| `DeltaSPH2D._solid_samples` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `deltasph2d.neighbor_pairs` | 3.000 | 3.7908 | 3.7908 | 5.32 |
+| `deltasph2d.sceneOperation` | 12.000 | 1.5185 | 1.5185 | 2.13 |
+| `Scene.buildAdjacency` | 10.000 | 52.2886 | 52.2886 | 73.33 |
+| `Scene.inside` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `Scene.signed_distance` | 1.000 | 0.7187 | 0.7187 | 1.01 |
+
+**(a)** 10 `buildAdjacency` calls/step; 12 `sceneOperation` calls/step. **(b)** 0 positions through
+`Scene.inside` per step (was 6,469,632). **(c)** Fluid pair sums = 14.0739 ms/step = 19.74 % of the
+step. **(e)** Three largest single costs (self ms/step): `Scene.buildAdjacency` = 52.2886,
+`DeltaSPH2D._detect_surface` = 5.3426, `deltasph2d.neighbor_pairs` = 3.7908.
+
+### Reviewer cost probe (`docs/work/refs/review5_cost_probe.py`, run unmodified from `python/`)
+
+```
+N 3240 near 468 edges 4
+cover_vector_scene                  5.64 ms/call  adjacency builds/call 1   calls/step 3  ->  16.92 ms/step
+cone_area_scene (th/2)              0.52 ms/call  adjacency builds/call 0   calls/step 3  ->   1.55 ms/step
+cone_area_scene (pi)                0.44 ms/call  adjacency builds/call 0   calls/step 3  ->   1.33 ms/step
+tensile_vector_scene w2            26.63 ms/call  adjacency builds/call 1   calls/step 1  ->  26.63 ms/step
+lap_lambda_scene w2                 3.72 ms/call  adjacency builds/call 1   calls/step 2  ->   7.44 ms/step
+_wall_data (existing, per call)    15.88 ms/call  adjacency builds/call 1   calls/step 3  ->  47.64 ms/step
+sum of exact ops per step: 53.9 ms
+```
