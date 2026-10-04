@@ -29,7 +29,7 @@ L = f K_l  with  f = P c / (C_l H^2),  P = -20 (w2) / -56/3 (w4)  = lap_factor(H
 nu_eff = fac/8 = alpha c0 H/(8 xi)  (fac = alpha c0 H/xi), derived not calibrated: for a smooth field the fluid-fluid pairwise
 term of the solver is (fac/8) (lap v + 2 grad div v) in 2D (expand v to second order: the only surviving moment is int r W' dA =
 -2 = -d and the isotropic fourth-moment tensor), i.e. fac/(2(d+2)), the nu of the solver's own time-step rule (dtv).  The wall
-term uses the same nu_eff, so wall and bulk viscosity are one operator.  The pairwise and the Laplacian wall terms are DIFFERENT
+term uses the same nu_eff, so wall and bulk share the Laplacian coefficient (the bulk pairwise term is (fac/8)(lap v + 2 grad div v), the wall term carries the lap part only).  The pairwise and the Laplacian wall terms are DIFFERENT
 operators near the wall (the Laplacian form damps the wall-normal velocity 3-12x less close to the wall): an intended change of
 discretisation (user decision, HANDOFF Part A Q1), see docs/derivations/laplacian-wall.md.  SurfaceRep bodies only; the first
 moments of lap W (a position-dependent mirror field) are not implemented.  Torch / warpSPHCore / scene are imported here so the
