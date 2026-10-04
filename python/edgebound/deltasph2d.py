@@ -33,6 +33,7 @@ from .cover import cover_vector_scene
 from .dfsph2d import F64, dwendland2, neighbor_pairs, wendland2
 from .scene import BodyField, Scene, buildCellList, sceneOperation  # noqa: F401  (buildCellList re-exported for callers)
 from .tensile import tensile_vector_scene
+from .viscosity import lap_lambda_scene
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
 KSCALE = 1.897367                       # warpSPHCore sphKernelScale(Wendland2, 2D): support / smoothing length
@@ -86,6 +87,7 @@ class DeltaSPHConfig:
     coverExact: bool = False            # wall part of the Barecasco cover vector from the exact edge reduction (cover.cover_vector_scene) instead of the polar quadrature; the cone count still uses the samples (Q3b)
     coneExact: bool = False               # wall part of the Barecasco cone count (and of the all-neighbour count) from the closed-form area (cone_area.cone_area_scene) instead of the polar samples
     tensileExact: bool = False            # wall part of the delta+ tensile term from the exact edge reduction (tensile.tensile_vector_scene, Wendland C2 and C4) instead of the polar quadrature
+    viscosityExact: bool = False            # wall part of the artificial viscosity from the exact wall Laplacian (viscosity.lap_lambda_scene, Wendland C2 and C4) instead of the pairwise polar-quadrature term
     kernel: KernelFunctions = KernelFunctions.Wendland2
     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
 
@@ -269,10 +271,17 @@ class DeltaSPH2D:
             near, (ins, u, rk, dr, dphi) = samples
             wprime = self.dW(rk, H) * dr                                                          # W'(r) dr  [R] (negative)
             fac = cfg.alpha * cfg.c0 * H / self.xi
+            if cfg.viscosityExact:
+                family = {KernelFunctions.Wendland2: "w2", KernelFunctions.Wendland4: "w4"}.get(cfg.kernel)
+                if family is None:  raise NotImplementedError("viscosityExact: Wendland C2 and C4 only")
+                dl = lap_lambda_scene(self.scene, x[near], H, family)                              # [B, Q]  int_solid lap W dA', per body
             for bi, b in enumerate(self.scene.bodies):
                 gm = G[bi].norm(dim=1)
                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
                 un = ((v - b.velocityAt(x)) * nb_).sum(1)
+                if cfg.viscosityExact:
+                    acc = acc.index_add(0, near, (-2.0 * (fac / 8.0) * cfg.wallMass * un[near] / rho[near] * dl[bi])[:, None] * nb_[near])   # fac/8 = fac/(2(d+2)), d = 2: moment identity, viscosity.py
+                    continue
                 yy = u[:, :, None] * u[:, None, :]                                                   # [P,2,2]
                 M2 = torch.einsum("qrp,r,pab->qab", ins[bi].to(F64), wprime, yy) * dphi              # int W' dr int yhat (x) yhat 1[solid] dphi
                 accv = (fac * cfg.wallMass * 2.0 * un[near] / rho[near])[:, None] * torch.einsum("qab,qb->qa", M2, nb_[near])
