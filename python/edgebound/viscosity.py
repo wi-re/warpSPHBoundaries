@@ -32,7 +32,8 @@ term of the solver is (fac/8) (lap v + 2 grad div v) in 2D (expand v to second o
 term uses the same nu_eff, so wall and bulk share the Laplacian coefficient (the bulk pairwise term is (fac/8)(lap v + 2 grad div v), the wall term carries the lap part only).  The pairwise and the Laplacian wall terms are DIFFERENT
 operators near the wall (the Laplacian form damps the wall-normal velocity 3-12x less close to the wall): an intended change of
 discretisation (user decision, HANDOFF Part A Q1), see docs/derivations/laplacian-wall.md.  SurfaceRep bodies only; the first
-moments of lap W (a position-dependent mirror field) are not implemented.  Torch / warpSPHCore / scene are imported here so the
+moments of lap W (a position-dependent mirror field) are not implemented.  The adjacency (the per-(query, edge) moments of the
+kernel) is built once per call and passed to both scene operations -- one kernel, one adjacency (scene.py rejects an adjacency whose kernel does not match the operation's).  Torch / warpSPHCore / scene are imported here so the
 module stays importable without them (as in tensile.py).
 """
 from fractions import Fraction
@@ -92,11 +93,14 @@ def lap_lambda_scene(scene, positions, H, family="w2"):
     ps = ParticleState(positions=pos, supports=torch.full((n,), float(H), dtype=torch.float64, device=dev),
                        masses=torch.ones(n, dtype=torch.float64, device=dev), kinds=torch.zeros(n, dtype=torch.int32, device=dev),
                        densities=torch.ones(n, dtype=torch.float64, device=dev))
+    adj = scene.buildAdjacency(ps, OperationProperties(kernel="l" + family, operation=WarpOperation.Density,
+                                                       gradientMode=GradientScheme.Naive,
+                                                       operationMode=OperationDirection.BoundaryToFluid))
     lam = cov = None
     for op in (WarpOperation.Density, WarpOperation.Covariance):
         pr = OperationProperties(kernel="l" + family, operation=op, gradientMode=GradientScheme.Naive,
                                  operationMode=OperationDirection.BoundaryToFluid)
-        out = sceneOperation(ps, pr, scene, None, None, [BodyField(rho=1.0)] * B, perBody=True)
+        out = sceneOperation(ps, pr, scene, adj, None, [BodyField(rho=1.0)] * B, perBody=True)
         if op == WarpOperation.Density:
             lam = out.reshape(B, n)
         else:

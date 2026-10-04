@@ -827,6 +827,8 @@ def sceneOperation(queryParticles, operationProperties: OperationProperties, sce
     `scene.bodies[b]` (default: a unit density wall without field)."""
     dev = scene.device
     adj = adjacency or scene.buildAdjacency(queryParticles, operationProperties)
+    if adjacency is not None and adjacency.kernel != kernelName(operationProperties.kernel):
+        raise ValueError("sceneOperation: the adjacency was built for kernel %r, the operation asks for %r (an adjacency holds the moments of its own kernel)" % (adjacency.kernel, kernelName(operationProperties.kernel)))
     op, mode = operationProperties.operation, operationProperties.gradientMode
     N = adj.numQueries
     nb = len(scene.bodies)

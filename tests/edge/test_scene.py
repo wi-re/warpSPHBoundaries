@@ -410,3 +410,24 @@ def test_signed_distance_and_normal(device):
     d, n, hit = sc.signed_distance(q)
     assert d[2] < 0 and d[0] > 0.1 and d[1] > 0.19
     assert float((n[0] - torch.tensor([1.0, 0.0], dtype=torch.float64, device=device)).norm()) < 0.7       # roughly +x (rotated hexagon)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_adjacency_kernel_guard(device):
+    """an adjacency holds the moments of its OWN kernel: sceneOperation must reject an adjacency built for a different kernel (before
+    WORK-006 T6.2 the kernel in the operation's props was silently ignored when an adjacency was passed).  On a unit-square SurfaceRep
+    scene with a few particles: an adjacency built for kernel 'cone' passed to a Density of kernel 'lw2' (registered via
+    viscosity.lap_factor(1.0, 'w2')) raises ValueError (match 'built for kernel'); the same adjacency with kernel 'cone' works and equals
+    the result without an adjacency (max|diff| <= 1e-12, same pairs, same arithmetic)."""
+    from edgebound.viscosity import lap_factor
+    lap_factor(1.0, "w2")                                                    # registers the 'lw2' kernel (lazy registration)
+    unit = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], dtype=float)
+    sc = Scene([Body(bodyId=0, reps=[SurfaceRep.polygon(unit)])], device)
+    pts = np.array([[0.5, 0.3], [0.2, 0.8], [1.3, 0.4], [0.5, 1.2], [0.1, 0.1]])
+    ps = state(pts, device, sup=0.4)
+    adj = sc.buildAdjacency(ps, props(WarpOperation.Density, kernel="cone"))
+    with pytest.raises(ValueError, match="built for kernel"):
+        sceneOperation(ps, props(WarpOperation.Density, kernel="lw2"), sc, adjacency=adj)
+    got = sceneOperation(ps, props(WarpOperation.Density, kernel="cone"), sc, adjacency=adj)
+    ref = sceneOperation(ps, props(WarpOperation.Density, kernel="cone"), sc)
+    assert float((got - ref).abs().max()) <= 1e-12

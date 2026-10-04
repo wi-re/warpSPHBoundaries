@@ -337,3 +337,50 @@ def test_nu_eff_moment_identity():
         a_x = -(math.pi / 4.0) * (I / (2.0 * math.pi))
         assert abs(a_x - 0.25) <= 1e-10 * 0.25, (fam, a_x)
         print("(g) %s: int r W' dA = %.12f (expect -2, atol 1e-10)   pairwise bulk term for v = (y^2, 0) = %.12f fac = fac/4 = (fac/8) |lap v| (rtol 1e-10)" % (fam, I, a_x))
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_one_adjacency_per_call(device):
+    """(h) lap_lambda_scene builds EXACTLY ONE adjacency per call (one kernel, one adjacency, passed to both the Density and the
+    Covariance operation) and the result equals the two-adjacency route written out with sceneOperation directly (each operation
+    without an adjacency argument, f (2 lambda - tr Cov) with lap_factor): max|diff| <= 1e-12 max|result| (same pairs, same
+    arithmetic, summation noise 1e-16; a wrongly shared adjacency is >= 1e-1)."""
+    from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
+    from edgebound.scene import BodyField, sceneOperation
+    body = Body(bodyId=0, reps=[SurfaceRep.polygon(LS)], center=CENTER, angle=ANGLE)
+    sc = Scene([body], device)
+    pts = np.random.default_rng(3).uniform(-2, 3, (200, 2))
+    pos = torch.as_tensor(pts, dtype=F64, device=device)
+    n = len(pos)
+    B = len(sc.bodies)
+    ps = ParticleState(positions=pos, supports=torch.full((n,), float(H), dtype=F64, device=device),
+                       masses=torch.ones(n, dtype=F64, device=device), kinds=torch.zeros(n, dtype=torch.int32, device=device),
+                       densities=torch.ones(n, dtype=F64, device=device))
+    orig = Scene.buildAdjacency
+    counts = {"n": 0}
+    def counting(self, queryParticles, operationProperties):
+        counts["n"] += 1
+        return orig(self, queryParticles, operationProperties)
+    Scene.buildAdjacency = counting
+    try:
+        for fam in ("w2", "w4"):
+            counts["n"] = 0
+            got = lap_lambda_scene(sc, pts, H, fam).cpu().numpy()
+            n_adj = counts["n"]
+            assert n_adj == 1, (fam, n_adj)
+            # the two-adjacency route: Density and Covariance each build their own adjacency (sceneOperation without an adjacency argument)
+            lam = sceneOperation(ps, OperationProperties(kernel="l" + fam, operation=WarpOperation.Density,
+                                                         gradientMode=GradientScheme.Naive,
+                                                         operationMode=OperationDirection.BoundaryToFluid),
+                                 sc, None, None, [BodyField(rho=1.0)] * B, perBody=True).reshape(B, n)
+            cov = sceneOperation(ps, OperationProperties(kernel="l" + fam, operation=WarpOperation.Covariance,
+                                                         gradientMode=GradientScheme.Naive,
+                                                         operationMode=OperationDirection.BoundaryToFluid),
+                                 sc, None, None, [BodyField(rho=1.0)] * B, perBody=True).reshape(B, n, 2, 2)
+            ref = (lap_factor(H, fam) * (2.0 * lam - cov[:, :, 0, 0] - cov[:, :, 1, 1])).cpu().numpy()
+            s = float(np.abs(got).max())
+            err = float(np.abs(got - ref).max())
+            assert err <= 1e-12 * s, (fam, err, s)
+            print("(h) %s: one lap_lambda_scene call builds %d adjacency (expect 1); two-adjacency route max|diff| = %.2e (tol 1e-12 * %.3e)" % (fam, n_adj, err, s))
+    finally:
+        Scene.buildAdjacency = orig
