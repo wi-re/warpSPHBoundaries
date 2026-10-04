@@ -167,6 +167,52 @@ The move is the expected operator change, not noise: the arrival is 0.0157 t\* e
 
 **(4) Sloshing with the new defaults (T6.3(3)).** SPHERIC 10, nx = 200, C4, T = 1.5 s (`.tmp/slosh_default.py`): 15001 steps, wall 1085 s; KE max-relative vs `slosh_B_nx200` **2.8102e-5** (1500 samples, gate 5 %), maxVelocity max **0.5920**, densities **[0.99928, 1.00490]**. The stored series is the OLD default, so 2.8102e-5 (0.0028 % over 1.5 s) is the effect of the whole WORK-006 default change — 10× below the WORK-005 `viscosityExact`-only 2.8231e-4 (0.5919, [0.99928, 1.00489]) and far below the 5e-3 finding threshold; maxVelocity and the densities agree with both the old default (0.5921, [0.99929, 1.00487]) and the WORK-005 run to the last printed digit.
 
+## No-slip wall viscosity (WORK-007)
+
+`cfg.wallViscosityForm = "noslip"` (the **default stays `"laplacian"`**) is a third wall-viscosity form that damps the **all-components** relative velocity (no-slip), instead of the wall-normal component only (free-slip, as in `"laplacian"` and `"pairwise"`). It is the Chiron et al. 2019 Eq. 91–92 one-sided finite-difference wall flux, specialised to the solver's units: per body `b`,
+
+```
+acc_wall = -2 nu_eff (v_i - v_w) |G_b| / (rho_i d_b),      nu_eff = alpha c0 H/(8 xi) = fac/8,      v_w = b.velocityAt(x_i),      d_b = max(signed distance to the wall, 0.25 dx)
+```
+
+`|G_b|` is the existing wall gradient (`G = wallMass ∇λ`; for a flat wall `|G_b| = wallMass ∫_chord W ds`, exact to 8.6e-16), so no new Warp or scene code is needed. Derivation, the flat-wall model, the constant-ghost rejection, the checks and the open questions: `derivations/noslip-wall.md`. The free-slip forms are unchanged; nothing is re-tuned.
+
+**Couette / Poiseuille through the solver** (T7.1 (c); `hydrostatic_tank(dp=0.04)`, `a_flux = rhs("noslip") − rhs(viscosity=False)`, first component, mean over the 15 columns `|x| < 0.3` in rows `s = (k+0.5) dp`, k = 0..3, ν_eff = 0.00314; the free-slip forms are the negative controls — on a tangential field their wall term is exactly 0): the no-slip term recovers the continuum target in the rows where a first-order flux term can, and the free-slip forms fail by design.
+
+| row (s/dp) | 0.5 | 1.5 | 2.5 | 3.5 |
+|---|---|---|---|---|
+| Couette `u = s`, bulk only (target 0) | 0.06014 | 0.01405 | 0.00084 | 0.00004 |
+| Couette, **no-slip** a_flux | +0.00815 | −0.00855 | −0.00280 | +0.00001 |
+| Couette, `laplacian` / `pairwise` a (row 0) | 0.06014 (both) | — | — | — |
+| Poiseuille `u = s(0.36−s)`, bulk only (target −2ν_eff = −0.00628) | 0.01625 | −0.00147 | −0.00577 | −0.00600 |
+| Poiseuille, **no-slip** a_flux | −0.00143 | −0.00825 | −0.00672 | −0.00601 |
+
+The no-slip Couette a_flux is ≤ 0.142 · |a_bulk(row 0)| in every row (tolerance 0.2); the no-slip Poiseuille is 7 % / 4 % from the target on rows 2 / 3 (tolerance 15 %) and much closer to the target than the bulk on rows 0 / 1 (0.22 / 0.42 of the bulk's distance to it). The free-slip forms give |a(row 0)| = |a_bulk(row 0)| = 0.06014 (> 0.5 · 0.06014), i.e. they damp no tangential velocity, as expected. (Matches the reviewer's solver probe to the digit, `docs/work/refs/review5_noslip_solver_probe.py`.)
+
+**T7.2 gates and sloshing (information, not a pass/fail verdict).** The reference series (`dambreak_B_nx67`, `slosh_B_nx200`) are free-slip runs, so a no-slip run is expected to deviate; the gate is the *default's* physics (WORK-002 limits). A `PHYSICS GATE: FAIL` here is a finding reported with the numbers, not a blocker, and nothing is adjusted.
+
+`check --physics --cases tank,dambreak --cfg wallViscosityForm=noslip` (`.tmp/w007_t72_regress_noslip.log`):
+
+| line | value | gate | limit |
+|---|---|---|---|
+| tank rmseBulk / rmseNear / keLast | 0.0015052 / 0.0018605 / 5.5667e-7 | PASS | ≤ 1.25× / 1.25× / 5× baseline |
+| tank rhoMin / rhoMax | 1.0000818 / 1.0024704 | PASS | ≥ 0.99 / ≤ 1.01 |
+| dam break KE vs `dambreak_B_nx67` (max rel, 668 samples) | 0.3165191 | **FAIL (FINDING)** | ≤ 0.05 |
+| dam break P1 arrival | nan t\* (P\* never > 0.05 in T = 0.65 s; reference 2.49) | **FAIL (FINDING)** | ≤ 0.05 |
+| dam break ke_tstar 1 / 2 / 2.5 | 0.3206926 / 0.5688047 / 0.6396314 (default 0.3573637 / 0.7542284 / 0.9227669) | — | — |
+| dam break maxVelocityMax | 3.7982989 (default 6.5979204, ~43 % lower) | — | — |
+| dam break minDensityMin / maxDensityMax | 0.9990133 / 1.0014192 | PASS | ≥ 0.97 / ≤ 1.03 |
+| dam break steps drift | 0 (6683 = 6683) | PASS | ≤ 0.05 |
+| **PHYSICS GATE** | **FAIL** (the two dambreak KE/arrival lines) | | |
+
+The tank is ≈ the default's (the hydrostatic tank is near-rest; the no-slip term damps only the tiny spurious wall velocities, so keLast is even lower than the default's 7.28e-7); the dam break changes a lot — the no-slip wall removes tangential momentum, so the KE at t\* = 1/2/2.5 is 10–31 % below the default's and the peak velocity is ~43 % below — while the density and step gates stay healthy. The bit-level lines FAIL by design (the noslip term is not exactly zero at the tiny spurious velocities).
+
+Sloshing (SPHERIC 10, nx = 200, C4, T = 1.5 s, `wallViscosityForm = "noslip"`; `.tmp/slosh_noslip.py`, 963 s wall, 15001 steps): KE max-relative vs `slosh_B_nx200` **1.4646e-01** (14.6 %, 1500 samples, gate 5 % — a FINDING, expected larger than the default's because the wall now dissipates tangentially), maxVelocity max **0.5683** (default 0.5920), densities **[0.99931, 1.00483]**. The wall of this case rolls (rotating gravity), so it exercises `b.velocityAt`.
+
+**Stability** (T7.2(3), `.tmp/stability_noslip.py`: the no-slip explicit damping rate `k = 2 ν_eff |G_b|/(ρ d_eff)`, `d_eff = max(d, 0.25 dx)`, for the near particles after 300 steps, default config otherwise): dam break max k = **16.5835 s⁻¹**, dt = 9.727e-05 s, **k·dt = 0.0016**; sloshing max k = **20.4154 s⁻¹**, dt = 1.000e-04 s, **k·dt = 0.0020**. Both `k·dt ≪ 1` (the reviewer's estimate k ~ 5 s⁻¹ at d = dx/2 is exceeded only because the nearest particles sit at d ~ 0.25 dx, where 1/d is larger) — the term is stable at the solver's acoustic time step.
+
+The default stays `"laplacian"`; `"noslip"` is an opt-in third form. Making it the default, partial slip, per-body slip, a per-element `∫W ds/d_n`, and the `1/γ` renormalisation are out of scope (WORK-007).
+
 ## 7. Next
 
 * sloshing (SPHERIC TC10): the rolling tank is a prescribed rotating body (`Body.angularVelocity`, `accelerationAt`, wall velocity in the free-slip mirror, the viscous wall term and the no-penetration law relative to the moving wall: the static-wall

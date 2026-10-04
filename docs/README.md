@@ -32,6 +32,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `derivations/tier4-slender-series.md` | fibres: slender series (2D strip/disk [V]; 3D ball/strand [D]/[P]), circle edge identity | 2D [V] |
 | `derivations/tet-face-edge-chain.md` | 3D tetrahedra | [P] |
 | `derivations/laplacian-wall.md` | wall Laplacian Δλ = ∫_solid ∇²W dA′ = 2λ[L] − tr Cov[L] (the viscosity wall term, Q1): scene route through the registered L = W′/r, ν_eff = α c0 H/(8ξ) | [V] tests |
+| `derivations/noslip-wall.md` | no-slip wall viscosity (WORK-007, Q1): the Chiron et al. 2019 Eq. 91–92 one-sided finite-difference wall flux `-2 ν_eff (v − v_w)|G|/(ρ d)`, `ν_eff = α c0 H/(8ξ)`, `d_min = 0.25 dx`, all-components relative velocity (the third `wallViscosityForm`) | [V] tests |
 
 Two tracks meet here: `PLAN.md` (curvature-aware exact/series results; tier 3 and
 the oracles for the others) and `HANDOFF.md` (Part A: state and the work plan towards the warpSPH port; Part B: edge reductions, tiers 1/2/4, FEM
