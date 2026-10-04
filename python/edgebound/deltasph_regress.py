@@ -28,7 +28,7 @@ pass/fail): for the dam break, the max over the common time range of
 are untouched.
 
 `--cfg key=value[,key=value...]` (values: true/false -> bool, else float if parsable, else the string) is
-passed as `**cfgkw` to the runners (e.g. `--cfg alpha=0.5`, `--cfg coverExact=true`); the cfg dict is printed at
+passed as `**cfgkw` to the runners (e.g. `--cfg alpha=0.5`, `--cfg wallViscosityForm=pairwise`); the cfg dict is printed at
 the top of `check` and stored under `meta` by `record`.  `--physics` (check only): the exit code then depends
 ONLY on the physics gate (fixed limits, one line per item: name, value, limit, PASS/FAIL); the bit-level lines
 are still printed, for information.

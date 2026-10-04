@@ -1,7 +1,8 @@
-"""Tests for the cfg.viscosityExact switch (WORK-005 T5.2): the wall part of the artificial viscosity from the exact wall Laplacian
-(viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi)) instead of the pairwise polar-quadrature term.
+"""Tests for the wallViscosityForm = "laplacian" default (WORK-005 T5.2 / WORK-006): the wall part of the artificial
+viscosity from the exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi)); the
+pairwise polar-quadrature term is the "pairwise" form.
 
-d_ex = rhs(viscosityExact=True) - rhs(wallViscosity=False) must equal the exact wall-Laplacian term
+d_ex = rhs(wallViscosityForm="laplacian") - rhs(wallViscosity=False) must equal the exact wall-Laplacian term
     -2 nu_eff wallMass u_n / rho  Delta-lambda n
 with n, u_n from the solver's own wall gradient G (not under test) and Delta-lambda from the OWN polar midpoint brute force
 (600 x 1200, solid = the exterior of the tank box).  The pairwise term d_pair is a DIFFERENT operator near the wall (the
@@ -61,32 +62,32 @@ def dl_brute(fam, p, H, L=2.4, Ht=1.2, nr=600, nt=1200):
 
 
 def test_viscosity_exact_default_off():
-    """(a) the switch defaults to off."""
-    assert DeltaSPHConfig().viscosityExact is False
+    """(a) the wall-viscosity form defaults to "laplacian" (the exact wall Laplacian)."""
+    assert DeltaSPHConfig().wallViscosityForm == "laplacian"
 
 
 @pytest.mark.parametrize("device", DEVICES)
 def test_viscosity_exact_matches_wall_laplacian(device):
-    """(b) d_ex = rhs(viscosityExact) - rhs(wallViscosity=False) equals -2 nu_eff wallMass u_n/rho Delta-lambda_brute n (the own
+    """(b) d_ex = rhs(wallViscosityForm="laplacian") - rhs(wallViscosity=False) equals -2 nu_eff wallMass u_n/rho Delta-lambda_brute n (the own
     600 x 1200 brute force over the tank exterior), max|diff| <= 5e-4 max|pred|, max|pred| > 0.1, >= 500 non-zero particles;
     (c) negative controls (the pairwise operator differs > 0.5 max; sign flip > 1.0 max; nu_eff -> fac/12 differs > 0.2 max);
-    (d) five sim.step() with viscosityExact = True stay finite (x, v, rho), both tanks."""
+    (d) five sim.step() stay finite (x, v, rho), both tanks."""
     for kern, fam in ((KernelFunctions.Wendland2, "w2"), (KernelFunctions.Wendland4, "w4")):
         sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device,
-                                  cfg=DeltaSPHConfig(kernel=kern, viscosityExact=True))
+                                  cfg=DeltaSPHConfig(kernel=kern))
         x = sim.x
         v = torch.stack([0.3 * torch.sin(2 * x[:, 0]) + 0.1, -0.2 * torch.cos(3 * x[:, 1]) + 0.05], 1)
         sim.v = v
-        a_ex, _, _ = sim.rhs(sim.x, v, sim.rho)
+        a_ex, _, _ = sim.rhs(sim.x, v, sim.rho)                                # default form: laplacian
         sim.cfg.wallViscosity = False
         try:
             a_no, _, _ = sim.rhs(sim.x, v, sim.rho)
             sim.cfg.wallViscosity = True
-            sim.cfg.viscosityExact = False
+            sim.cfg.wallViscosityForm = "pairwise"
             a_pair, _, _ = sim.rhs(sim.x, v, sim.rho)
         finally:
             sim.cfg.wallViscosity = True
-            sim.cfg.viscosityExact = True
+            sim.cfg.wallViscosityForm = "laplacian"
         d_ex = (a_ex - a_no).cpu().numpy()
         d_pair = (a_pair - a_no).cpu().numpy()
         near = np.nonzero(np.abs(d_ex).max(1) > 0)[0]
@@ -113,9 +114,9 @@ def test_viscosity_exact_matches_wall_laplacian(device):
         d_nu = float(np.abs(pred12 - d_ex[near]).max()) / scale
         assert d_nu > 0.2, (fam, d_nu)
         print("(c) %s: max|d_ex - d_pair|/max|d_pair| = %.3f (> 0.5)   sign flip %.3f (> 1.0)   nu_eff -> fac/12: %.3f (> 0.2)" % (fam, d_op, d_sign, d_nu))
-        # (d) five steps with viscosityExact = True stay finite (no NaN / inf in x, v, rho)
+        # (d) five steps stay finite (no NaN / inf in x, v, rho)
         for _ in range(5):
             sim.step()
         for a in (sim.x, sim.v, sim.rho):
             assert torch.isfinite(a).all()
-        print("(d) %s: five steps with viscosityExact=True finite" % fam)
+        print("(d) %s: five steps finite" % fam)

@@ -56,8 +56,8 @@ def test_cone_exact_switch(device):
     ok = norm[near] > 1e-12                                     # the axis c is defined
     ins, u, rk, dr, dphi = samples[1]
 
-    # (a) default off
-    assert DeltaSPHConfig().coneExact is False
+    # (a) the switch is gone (the closed-form cone area is the only path)
+    assert not hasattr(DeltaSPHConfig(), "coneExact")
 
     # (b) the wall cone count and the all-neighbour count: polar quadrature vs the closed-form area (the quadrature's own error)
     cn = (u[None] * c[near][:, None, :]).sum(2)
@@ -75,13 +75,6 @@ def test_cone_exact_switch(device):
     wc_neg = nw * cone_area_scene(sim.scene, x[near], -c[near], sim.cfg.barecascoThreshold / 2, H)
     assert (wc_q - wc_neg).abs().max().item() > 1.0
 
-    # (d) coneExact=True (and, separately, coneExact=coverExact=True): the detector runs end to end and returns a bool mask of length N
-    for flags in (dict(coneExact=True), dict(coneExact=True, coverExact=True)):
-        for k, v in flags.items():
-            setattr(sim.cfg, k, v)
-        try:
-            surf = sim._detect_surface(x, i, j, r, lam, samples)
-        finally:
-            sim.cfg.coneExact = False
-            sim.cfg.coverExact = False
-        assert surf.dtype == torch.bool and surf.shape[0] == N
+    # (d) the detector runs end to end (exact cone area only) and returns a bool mask of length N
+    surf = sim._detect_surface(x, i, j, r, lam)
+    assert surf.dtype == torch.bool and surf.shape[0] == N

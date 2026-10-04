@@ -37,8 +37,8 @@ def test_cover_exact_switch(device):
     Cw_quad = -n_w * (wt[..., None] * u[None, None]).sum((1, 2))          # as in _detect_surface
     Cw_exact = n_w * cover_vector_scene(sim.scene, x[near], H)
 
-    # (a) default off
-    assert DeltaSPHConfig().coverExact is False
+    # (a) the switch is gone (the exact cover is the only path)
+    assert not hasattr(DeltaSPHConfig(), "coverExact")
 
     # (b) the two routes agree within the quadrature error; the magnitude is O(n_w H^2)
     scale = n_w * H * H
@@ -48,10 +48,6 @@ def test_cover_exact_switch(device):
     # (c) sign control: a flipped exact vector must NOT agree with the quadrature
     assert (-Cw_exact - Cw_quad).abs().max().item() > 0.5 * scale
 
-    # (d) coverExact=True: the detector runs end-to-end and returns a bool mask of length N
-    sim.cfg.coverExact = True
-    try:
-        surf = sim._detect_surface(x, i, j, r, lam, samples)
-    finally:
-        sim.cfg.coverExact = False
+    # (d) the detector runs end-to-end (exact cover only) and returns a bool mask of length N
+    surf = sim._detect_surface(x, i, j, r, lam)
     assert surf.dtype == torch.bool and surf.shape[0] == N
