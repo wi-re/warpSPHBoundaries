@@ -114,6 +114,16 @@ a handful of bodies.
 Not in the interface yet: Laplacian / Covariance, periodic domains, the p = 2 weights for the exact torque of position-dependent fields, batching of many small bodies,
 autograd through the weights.
 
+## 6b. What an adjacency really is (REVIEW-005 investigation, 2026-10-04): per-kernel moments, not a neighbour list
+
+`Scene.buildAdjacency(particles, props)` is **not** a kernel-independent neighbour list. For a `SurfaceRep` it (a) finds the (query, edge) pairs inside one support (cell list + segment-distance cull), (b) evaluates `warpbc.edge_channels` for **the kernel named in `props`**, giving per pair the integrals `lam = ∫W`, `m1 = ∫yW`, `g0 = ∫∇W`, `g1 = ∫y⊗∇W` of the kernel over the solid (the edge-reduction terms), and (c) adds the body-indicator pseudo-pairs. `sceneOperation` then only *contracts* these stored moments with the body field (`Density`, `Gradient`, `Covariance`, ... are algebra on `lam, g0, m1, g1`); the kernel in the `props` handed to `sceneOperation` is **ignored** when an adjacency is passed.
+
+Consequences (all measured, `docs/work/refs/review5_adjacency_why_probe.py`, developed dam-break state, 484 pairs):
+* Reusing an adjacency for another kernel is silently wrong: `Density` of `lw2` with a `cone` adjacency is **bit-identical** (0.0 difference) to `Density` of `cone` — it returns the `cone` moments — and differs from the true `lw2` result by 0.18 against a scale of 0.62. `SceneAdjacency.kernel` records the name but nothing checks it (a guard is part of WORK-006 T6.2).
+* Within one kernel, reuse is exact: the three `Density`/`Gradient`/`Covariance` operations of `_wall_data` and `_surface_state` share one adjacency, and `lap_lambda_scene` can share one between its `Density` and `Covariance` (bit-identical, 7.2 → 3.7 ms).
+* Cost split of a build (ms): kernel-independent — pair list 0.37, indicator 0.50 (≈ 0.9 of 2.7 for `cone`); kernel-dependent — `edge_channels` 1.2 (`cone`), 1.7 (`lw2`), 2.3 (`w2`), **8.5 (`w2p5`, Chebyshev (16, 8))**. Sharing only the pair list across kernels would save ≈ 1 ms per extra kernel; the cost is the channel evaluation.
+* Where the phase-2 saving is: (i) **channel pruning** — every kernel evaluates all nine channels (21 terms: `m` 5, `g0` 4, `g1` 12 terms, identical for every kernel) although the consumers need a subset: tensile and cover need `g0` only (4 of 21 terms), the wall Laplacian needs `lam` and `g1` (13 of 21); (ii) fusing the kernels of one `rhs` call into one pass over the shared edge geometry (`z, s0, s1`, chord clip). Both are estimates from the term counts, not measurements.
+
 ## 7. What carries over to 3D
 
 The interface above is dimension-agnostic: `Pose` becomes a rotation matrix / quaternion, the OBB test and the cell lists gain a coordinate, `MomentPairs` keeps the same
