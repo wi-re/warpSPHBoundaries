@@ -114,6 +114,32 @@ Ours: `sloshing_tank(nx=200)`, tier-2 surface loop for the 0.9 × 0.508 m tank, 
   its full-length `sensorPressure` (nearest boundary particle's density) has no counterpart with analytic walls. The **wall MLS probe** (first-order MLS of the fluid pressure at the sensor point, as the Marrone probes) is erratic here (8.6, 15.5 and 66 kPa
   spikes at the impacts): at a point at the free-surface level with few, one-sided neighbours the linear fit extrapolates wildly. A usable wall pressure for analytic walls should come from the wall model itself (the hydrostatic closure `P_b`, or the pressure force on the wall per length).
 * Not compared: the shifting scheme (Sun vs Michel), nx = 100 / 400, the no-shift variant, the experimental repeatability band, the dilated-mask effect.
+
+## Wall Laplacian viscosity (WORK-005)
+
+`cfg.viscosityExact` (default off) replaces the pairwise polar-quadrature wall term of the α-viscosity with the exact wall Laplacian term (`viscosity.lap_lambda_scene`, `Δλ = ∫_solid ∇²W dA′` = 2λ[L] − tr Cov[L] of the registered L = W′/r; derivation in `derivations/laplacian-wall.md`).  Wall and bulk become one operator (ν_eff = α c0 H/(8ξ), derived from the moment identity ∫ r W′ dA = −2, not calibrated).  The two wall terms are **different operators** near the wall — the Laplacian form damps the wall-normal velocity 3–12× less in the first particle rows (flat-wall ratio 8|A|/B, `derivations/laplacian-wall.md` §6) — so the switch is a change of the discretisation (user decision, HANDOFF Part A Q1), not a quadrature replacement, and the numbers below are the do-no-harm physics gate, not an exactness claim.
+
+`check --physics --cases tank,dambreak --cfg viscosityExact=true` (2026-10-04, `local-model`, full log `docs/work/logs/LOG-005.md` T5.3(1a)):
+
+| line | value | gate | limit |
+|---|---|---|---|
+| tank rmseBulk | 1.49929753837e-3 | PASS | ≤ 1.873494419e-3 (1.25 × baseline) |
+| tank rmseNear | 1.81340794898e-3 | PASS | ≤ 2.267181356e-3 |
+| tank keLast | 7.28437955168e-7 | PASS | ≤ 3.503023691e-6 (5 × baseline) |
+| dam break KE vs `dambreak_B_nx67` (max rel, 668 samples) | 3.9892e-4 | PASS | ≤ 0.05 |
+| dam break P1 arrival | 2.4740 t\* (reference 2.49, \|diff\| 0.0160) | PASS | ≤ 0.05 |
+| dam break ke_tstar 1 / 2 / 2.5 | 0.35736468689 / 0.754254694988 / 0.92280834676 | — | — |
+| dam break maxVelocityMax | 6.59592351289 (default 6.68104559177) | — | — |
+| dam break minDensityMin | 0.999429377347 | PASS | ≥ 0.97 |
+| dam break maxDensityMax | 1.00603521646 | PASS | ≤ 1.03 |
+| **PHYSICS GATE** | **PASS** | | |
+
+All four exact switches on (`coverExact,coneExact,tensileExact,viscosityExact`; T5.3(1b)): the tank agrees with the single-switch run to within 1 in the last displayed digit (rmseBulk 1.49929753836e-3, rmseNear 1.81340794898e-3, keLast 7.28437955168e-7, same 3502 steps); dam break KE 3.5344e-4, arrival 2.4740 t\*, maxVelocityMax 6.598, densities 0.999428 / 1.006031, ke_tstar 0.357364 / 0.754228 / 0.922767; PHYSICS GATE: PASS.
+
+Sloshing (SPHERIC 10, nx = 200, C4, truncated at T = 1.5 s, `viscosityExact` only; T5.3(2)): 15001 steps, wall 1388 s on the shared GPU (the reviewer's context run: 1917 s with two jobs).  KE max-relative vs `slosh_B_nx200` **2.8231e-4** (1500 samples, gate 5 %; reviewer 2.820e-4), maxVelocity max **0.5919** (default 0.5921), densities **[0.99928, 1.00489]** (default [0.99929, 1.00487]).  The stored `slosh_B_nx200` KE series is the default run, so the number measures the effect of the switch directly: **0.03 % over 1.5 s**, far inside the band.
+
+**Effect.**  The switch changes the operator near the wall, and the trajectories follow at the bit level (the bit-level lines FAIL by design), but only far inside every gate band: the dam-break P1 arrival moves from 2.48970315022 t\* (baseline) to 2.47397042889 t\* (≈ 0.0157 t\* earlier; \|arrival − 2.49\| = 0.0160, gate ≤ 0.05); the dam-break KE vs `dambreak_B_nx67` is 3.9892e-4 relative (single switch) / 3.5344e-4 (all four) (gate ≤ 0.05); the tank gate metrics move by ≈ 1e-7 relative (rmseBulk 1.49929753837e-3 vs baseline 1.49929879553e-3, gate ≤ 1.25 × baseline; the all-four run agrees with the single-switch tank to within 1 in the last displayed digit).  The sloshing KE moves by 0.03 % over 1.5 s.  The default stays the pairwise form (`cfg.viscosityExact` off); whether to keep the pairwise form or switch the default is a user decision after these numbers, not a regression verdict.
+
 ## 7. Next
 
 * sloshing (SPHERIC TC10): the rolling tank is a prescribed rotating body (`Body.angularVelocity`, `accelerationAt`, wall velocity in the free-slip mirror, the viscous wall term and the no-penetration law relative to the moving wall: the static-wall

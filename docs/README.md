@@ -31,6 +31,7 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `derivations/tier3-curvature-2d.md` | 2D curvature expansion (closest point), F0/F1/F2 closed forms | [V] |
 | `derivations/tier4-slender-series.md` | fibres: slender series (2D strip/disk [V]; 3D ball/strand [D]/[P]), circle edge identity | 2D [V] |
 | `derivations/tet-face-edge-chain.md` | 3D tetrahedra | [P] |
+| `derivations/laplacian-wall.md` | wall Laplacian Δλ = ∫_solid ∇²W dA′ = 2λ[L] − tr Cov[L] (the viscosity wall term, Q1): scene route through the registered L = W′/r, ν_eff = α c0 H/(8ξ) | [V] tests |
 
 Two tracks meet here: `PLAN.md` (curvature-aware exact/series results; tier 3 and
 the oracles for the others) and `HANDOFF.md` (Part A: state and the work plan towards the warpSPH port; Part B: edge reductions, tiers 1/2/4, FEM
