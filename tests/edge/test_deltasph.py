@@ -1,5 +1,6 @@
 """DeltaSPH2D (delta+-SPH on the scene boundary layer): the DDT is exactly zero on a hydrostatic field, the wall continuity term has the right sign, a wall never pulls (ceiling), the Barecasco switch
-flags the free surface and not the walls, hydrostatic tank at rest, representation independence."""
+flags the free surface and not the walls, hydrostatic tank at rest, and the solver requires SurfaceRep walls (the exact wall operations are the only path; the scene-layer representation independence
+lives in test_scene.py / test_dfsph.py)."""
 import math
 
 import numpy as np
@@ -97,14 +98,19 @@ def test_hydrostatic_tank_stays_at_rest_and_the_walls_carry_the_weight(device):
 
 
 @pytest.mark.parametrize("device", DEVICES)
-def test_dynamics_independent_of_the_wall_representation(device):
-    xs = {}
-    for kind in ("surface", "volume"):
-        sim, _ = small_tank(device, domain=kind)
-        for _ in range(25):
-            sim.step()
-        xs[kind] = sim.x.cpu().numpy()
-    assert np.abs(xs["surface"] - xs["volume"]).max() < 1e-9
+def test_deltasph_requires_surface_walls(device):
+    """replaces test_dynamics_independent_of_the_wall_representation (WORK-006 T6.1, REVIEW-005b resume note): with the exact wall operations
+    (cover, cone area, tensile, wall Laplacian) as the only path, DeltaSPH2D can no longer step a VolumeRep wall (the polar code was the only
+    path that did; cover_vector_scene is SurfaceRep-only) -- the first step raises NotImplementedError.  The representation-independence checks
+    live where the representation lives: the scene layer (tests/edge/test_scene.py: surface / volume / sdf) and DFSPH2D (tests/edge/test_dfsph.py,
+    volume vs surface 1e-10) -- none of them drive DeltaSPH2D.  Here: (i) the guard, (ii) the surface path still steps and stays finite."""
+    sim, _ = small_tank(device, domain="volume")
+    with pytest.raises(NotImplementedError, match="SurfaceRep bodies only"):
+        sim.step()
+    sim, _ = small_tank(device, domain="surface")
+    for _ in range(25):
+        sim.step()
+    assert bool(torch.isfinite(sim.x).all()) and bool(torch.isfinite(sim.v).all()) and bool(torch.isfinite(sim.rho).all())
 
 
 @pytest.mark.parametrize("device", DEVICES)
