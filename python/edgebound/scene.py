@@ -253,8 +253,9 @@ class SurfaceRep:
         return wn + self.background
 
     # ---- adjacency (local frame)
-    def pairs(self, lpos, lsup, qglobal, kernel, device):
-        """MomentPairs (local frame) of the queries `lpos` against this surface (exact: edge terms + indicator pseudo-pairs)."""
+    def pairs(self, lpos, lsup, qglobal, kernel, device, channels=None):
+        """MomentPairs (local frame) of the queries `lpos` against this surface (exact: edge terms + indicator pseudo-pairs).  `channels` (default all nine
+        of warpbc.edge_channels): only these are evaluated, the others are 0; the indicator pseudo-pairs (lam, g1) are skipped when no channel of lam / g1 is asked for."""
         if len(lpos) == 0:
             return None
         cl = self._celllist(float(lsup.max()))
@@ -262,12 +263,14 @@ class SurfaceRep:
         a, b = self.vertices[self.edges[e, 0].long()], self.vertices[self.edges[e, 1].long()]
         keep = _segment_distance(lpos[qi], a, b) < lsup[qi]
         qi, e = qi[keep].to(torch.int32), e[keep].to(torch.int32)
-        c = warpbc.edge_channels(qi, e, lpos, lsup, self.vertices, self.edges, kernel, device=str(device))        # [P,9] units of h
+        c = warpbc.edge_channels(qi, e, lpos, lsup, self.vertices, self.edges, kernel, device=str(device), channels=channels)        # [P,9] units of h
         h = lsup[qi.long()]
         lam = c[:, 0]
         m1 = h[:, None] * c[:, 1:3]
         g0 = c[:, 3:5] / h[:, None]
         g1 = torch.stack([c[:, 5:7], c[:, 7:9]], 1)
+        if channels is not None and not (set(int(k) for k in channels) & {0, 5, 6, 7, 8}):
+            return MomentPairs(qglobal[qi.long()], lam, g0, m1, g1)                                  # gradient-only: the indicator adds lam and g1 only
         ind = self.indicatorFast(lpos, float(lsup.max()))
         nz = torch.nonzero(ind != 0).flatten()
         eye = torch.eye(2, dtype=F64, device=device)
@@ -466,6 +469,7 @@ class SceneAdjacency:
     kernel: str
     entries: list                   # per body: dict(body, cand, surface=[MomentPairs world], implicit=[MomentPairs], volume=[(rep, BoundaryAdjacency)])
     stats: dict
+    channels: Optional[frozenset] = None   # None: all nine moment channels; else the SurfaceRep channels that were evaluated (the others are 0): see sceneOperation
 
 
 @dataclass
@@ -613,7 +617,7 @@ class Scene:
         idx = torch.nonzero(hit).flatten()
         return idx, lpos[idx]
 
-    def buildAdjacency(self, queryParticles, operationProperties: OperationProperties) -> SceneAdjacency:
+    def buildAdjacency(self, queryParticles, operationProperties: OperationProperties, channels=None) -> SceneAdjacency:
         dev = self.device
         pos, sup = queryParticles.positions.to(dev, F64), queryParticles.supports.to(dev, F64)
         if pos.shape[1] != 2:
@@ -629,17 +633,17 @@ class Scene:
             stats["candidates"].append(int(len(cand)))
             if len(cand):
                 for rep in body.reps:
-                    self._repAdjacency(rep, body, ent, cand, lpos, lsup, name, queryParticles, operationProperties)
+                    self._repAdjacency(rep, body, ent, cand, lpos, lsup, name, queryParticles, operationProperties, channels)
             for key in ("surface", "implicit"):
                 stats["pairs"] += sum(len(s.q) for s in ent[key])
             entries.append(ent)
-        return SceneAdjacency(len(pos), name, entries, stats)
+        return SceneAdjacency(len(pos), name, entries, stats, None if channels is None else frozenset(int(c) for c in channels))
 
-    def _repAdjacency(self, rep, body, ent, cand, lpos, lsup, name, queryParticles, operationProperties):
+    def _repAdjacency(self, rep, body, ent, cand, lpos, lsup, name, queryParticles, operationProperties, channels=None):
         dev = self.device
         pose = body.pose
         if isinstance(rep, SurfaceRep):
-            ent["surface"].append(rep.pairs(lpos, lsup, cand, name, dev).toWorld(pose))
+            ent["surface"].append(rep.pairs(lpos, lsup, cand, name, dev, channels).toWorld(pose))
         elif isinstance(rep, VolumeRep):
             sub = _subState(queryParticles, cand, lpos, lsup, dev)
             adj = buildBoundaryAdjacency(sub, operationProperties, rep.mesh, grid=rep.grid(float(lsup.max())), supportMax=float(lsup.max()))
@@ -830,6 +834,10 @@ def sceneOperation(queryParticles, operationProperties: OperationProperties, sce
     if adjacency is not None and adjacency.kernel != kernelName(operationProperties.kernel):
         raise ValueError("sceneOperation: the adjacency was built for kernel %r, the operation asks for %r (an adjacency holds the moments of its own kernel)" % (adjacency.kernel, kernelName(operationProperties.kernel)))
     op, mode = operationProperties.operation, operationProperties.gradientMode
+    if adj.channels is not None:                    # a pruned adjacency (gradient channels only) serves the Naive gradient of a constant scalar field and nothing else
+        if (op != WarpOperation.Gradient or mode != GradientScheme.Naive or returnReaction or not {3, 4} <= adj.channels
+                or any(f.perQuery or f.a1 is not None for f in (bodyFields or []))):
+            raise ValueError("sceneOperation: the adjacency was built with the channels %s only; it serves the Naive Gradient of a constant scalar field (no reaction)" % sorted(adj.channels))
     N = adj.numQueries
     nb = len(scene.bodies)
     bodyFields = bodyFields or [BodyField() for _ in range(nb)]

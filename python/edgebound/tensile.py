@@ -84,5 +84,6 @@ def tensile_vector_scene(scene, positions, H, family="w2"):
     pr = OperationProperties(kernel=family + "p5", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
     one = BodyField(torch.tensor(1.0, dtype=torch.float64, device=dev))
-    out = sceneOperation(ps, pr, scene, None, None, [one] * len(scene.bodies), perBody=True)
+    adj = scene.buildAdjacency(ps, pr, channels=(3, 4))                                        # the Naive gradient of a constant needs g0 only
+    out = sceneOperation(ps, pr, scene, adj, None, [one] * len(scene.bodies), perBody=True)
     return tensile_factor(H, family) * out.sum(0)

@@ -142,5 +142,6 @@ def cover_vector_scene(scene, positions, H, adjacency=None):
     pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
     one = BodyField(torch.tensor(1.0, dtype=torch.float64, device=dev))
+    adjacency = adjacency if adjacency is not None else scene.buildAdjacency(ps, pr, channels=(3, 4))        # the Naive gradient of a constant needs g0 only
     out = sceneOperation(ps, pr, scene, adjacency, None, [one] * len(scene.bodies), perBody=True)
     return -(math.pi * float(H) ** 3 / 3) * out.sum(0)

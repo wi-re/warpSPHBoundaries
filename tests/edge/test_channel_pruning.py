@@ -92,3 +92,93 @@ def test_device_plan_cache(device, geometry):
     assert n == 1, n
     assert torch.equal(c1, c2)
     print(f"(b) cache: same key is the same object, pruned != full, two edge_channels calls construct {n} plan")
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_pruned_adjacency_guard_and_equality(device):
+    """(c) the (3,4)-pruned adjacency carries channels == {3,4} (the full one has channels None), and the Naive Gradient
+    of a constant scalar field through it is torch.equal to the one through the full adjacency (same pairs, the pruned one
+    holds the same g0 and 0 elsewhere, the constant gradient reads g0 only).  The guard raises ValueError for every other
+    use of a pruned adjacency: a Density, a Covariance, a Gradient of a perQuery field with a1, a Gradient with
+    returnReaction, and a Gradient through an adjacency pruned to a set that does not contain {3,4} (channels=(0,))."""
+    from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
+    from edgebound.deltasph2d import hydrostatic_tank
+    from edgebound.scene import BodyField, sceneOperation
+    dev = str(device)
+    sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device)
+    ps = ParticleState(positions=sim.x, supports=sim.Hvec, masses=torch.full_like(sim.rho, sim.m),
+                       kinds=sim.kinds, densities=sim.rho)
+    pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
+                             operationMode=OperationDirection.BoundaryToFluid)
+    one = BodyField(torch.tensor(1.0, dtype=TD, device=dev))
+    adj = sim.scene.buildAdjacency(ps, pr, channels=(3, 4))
+    full = sim.scene.buildAdjacency(ps, pr)
+    assert adj.channels == frozenset({3, 4}), adj.channels
+    assert full.channels is None, full.channels
+    got = sceneOperation(ps, pr, sim.scene, adj, None, [one], perBody=True)
+    ref = sceneOperation(ps, pr, sim.scene, full, None, [one], perBody=True)
+    assert torch.equal(got, ref)
+    print(f"(c) pruned adjacency channels = {sorted(adj.channels)} (full is None); Naive Gradient of a constant torch.equal")
+    density = OperationProperties(kernel="cone", operation=WarpOperation.Density, gradientMode=GradientScheme.Naive,
+                                  operationMode=OperationDirection.BoundaryToFluid)
+    covariance = OperationProperties(kernel="cone", operation=WarpOperation.Covariance, gradientMode=GradientScheme.Naive,
+                                     operationMode=OperationDirection.BoundaryToFluid)
+    with pytest.raises(ValueError, match="built with the channels"):
+        sceneOperation(ps, density, sim.scene, adj, None, [BodyField(rho=1.0)], perBody=True)
+    with pytest.raises(ValueError, match="built with the channels"):
+        sceneOperation(ps, covariance, sim.scene, adj, None, [one], perBody=True)
+    nq = len(ps.positions)
+    pq = BodyField(torch.zeros(nq, dtype=TD, device=dev), torch.zeros(nq, 2, dtype=TD, device=dev), rho=1.0, perQuery=True)
+    with pytest.raises(ValueError, match="built with the channels"):
+        sceneOperation(ps, pr, sim.scene, adj, None, [pq], perBody=True)
+    with pytest.raises(ValueError, match="built with the channels"):
+        sceneOperation(ps, pr, sim.scene, adj, None, [one], returnReaction=True, perBody=True)
+    adj0 = sim.scene.buildAdjacency(ps, pr, channels=(0,))
+    assert adj0.channels == frozenset({0})
+    with pytest.raises(ValueError, match="built with the channels"):
+        sceneOperation(ps, pr, sim.scene, adj0, None, [one], perBody=True)
+    print("(c) guard: Density, Covariance, perQuery+a1 Gradient, returnReaction Gradient, channels=(0,) all raise ValueError")
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_cover_and_tensile_pruned_equal_full(device, monkeypatch):
+    """(d) the cover vector and the tensile term built through the (3,4)-pruned adjacency (the default path) equal the
+    full-adjacency results to 1e-13 * scale: the L body of test_cover_scene, 200 queries (34 inside the body, so the
+    indicator pseudo-pairs of the full adjacency matter).  The tolerance allows for the index_add_ atomics of
+    sceneOperation (not guaranteed bit-reproducible); the reviewer measured 0 on all three (scales 0.308 / 235 / 751)."""
+    from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
+    from edgebound import cover, tensile
+    from edgebound.scene import Body, Scene, SurfaceRep
+    dev = str(device)
+    LS = np.array([[0, 0], [2, 0], [2, 1], [1, 1], [1, 2], [0, 2]], dtype=float)
+    CENTER, ANGLE, H = (0.3, -0.2), 0.7, 0.6
+    sc = Scene([Body(bodyId=0, reps=[SurfaceRep.polygon(LS)], center=CENTER, angle=ANGLE)], device)
+    pos = np.random.default_rng(3).uniform(-2, 3, (200, 2))
+    n = len(pos)
+    ps = ParticleState(positions=torch.tensor(pos, dtype=TD, device=dev),
+                       supports=torch.full((n,), H, dtype=TD, device=dev),
+                       masses=torch.ones(n, dtype=TD, device=dev), kinds=torch.zeros(n, dtype=torch.int32, device=dev),
+                       densities=torch.ones(n, dtype=TD, device=dev))
+    pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
+                             operationMode=OperationDirection.BoundaryToFluid)
+    full_adj = sc.buildAdjacency(ps, pr)
+    assert full_adj.channels is None
+    got_c = cover.cover_vector_scene(sc, pos, H)                       # default: the (3,4)-pruned adjacency
+    ref_c = cover.cover_vector_scene(sc, pos, H, adjacency=full_adj)   # explicit full adjacency
+    dc = float(np.abs(got_c.cpu().numpy() - ref_c.cpu().numpy()).max())
+    sc_c = float(np.abs(ref_c.cpu().numpy()).max())
+    assert dc <= 1e-13 * sc_c, (dc, sc_c)
+    print(f"(d) cover: max|Δ| = {dc:.2e} (<= 1e-13 * scale {sc_c:.3f})")
+    got_t = {fam: tensile.tensile_vector_scene(sc, pos, H, fam) for fam in ("w2", "w4")}     # default: pruned
+    orig = Scene.buildAdjacency
+
+    def _full_only(self, queryParticles, operationProperties, channels=None):
+        return orig(self, queryParticles, operationProperties)         # drop `channels` -> the full adjacency
+
+    monkeypatch.setattr(Scene, "buildAdjacency", _full_only)
+    for fam in ("w2", "w4"):
+        ref_t = tensile.tensile_vector_scene(sc, pos, H, fam)          # patched: full
+        dt_ = float(np.abs(got_t[fam].cpu().numpy() - ref_t.cpu().numpy()).max())
+        sc_t = float(np.abs(ref_t.cpu().numpy()).max())
+        assert dt_ <= 1e-13 * sc_t, (fam, dt_, sc_t)
+        print(f"(d) tensile {fam}: max|Δ| = {dt_:.2e} (<= 1e-13 * scale {sc_t:.3f})")
