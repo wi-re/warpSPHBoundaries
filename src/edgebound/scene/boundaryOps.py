@@ -153,13 +153,13 @@ def buildBoundaryAdjacency(queryParticles, operationProperties: OperationPropert
     mesh0 = desc.mesh
     dev = mesh0.device if mesh0 is not None else pos.device
     pos, sup = pos.to(dev), sup.to(dev)
-    allowed = _queryAllowed(queryParticles, operationProperties.operationMode, dev)
+    allowed = queryAllowed(queryParticles, operationProperties.operationMode, dev)
     # ---- implicit bodies ------------------------------------------------------------------------------------
     bodyLam, bodyGrad, bodyTier, polyBodies = [], [], [], []
     tables = {}
     if desc.bodies:
-        tables["t3"] = _tier3(name, str(dev))
-        tables["t4"] = _tier4(name, str(dev))
+        tables["t3"] = tier3Table(name, str(dev))
+        tables["t4"] = tier4Table(name, str(dev))
     V = [mesh0.vertices] if mesh0 is not None else []
     E = [mesh0.elements.long()] if mesh0 is not None else []
     bid = [mesh0.bodyIds.long()] if mesh0 is not None else []
@@ -218,19 +218,19 @@ def buildBoundaryAdjacency(queryParticles, operationProperties: OperationPropert
 _T3, _T4 = {}, {}
 
 
-def _tier3(name, dev):
+def tier3Table(name, dev):
     if (name, dev) not in _T3:
         _T3[(name, dev)] = Tier3(name, dev)
     return _T3[(name, dev)]
 
 
-def _tier4(name, dev):
+def tier4Table(name, dev):
     if (name, dev) not in _T4:
         _T4[(name, dev)] = Tier4(name, dev)
     return _T4[(name, dev)]
 
 
-def _queryAllowed(queryParticles, mode: OperationDirection, dev):
+def queryAllowed(queryParticles, mode: OperationDirection, dev):
     """boundary elements are `Boundary`-kind SOURCES: they act iff the source side of the direction is Boundary or All; the query kind must match the target side."""
     kinds = getattr(queryParticles, "kinds", None)
     n = queryParticles.positions.shape[0]

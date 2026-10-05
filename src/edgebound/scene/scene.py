@@ -28,7 +28,7 @@ import torch
 from warpSPHCore import GradientScheme, OperationProperties, WarpOperation
 
 from ..edge import warpbc
-from .boundaryOps import (BoundaryMesh, _queryAllowed, _tier3, _tier4, boundaryOperation,
+from .boundaryOps import (BoundaryMesh, queryAllowed, tier3Table, tier4Table, boundaryOperation,
                           buildBoundaryAdjacency, buildElementGrid, kernelName)
 from .implicitBodies import DiskBody, HalfPlaneBody, TierPolicy, evaluateBody
 
@@ -623,7 +623,7 @@ class Scene:
         if pos.shape[1] != 2:
             raise NotImplementedError("2D only")
         name = kernelName(operationProperties.kernel)
-        allowed = _queryAllowed(queryParticles, operationProperties.operationMode, dev)
+        allowed = queryAllowed(queryParticles, operationProperties.operationMode, dev)
         entries, stats = [], {"candidates": [], "pairs": 0, "tier": {}}
         cells = ParticleCells.build(pos, float(sup.max())) if len(self.bodies) > 1 else None
         for body in self.bodies:
@@ -659,7 +659,7 @@ class Scene:
                                                   torch.einsum("pkd,pkj->pdj", y, G)))
         elif isinstance(rep, (ImplicitRep, SdfRep)):
             if isinstance(rep, ImplicitRep):
-                lam, g, tier, _ = evaluateBody(rep.shape, lpos, lsup, name, dev, rep.policy, {"t3": _tier3(name, str(dev)), "t4": _tier4(name, str(dev))})
+                lam, g, tier, _ = evaluateBody(rep.shape, lpos, lsup, name, dev, rep.policy, {"t3": tier3Table(name, str(dev)), "t4": tier4Table(name, str(dev))})
                 low = tier == 2
                 fb = rep.fallbackSurface(float(lsup[low].min()), dev) if bool(low.any()) else None
             else:
@@ -689,7 +689,7 @@ def _planar_moments(rep, lpos, lsup, name, dev):
         d, n, _ = rep.shape.signed(lpos)
     else:
         d, n, _, _ = rep.signed(lpos)
-    t3 = _tier3(name, str(dev))
+    t3 = tier3Table(name, str(dev))
     q = d / lsup
     lam, dlam, m1n, g1nn, g1tt = t3.planar_moments(q)
     m1 = -(m1n * lsup)[:, None] * n
@@ -700,7 +700,7 @@ def _planar_moments(rep, lpos, lsup, name, dev):
 
 def _sdfTier3(rep: SdfRep, lpos, lsup, name, dev):
     d, n, kappa, gn = rep.signed(lpos)
-    t3 = _tier3(name, str(dev))
+    t3 = tier3Table(name, str(dev))
     q = d / lsup
     lam, dl = t3.lam(q, kappa * lsup)
     valid = ((kappa * lsup).abs() <= rep.maxKappaH) & ((gn - 1).abs() <= rep.gradTol)

@@ -5,7 +5,7 @@ import mpmath as mp
 import pytest
 
 from curvbound.kernels import KERNELS as SRC
-from edgebound.edge.kernels import KERNELS, disk_moment, kernel, peval
+from edgebound.edge.kernels import disk_moment, kernel, peval
 from edgebound.edge.mpq import mpq
 from .conftest import KERNELS as NAMES
 

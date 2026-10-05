@@ -3,7 +3,7 @@
 **Status:** [V] Maple (divergence step, half-plane equality with `λ_2(d)` symbolic) + mpmath vs polar quadrature, tiling, subdivision, continuity
 **Tier(s):** 1, 2 · **Dimension:** 2D (3D version: `tet-face-edge-chain.md`)
 **Depends on:** `../notation.md`, `edge-primitives.md`, `truncated-monomials.md`
-**Implemented in:** `src/edgebound/edge/core.py::value` (stage 1, mpmath); `edge_identity_check.py` (original quadrature-edge check, [V])
+**Implemented in:** `src/edgebound/edge/core.py::value` (stage 1, mpmath); `scripts/derivation_checks/edge_identity_check.py` (original quadrature-edge check, [V])
 **Verified by:** `maple/11_truncated_monomials.mpl`, `maple/13_halfplane.mpl`, `tests/edge/test_value.py`, `tests/edge/test_degenerate.py`, `tests/edge/test_fixtures.py`
 
 ## 1. Statement
@@ -57,7 +57,7 @@ both signs of `z`; wedge at a vertex vs polar reference (all chord-clipping case
 
 | check | how | tolerance | status |
 |---|---|---|---|
-| random triangles vs area quadrature (C4) | `edge_identity_check.py` | 1e-12 | [V] |
+| random triangles vs area quadrature (C4) | `scripts/derivation_checks/edge_identity_check.py` | 1e-12 | [V] |
 | random triangles/points vs polar oracle, 4 kernels | `tests/edge/test_value.py` | 1e-30 asserted (≈1e-42) | [V] |
 | divergence step, symbolic | Maple (`maple/11`) | exact | [V] |
 | half-plane equals `λ_2(d)` (symbolic, 4 kernels, cubic branches A/B) | Maple `simplify = 0` + 50-digit spot values | exact / 5e-47 | [V] |

@@ -13,7 +13,6 @@ Tolerances (stated before looking):
       wall operations are not guaranteed bit-reproducible); the invalidation cases assert the stale-cache error is visible
       (|Δlam| > 1e-4, reviewer measured 8.3e-3 / 8.9e-3) and the g-change moves A by > 1e-2 (reviewer measured 0.59).
 """
-import numpy as np
 import pytest
 import torch
 import warp as wp

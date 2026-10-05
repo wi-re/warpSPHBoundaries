@@ -9,7 +9,7 @@ from edgebound.edge.mpq import mpq
 from curvbound import planar2d
 
 from .conftest import KERNELS, rand_point, rand_triangle
-from .test_value import _big_triangle
+from .conftest import big_triangle
 
 TOL = mp.mpf(10) ** -30
 
@@ -44,7 +44,7 @@ def test_gradient_vs_finite_difference_of_value(name, rng):
 def test_half_plane_gradient_is_minus_dlambda_dd(name):
     """grad_x lambda along the wall normal = -d lambda_2/d d  (x moving toward the wall, n = (0,-1))."""
     for d in [F(1, 100), F(1, 10), F(3, 10), F(1, 2), F(7, 10), F(95, 100)]:
-        g = eb.gradient(_big_triangle(d), (F(0), F(0)), name)
+        g = eb.gradient(big_triangle(d), (F(0), F(0)), name)
         with mp.workdps(70):
             f = lambda t: planar2d(name, t, dps=70)
             h, x0 = mp.mpf(10) ** -12, mpq(d)                       # 4th-order stencil: error ~ h^4

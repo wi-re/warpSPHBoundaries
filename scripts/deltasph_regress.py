@@ -43,7 +43,7 @@ import time
 import numpy as np
 import torch
 
-from edgebound.sim.validation import run_dambreak, run_sloshing, run_tank
+from edgebound.sim.validation import ke_relmax, run_dambreak, run_sloshing, run_tank
 
 from edgebound import paths
 
@@ -95,19 +95,7 @@ def _run_case(name, perturb=False, **cfgkw):
 
 
 def _ke_relmax(series, refname):
-    """max over the common time range of |KE - KE_ref| / max(KE_ref), KE_ref interpolated on our t.  (secondary check)."""
-    ref = np.load(os.path.join(RESULTS_DIR, refname))
-    t_o, ke_o = series["t"], series["ke"]
-    t_r, ke_r = ref["t"], ref["kineticEnergy"]
-    lo, hi = max(t_o.min(), t_r.min()), min(t_o.max(), t_r.max())
-    sel = (t_o >= lo) & (t_o <= hi)
-    if not sel.any():
-        return float("nan"), 0
-    ke_r_at = np.interp(t_o[sel], t_r, ke_r)
-    denom = ke_r_at.max()
-    if denom <= 0:
-        return float("nan"), int(sel.sum())
-    return float(np.max(np.abs(ke_o[sel] - ke_r_at) / denom)), int(sel.sum())
+    return ke_relmax(series, os.path.join(RESULTS_DIR, refname))
 
 
 def _physics_lines(case, series):

@@ -5,9 +5,11 @@ import sys, time, types
 sys.path.insert(0, "python"); sys.path.insert(0, "docs/work/refs")
 import numpy as np
 T, which = float(sys.argv[1]), sys.argv[2]
-from edgebound.sim import deltasph2d
-from edgebound import deltasph_validation as dv
-from edgebound.deltasph_regress import _ke_relmax
+from edgebound.sim import cases, deltasph2d
+from edgebound.sim import validation as dv
+from edgebound.sim.validation import ke_relmax
+from edgebound import paths
+_ke_relmax = lambda series, name: ke_relmax(series, str(paths.results_dir() / 'deltasph' / name))
 if which == "exact":
     import importlib
     ns = {}
@@ -17,7 +19,7 @@ if which == "exact":
     src = src.replace("T = tensile_vector_scene(self.scene, x[near], H)", "T = _TE(self.scene, x[near], H)")
     mod = types.ModuleType("edgebound.deltasph2d_probe"); mod.__package__ = "edgebound"; mod.__dict__["_TE"] = ns["T_scene"]
     exec(compile(src, "deltasph2d_probe", "exec"), mod.__dict__)
-    dv.sloshing_tank = lambda *a, **k: (lambda sim_info: (setattr(sim_info[0], "__class__", mod.DeltaSPH2D), sim_info)[1])(deltasph2d.sloshing_tank(*a, **k))
+    dv.sloshing_tank = lambda *a, **k: (lambda sim_info: (setattr(sim_info[0], "__class__", mod.DeltaSPH2D), sim_info)[1])(cases.sloshing_tank(*a, **k))
 kw = dict(tensileExact=True) if which == "exact" else {}
 t0 = time.time()
 sim, info, res = dv.run_sloshing(nx=200, T=T, shifting=True, noPen="impulse", verbose=False, **kw)

@@ -4,9 +4,7 @@ import pytest
 import torch
 import warp as wp
 
-from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from edgebound.scene import scene as S
-from edgebound.edge import warpbc
+from warpSPHCore import GradientScheme, KernelFunctions, OperationProperties, ParticleState, WarpOperation
 from edgebound.scene.implicitBodies import DiskBody, HalfPlaneBody
 from edgebound.scene.scene import Body, BodyField, ImplicitRep, Scene, SdfRep, SurfaceRep, VolumeRep, sceneOperation
 
@@ -87,7 +85,6 @@ def test_reaction_conservation_and_torque_vs_quadrature(device):
     np.testing.assert_allclose(rea.force.cpu().numpy()[0], -(m[:, None] * out).sum(0).cpu().numpy(), atol=1e-12)
     assert rea.torqueExact == [True]
     # torque by dense quadrature of  -m_i A  int (x'-c) x grad_x W dA'   over the world-frame polygon (fan of the 3 unit squares, Gauss 12x12)
-    from edgebound.edge.kernels import kernel as K
     body = sa.bodies[0]
     X = body.pose.toWorld(torch.as_tensor(LV, dtype=TD, device=device)).cpu().numpy()
     gx, gw = np.polynomial.legendre.leggauss(14)

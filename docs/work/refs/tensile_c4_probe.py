@@ -5,7 +5,7 @@ import sys, math
 sys.path.insert(0, "python"); sys.path.insert(0, "docs/work/refs")
 import numpy as np, torch
 from edgebound.edge import kernels, warpbc, np2d
-from edgebound.q2_conditioning import terms
+from edgebound.edge.kernels import power_terms as terms
 from edgebound.sim.deltasph2d import DeltaSPHConfig
 from edgebound.sim.cases import hydrostatic_tank, sloshing_tank
 from edgebound.sim.pairs import F64

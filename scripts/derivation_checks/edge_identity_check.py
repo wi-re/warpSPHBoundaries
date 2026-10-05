@@ -1,6 +1,8 @@
 # VERIFIED: 2D edge identities (value, gradient, first moment) for full Wendland C4 vs adaptive area quadrature; max diff 3e-13.
 # Uses quad along edges (not yet closed-form primitives).
 import numpy as np
+
+cross2 = lambda u, v: u[0] * v[1] - u[1] * v[0]      # np.cross of 2-vectors was removed in numpy 2
 from scipy.integrate import quad, dblquad
 from numpy.polynomial import polynomial as P
 # Wendland C4 (2D), support 1: k(q)=(1-q)^6 (1+6q+35/3 q^2)
@@ -16,15 +18,15 @@ def area(T,x,f):
     (a,b,c)=T
     def g(v,u):  # barycentric param
         p=a+u*(b-a)+v*(c-a); r=np.linalg.norm(p-x); return f(p,r)
-    J=abs(np.cross(b-a,c-a))
+    J=abs(cross2(b-a,c-a))
     return dblquad(g,0,1,0,lambda u:1-u,epsabs=1e-13,epsrel=1e-13)[0]*J
 
 def inside(T,x):
-    a,b,c=T; s=[np.cross(q-p,x-p) for p,q in ((a,b),(b,c),(c,a))]
+    a,b,c=T; s=[cross2(q-p,x-p) for p,q in ((a,b),(b,c),(c,a))]
     return all(v>0 for v in s) or all(v<0 for v in s)
 
 def edges(T,x,fn):
-    a,b,c=T; orient=np.sign(np.cross(b-a,c-a)); out=0
+    a,b,c=T; orient=np.sign(cross2(b-a,c-a)); out=0
     for p,q in ((a,b),(b,c),(c,a)):
         t=(q-p)/np.linalg.norm(q-p); n=orient*np.array([t[1],-t[0]])  # outward
         z=n@(p-x); c0=x+z*n; s0=t@(p-c0); s1=t@(q-c0)

@@ -161,7 +161,7 @@ divergence-theorem reductions to **edge line integrals with elementary primitive
 ## 3. Core 2D identities  [V]
 
 Verified for the full Wendland C4 kernel on 20 random triangles/points vs adaptive area quadrature,
-max abs diff $3\times10^{-13}$ (quadrature-limited). Script: `edge_identity_check.py`.
+max abs diff $3\times10^{-13}$ (quadrature-limited). Script: `scripts/derivation_checks/edge_identity_check.py`.
 
 $$\int_T W\,dA = \mathbb 1[x\in T] + \sum_e z_e\int_{\text{chord}}\frac{M(r)-M(1)}{r^2}\,ds$$
 
@@ -216,7 +216,7 @@ Degree drops by 2 per step. Odd $k$ → purely edge integrals (compact). Even $k
 value-type integral (§3 form with $f\to$ iterated $\Phi$). For $f=r^n$: $\Phi=(r^{n+2}-R^{n+2})/(n+2)$,
 still polynomial in $r$ → only $I_m, J_m$ with $m\ge -2$.
 
-**(b) Alternative: direct far-field form  [D, implemented in `monomial_edge_forms.py`, unverified]**
+**(b) Alternative: direct far-field form  [D, implemented in `scripts/derivation_checks/monomial_edge_forms.py`, unverified]**
 $$\int_T y^\alpha r^n\mathbb 1[r\le R] = \mathbb 1[x\in T]\Big(\oint_{S^1}\omega^\alpha\Big)\frac{R^{n+2+k}}{n+2+k}
 +\sum_e\frac{z_e}{n+2+k}\int_{\text{chord}}(z_en_e+st_e)^\alpha\Big[r^n-R^{n+2+k}r^{-(2+k)}\Big]ds$$
 (from $\nabla\cdot(yPF)=P[(d+k)F+rF']$; far field $P\,y\,r^{-(d+k)}$ divergence-free; $\oint\omega^\alpha=0$ for odd $k$).
@@ -375,8 +375,8 @@ Added since (Part A): scene layer, DFSPH and δ⁺-SPH solvers on it, exact wall
 ## 14. Files
 
 Original (2026-10-01):
-- `edge_identity_check.py` — [V] §3 identities vs area quadrature (edge integrals by `quad`).
-- `monomial_edge_forms.py` — [D] closed-form primitives + §4/§6(b); brute-force reference timed out
+- `scripts/derivation_checks/edge_identity_check.py` — [V] §3 identities vs area quadrature (edge integrals by `quad`).
+- `scripts/derivation_checks/monomial_edge_forms.py` — [D] closed-form primitives + §4/§6(b); brute-force reference timed out
   (discontinuity at $r=R$); swap in a polar reference (radial breakpoint at $R$) or Maple.
 
 Since: the package `src/edgebound/` (module map in Part A §A1 and `docs/README.md`), `maple/` (`run_edge.sh`), `tests/edge/`, `tests/fixtures/` (golden fixtures), `docs/` (index in `docs/README.md`), `notebooks/edge2d_demo.ipynb`, `results/deltasph/` (tracked δ⁺ series and figures), `results/tables/` (tier-3 Hermite tables), `results/symbolic/`.

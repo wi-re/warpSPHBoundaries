@@ -9,7 +9,6 @@ import pytest
 import edgebound as eb
 from edgebound.edge import fem, np2d, np_fem
 from edgebound.edge.kernels import KERNELS, WARPSPH_C2_PI, disk_moment, peval
-from edgebound.edge.mpq import mpq
 
 from .conftest import rand_point, rand_triangle
 
@@ -61,7 +60,7 @@ def test_value_gradient_moments_vs_polar_oracle(name, rng):
 
 @pytest.mark.parametrize("name", NEW)
 def test_numpy_float64_and_fem_p1_and_covering_mesh(name):
-    from .test_value import _tiling
+    from .conftest import tiling
     rng = np.random.default_rng(3)
     V = rng.uniform(-1, 1, (30, 3, 2))
     X = rng.uniform(-.4, .4, (30, 2))
@@ -72,6 +71,6 @@ def test_numpy_float64_and_fem_p1_and_covering_mesh(name):
         w = np_fem.weights_hybrid(V[i:i + 1], X[i:i + 1], name, 1)[0]
         wr = fem.weights(T, x, name, 1)
         assert max(abs(w[k] - float(wr[k])) for k in range(3)) < 5e-12
-    tris = [[(float(a), float(b)) for a, b in T] for T in _tiling(F(2), 2)]
+    tris = [[(float(a), float(b)) for a, b in T] for T in tiling(F(2), 2)]
     tot = sum(np2d.value(np.array([T]), np.array([[0.1, -0.2]]), name)[0] for T in tris)
     assert abs(tot - 1) < 1e-12

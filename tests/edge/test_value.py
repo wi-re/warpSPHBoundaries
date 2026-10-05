@@ -9,7 +9,7 @@ from edgebound.edge import geometry as G
 from edgebound.edge.mpq import mpq
 from curvbound import planar2d
 
-from .conftest import KERNELS, rand_point, rand_triangle
+from .conftest import KERNELS, big_triangle, rand_point, rand_triangle, tiling
 
 TOL = mp.mpf(10) ** -30
 
@@ -23,52 +23,33 @@ def test_random_triangles_vs_polar(name, rng):
         o = eb.polar_value(T, x, name)
         assert abs(v - o) < TOL, (T, x)
 
-
-def _big_triangle(d):
-    """x = origin; the solid is the half plane {y > d} (clipped far away by a huge triangle)."""
-    return [(F(-40), d), (F(40), d), (F(0), F(80))]
-
-
 @pytest.mark.parametrize("name", KERNELS)
 def test_half_plane_equals_planar2d(name):
     """HALF-PLANE cross-check: one edge at distance d == lambda_2(d) of docs/derivation.md s.3."""
     worst = mp.mpf(0)
     for d in [F(0), F(1, 10**12), F(1, 1000), F(1, 10), F(3, 10), F(1, 2), F(1, 2) + F(1, 10**6),
               F(7, 10), F(999, 1000), F(1) - F(1, 10**12)]:
-        v = eb.value(_big_triangle(d), (F(0), F(0)), name)
+        v = eb.value(big_triangle(d), (F(0), F(0)), name)
         ref = mp.mpf(1) / 2 if d == 0 else planar2d(name, mpq(d), dps=60)
         err = abs(v - ref)
         worst = max(worst, err)
         assert err < mp.mpf(10) ** -35, (d, err)
     # d >= 1: support does not reach the wall; d < 0: x inside the solid: 1 - lambda(|d|)
-    assert eb.value(_big_triangle(F(1)), (F(0), F(0)), name) == 0
-    assert eb.value(_big_triangle(F(3, 2)), (F(0), F(0)), name) == 0
+    assert eb.value(big_triangle(F(1)), (F(0), F(0)), name) == 0
+    assert eb.value(big_triangle(F(3, 2)), (F(0), F(0)), name) == 0
     for d in [F(1, 10), F(1, 2), F(9, 10)]:
-        vin = eb.value(_big_triangle(-d), (F(0), F(0)), name)
+        vin = eb.value(big_triangle(-d), (F(0), F(0)), name)
         assert abs(vin - (1 - planar2d(name, mpq(d), dps=60))) < mp.mpf(10) ** -35
 
 
 def test_half_plane_x_on_edge_is_one_half():
     for name in KERNELS:
-        v = eb.value(_big_triangle(F(0)), (F(0), F(0)), name)
+        v = eb.value(big_triangle(F(0)), (F(0), F(0)), name)
         assert abs(v - mp.mpf(1) / 2) < mp.mpf(10) ** -38
-
-
-def _tiling(a, n):
-    """square [-a, a]^2 split into 2 n^2 triangles (CCW)."""
-    tris = []
-    xs = [-a + 2 * a * F(i, n) for i in range(n + 1)]
-    for i in range(n):
-        for j in range(n):
-            p00, p10, p01, p11 = (xs[i], xs[j]), (xs[i + 1], xs[j]), (xs[i], xs[j + 1]), (xs[i + 1], xs[j + 1])
-            tris.append([p00, p10, p11])
-            tris.append([p00, p11, p01])
-    return tris
-
 
 @pytest.mark.parametrize("name", KERNELS)
 def test_tiled_mesh_covering_support_sums_to_one(name):
-    tris = _tiling(F(3, 2), 3)                        # covers the unit disk around any |x| < 1/2
+    tris = tiling(F(3, 2), 3)                        # covers the unit disk around any |x| < 1/2
     for x in [(F(1, 7), F(-1, 5)), (F(-1, 2), F(0)), (F(1, 2), F(1, 2)),   # on grid vertex (-1/2... cell corners) / edges
               (F(0), F(0))]:
         tot = sum(eb.value(T, x, name) for T in tris)
@@ -78,7 +59,6 @@ def test_tiled_mesh_covering_support_sums_to_one(name):
 @pytest.mark.parametrize("name", KERNELS)
 def test_fan_around_x_vertex_sum(name):
     """x is the common vertex of a fan of 8 triangles covering the support: indicator = angle / 2 pi each."""
-    import itertools
     R = F(2)
     ring = [(R, F(0)), (R, R), (F(0), R), (-R, R), (-R, F(0)), (-R, -R), (F(0), -R), (R, -R)]
     x = (F(0), F(0))

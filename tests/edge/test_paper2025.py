@@ -14,7 +14,7 @@ from scipy.spatial import Delaunay
 
 import mpmath as mp
 import edgebound as eb
-from edgebound.edge import fem, np_fem, np2d
+from edgebound.edge import fem, np_fem
 
 
 def mesh8():

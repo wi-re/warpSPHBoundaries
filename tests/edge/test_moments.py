@@ -1,6 +1,5 @@
 """moments-recursion.md checks: (a) vs polar (k <= 4), (a) vs (b), full-support meshes, half-plane."""
 from fractions import Fraction as F
-from itertools import product
 
 import mpmath as mp
 import pytest
@@ -10,7 +9,7 @@ from edgebound.edge.kernels import disk_moment, kernel
 from edgebound.edge.mpq import mpq
 
 from .conftest import KERNELS, rand_point, rand_triangle
-from .test_value import _big_triangle, _tiling
+from .conftest import big_triangle, tiling
 
 TOL = mp.mpf(10) ** -30
 ALPHAS = [(a, k - a) for k in range(1, 5) for a in range(k + 1)]
@@ -51,7 +50,7 @@ def test_b_is_undefined_on_an_edge_line():
 @pytest.mark.parametrize("name", KERNELS)
 def test_full_support_mesh_gives_disk_moments(name):
     """covering mesh: sum over elements = exact rational disk moment (no quadrature)."""
-    tris = _tiling(F(2), 2)                                   # covers the support disk for |x| < 1
+    tris = tiling(F(2), 2)                                   # covers the support disk for |x| < 1
     for x in [(F(1, 7), F(-1, 5)), (F(0), F(0)), (F(3, 4), F(0))]:        # mesh vertex / generic / on a mesh edge
         for al in [(0, 0), (1, 0), (0, 1), (2, 0), (1, 1), (0, 2), (3, 0), (2, 1), (4, 0), (2, 2), (0, 4)]:
             tot = sum(eb.moment(T, x, name, al) for T in tris)
@@ -82,9 +81,9 @@ def test_half_plane_second_component_first_moment(name):
         dd = mpq(d)
         pts = [dd, mpq(F(1, 2)), mp.mpf(1)] if dd < mpq(F(1, 2)) else [dd, mp.mpf(1)]
         ref = 2 * mp.quad(lambda r: Wf(r) * r * mp.sqrt(r * r - dd * dd), pts)
-        m = eb.moment(_big_triangle(d), (F(0), F(0)), name, (0, 1))
+        m = eb.moment(big_triangle(d), (F(0), F(0)), name, (0, 1))
         assert abs(m - ref) < mp.mpf(10) ** -28, (d, m, ref)
-        assert abs(eb.moment(_big_triangle(d), (F(0), F(0)), name, (1, 0))) < mp.mpf(10) ** -35     # symmetry
+        assert abs(eb.moment(big_triangle(d), (F(0), F(0)), name, (1, 0))) < mp.mpf(10) ** -35     # symmetry
 
 
 @pytest.mark.parametrize("name", ["cubic", "w4"])

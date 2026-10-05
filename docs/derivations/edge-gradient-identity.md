@@ -3,7 +3,7 @@
 **Status:** [V] Maple (half-plane symbolic, per block and per kernel) + mpmath (polar quadrature, finite differences)
 **Tier(s):** 1, 2 · **Dimension:** 2D
 **Depends on:** `edge-value-identity.md`
-**Implemented in:** `src/edgebound/edge/core.py::gradient`, `::moment_gradient` (stage 1); `edge_identity_check.py` [V, quadrature edges]
+**Implemented in:** `src/edgebound/edge/core.py::gradient`, `::moment_gradient` (stage 1); `scripts/derivation_checks/edge_identity_check.py` [V, quadrature edges]
 **Verified by:** `maple/11_truncated_monomials.mpl`, `maple/13_halfplane.mpl`, `tests/edge/test_gradient.py`, `tests/edge/test_moments.py`
 
 ## 1. Statement
@@ -39,7 +39,7 @@ Half-plane (solid `{y > d}`, `n = (0,−1)`): `∇λ = (0, ∫_{−L}^{L} W ds)`
 
 | check | how | tolerance | status |
 |---|---|---|---|
-| vs area quadrature (C4, 20 random triangles) | `edge_identity_check.py` | 1e-12 | [V] |
+| vs area quadrature (C4, 20 random triangles) | `scripts/derivation_checks/edge_identity_check.py` | 1e-12 | [V] |
 | vs independent polar quadrature of `∫ (−W'/r) y dA` (all 4 kernels, random) | `test_gradient.py` | 1e-30 asserted | [V] |
 | vs 4th-order finite differences of the value identity, 80 digits | `test_gradient.py` | 1e-25 | [V] |
 | per block, half-plane symbolic: `−dV/dd = 2 I_n(L)`, `n = 0…12` | Maple | exact | [V] |

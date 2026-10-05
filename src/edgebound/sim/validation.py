@@ -177,3 +177,19 @@ def run_sloshing(nx=200, T=7.0, every=10, snapDt=None, out=None, verbose=True, *
     if out:
         np.savez(out, **res, **({f"snap_{key}": np.array(v) for key, v in snaps.items()} if snapDt else {}), lo=np.array([-info["L"] / 2, 0.0]), hi=np.array([info["L"] / 2, 0.25]), r=info["dx"] / 2, h=4 * info["dx"])
     return sim, info, res
+
+
+def ke_relmax(series, refpath):
+    """max over the common time range of |KE - KE_ref| / max(KE_ref), KE_ref (an .npz with `t`, `kineticEnergy`) interpolated on our t; returns (value, samples)."""
+    ref = np.load(refpath)
+    t_o, ke_o = series["t"], series["ke"]
+    t_r, ke_r = ref["t"], ref["kineticEnergy"]
+    lo, hi = max(t_o.min(), t_r.min()), min(t_o.max(), t_r.max())
+    sel = (t_o >= lo) & (t_o <= hi)
+    if not sel.any():
+        return float("nan"), 0
+    ke_r_at = np.interp(t_o[sel], t_r, ke_r)
+    denom = ke_r_at.max()
+    if denom <= 0:
+        return float("nan"), int(sel.sum())
+    return float(np.max(np.abs(ke_o[sel] - ke_r_at) / denom)), int(sel.sum())

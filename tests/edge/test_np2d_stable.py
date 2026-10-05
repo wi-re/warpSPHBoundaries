@@ -1,7 +1,6 @@
 """Stage 3: float32 conditioning. Exact Chebyshev compile + stable quadrature mode of np2d."""
 from fractions import Fraction as F
 
-import mpmath as mp
 import numpy as np
 import pytest
 

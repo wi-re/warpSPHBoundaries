@@ -33,7 +33,7 @@ import torch
 import warp as wp
 from warpSPHCore import KernelFunctions
 
-from edgebound.sim import cases, deltasph2d as D
+from edgebound.sim import cases
 from edgebound.sim.deltasph2d import DeltaSPHConfig
 from edgebound.sim.cases import hydrostatic_tank
 

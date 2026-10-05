@@ -2,7 +2,6 @@
 reaction conservation, directions, kernels, devices."""
 from fractions import Fraction as F
 
-import mpmath as mp
 import numpy as np
 import pytest
 import torch
@@ -10,9 +9,7 @@ import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 from edgebound.scene import boundaryOps as B
-from edgebound.edge import np2d, np_fem
-from edgebound.edge.kernels import disk_moment, KERNELS
-from edgebound.edge.mpq import mpq
+from edgebound.edge import np_fem
 
 DEVICES = ["cpu"] + (["cuda:0"] if wp.is_cuda_available() else [])
 TD = torch.float64
@@ -106,8 +103,8 @@ def test_all_operations_match_the_numpy_weights(device, kname):
 
 @pytest.mark.parametrize("device", DEVICES)
 def test_covering_mesh_exactness_and_directions(device):
-    from .test_value import _tiling
-    tris = _tiling(F(2), 2)
+    from .conftest import tiling
+    tris = tiling(F(2), 2)
     V = np.array(sorted({(float(a), float(b)) for T in tris for a, b in T}))
     idx = {tuple(v): i for i, v in enumerate(V)}
     E = np.array([[idx[(float(a), float(b))] for a, b in T] for T in tris])

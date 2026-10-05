@@ -8,7 +8,8 @@ import numpy as np, mpmath as mp
 from fractions import Fraction as F
 from edgebound.edge import kernels, np2d, geometry as G
 from edgebound.edge.core import GUARD, block_grad
-from edgebound.q2_conditioning import terms, ref_coeffs, POLY
+from edgebound.edge.kernels import power_terms as terms, power_monomials as ref_coeffs
+POLY = [(0, 0), (1, 0), (1, 1), (0, 1)]
 
 # ---- (1)
 for fam, c2 in (("w2", 7.0), ("w4", 9.0)):

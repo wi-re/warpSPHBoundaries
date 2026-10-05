@@ -1,6 +1,7 @@
 import sys; sys.path.insert(0,"python")
 import math, numpy as np, torch, time
-from edgebound.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig, triangle_distance
+from edgebound.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig
+from edgebound.sim.cases import triangle_distance
 from edgebound.sim.dfsph2d import domain_scene
 from edgebound.scene.scene import Body, Scene, SurfaceRep
 dev="cuda:0"; dp=0.02; g=9.81; L,Ht,Hw=1.6,1.0,0.5; c0=20*math.sqrt(g*Hw); bed=0.0

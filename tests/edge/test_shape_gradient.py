@@ -1,7 +1,6 @@
 """Shape derivative (vertex gradient): edge-local analytic adjoint vs 40+ digit finite differences of the exact stage 1."""
 from fractions import Fraction as F
 
-import mpmath as mp
 import numpy as np
 import pytest
 

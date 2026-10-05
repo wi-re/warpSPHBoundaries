@@ -20,7 +20,6 @@ import math
 
 import numpy as np
 import pytest
-import torch
 import warp as wp
 
 from edgebound.scene.scene import Body, ImplicitRep, Scene, SurfaceRep, VolumeRep

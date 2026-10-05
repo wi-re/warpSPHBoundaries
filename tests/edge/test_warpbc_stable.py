@@ -29,7 +29,6 @@ Tolerances (fixed in the WORK-004 T4.1 spec, stated BEFORE looking at the result
   (f)  finiteness: the z == 0 (point on an edge's chord line) and |z| = 1e-9 (a hair off it) pairs are finite for
        w4p5 through the stable route (no NaN / inf).
 """
-import math
 from fractions import Fraction as F
 
 import mpmath as mp

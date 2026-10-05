@@ -9,7 +9,6 @@ import torch
 import warp as wp
 
 from edgebound.sim import cases, deltasph2d as D
-from edgebound.sim.dfsph2d import domain_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64

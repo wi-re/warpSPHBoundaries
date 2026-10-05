@@ -6,11 +6,11 @@ import pytest
 
 import edgebound as eb
 from edgebound.edge import fem
-from edgebound.edge.kernels import disk_moment, kernel as get_kernel, pderiv, peval
+from edgebound.edge.kernels import disk_moment, kernel as get_kernel, pderiv
 from edgebound.edge.mpq import mpq
 
 from .conftest import KERNELS, rand_point, rand_triangle
-from .test_value import _tiling
+from .conftest import tiling
 
 TOL = mp.mpf(10) ** -30
 T0 = [(F(-3, 10), F(-1, 5)), (F(3, 5), F(-1, 10)), (F(1, 10), F(7, 10))]
@@ -46,7 +46,7 @@ def test_1_partition_of_unity(name, p, rng):
         T, x = rand_triangle(rng), rand_point(rng)
         w = fem.weights(T, x, name, p)
         assert abs(sum(w) - eb.value(T, x, name)) < TOL
-    tot = sum(sum(fem.weights(Tt, (F(1, 7), F(-1, 5)), name, p)) for Tt in _tiling(F(2), 2))
+    tot = sum(sum(fem.weights(Tt, (F(1, 7), F(-1, 5)), name, p)) for Tt in tiling(F(2), 2))
     assert abs(tot - 1) < mp.mpf(10) ** -33
 
 
@@ -55,7 +55,7 @@ def test_1_partition_of_unity(name, p, rng):
 def test_2_polynomial_reproduction(name, p, rng):
     A = trunc(A3, p)
     # (a) covering mesh vs exact rational disk integral
-    tris = _tiling(F(2), 2)
+    tris = tiling(F(2), 2)
     x = (F(1, 7), F(-1, 5))
     tot = sum(fem.field_integral(Tt, x, name, p, fem.nodal_values(Tt, p, A)) for Tt in tris)
     assert abs(tot - mpq(disk_ref(name, A, x))) < mp.mpf(10) ** -32
@@ -73,7 +73,7 @@ def test_3_gradient_reproduction(name, p, rng):
     A = trunc(A3, p)
     dAx, dAy = fem.poly_grad(A)
     # covering mesh: int A grad_x W = int grad A W  (exact, rational)
-    tris = _tiling(F(2), 2)
+    tris = tiling(F(2), 2)
     x = (F(1, 7), F(-1, 5))
     gx = gy = mp.mpf(0)
     for Tt in tris:
@@ -137,7 +137,7 @@ def test_6_degree_exceeded_error_order():
     for p in (1, 2):
         errs = []
         for n in (2, 4, 8):
-            tris = _tiling(F(2), n)
+            tris = tiling(F(2), n)
             # nodal values of the degree-3 (or 2) field, interpolated at degree p (cannot be represented exactly)
             Afull = trunc(A, 3)
             tot = sum(fem.field_integral(Tt, x, "w4", p, fem.nodal_values(Tt, p, Afull)) for Tt in tris)

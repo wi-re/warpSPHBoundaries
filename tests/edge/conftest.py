@@ -35,3 +35,19 @@ def rand_point(rng, scale=1, den=1000):
 @pytest.fixture
 def rng():
     return random.Random(20261001)
+
+def big_triangle(d):
+    """x = origin; the solid is the half plane {y > d} (clipped far away by a huge triangle)."""
+    return [(F(-40), d), (F(40), d), (F(0), F(80))]
+
+
+def tiling(a, n):
+    """square [-a, a]^2 split into 2 n^2 triangles (CCW)."""
+    tris = []
+    xs = [-a + 2 * a * F(i, n) for i in range(n + 1)]
+    for i in range(n):
+        for j in range(n):
+            p00, p10, p01, p11 = (xs[i], xs[j]), (xs[i + 1], xs[j]), (xs[i], xs[j + 1]), (xs[i + 1], xs[j + 1])
+            tris.append([p00, p10, p11])
+            tris.append([p00, p11, p01])
+    return tris

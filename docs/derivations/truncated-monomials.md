@@ -73,7 +73,7 @@ sector `θ R^{n+2}/(n+2)` when the opposite edge lies outside `R`.
   evaluating the polynomial parts in float64 costs ≈ 1e-14 absolute (measured, see
   `../backends-and-verification.md`). Use exact combined weights (indicator/atan coefficients are
   exact rationals) and, if needed, a Bernstein/`(1−q)`-form for the polynomial edge terms in float32.
-- **`monomial_edge_forms.py` has a bug:** its cubic-spline term list uses `−4σ(½−q)³` for the
+- **`scripts/derivation_checks/monomial_edge_forms.py` has a bug:** its cubic-spline term list uses `−4σ(½−q)³` for the
   `R = ½` block, but `W = σ[2(1−q)³ − 8(½−q)³]`, so the coefficient must be `−8σ` (equivalently
   `−4 C2`). With `−4σ` the kernel at `q = 0` is `1.5σ` instead of `σ`. The script was never
   run to completion (its reference timed out), so this went unnoticed. The new
