@@ -28,10 +28,13 @@ import torch
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
 from ..scene.cone_area import cone_area_scene
+from ..scene.boundaryOps import kernelName
 from ..scene.cover import cover_vector_scene
+from ..scene.fused import FusedWall, WallOutput
+from ..edge.warpfused import FusedGroup
 from ..scene.scene import BodyField, Scene, sceneOperation
-from ..scene.tensile import tensile_vector_scene
-from ..scene.viscosity import lap_lambda_scene
+from ..scene.tensile import tensile_factor, tensile_vector_scene
+from ..scene.viscosity import lap_factor, lap_lambda_scene
 from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
@@ -69,6 +72,7 @@ class DeltaSPHConfig:
     noPen: str = "off"                  # 'impulse': once per step, closing particles within dp/4 of a wall get v_n <- v_n (1 - f(d)), f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) (warpSPH mDBC no-penetration, 'impulse' placement)
     wallViscosity: bool = True          # wall term of the alpha-viscosity (free-slip mirror), form: wallViscosityForm
     wallViscosityForm: str = "laplacian"   # "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples) | "noslip": no-slip wall (v_w = body velocity): Chiron-style flux term -2 nu_eff (v - v_w) |G| / (rho d), nu_eff = alpha c0 H/(8 xi), d = max(distance to the wall, 0.25 dx)
+    fusedWall: bool = True              # step 3 of docs/plan-wall-evaluation.md: lam, G, Cov, A, the cover vector, the wall Laplacian and the tensile term of one position set from ONE fused kernel launch family (scene/fused.py); surface-loop walls with one support only, else the sceneOperation path is used
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
     barecascoThreshold: float = math.pi / 3
@@ -100,6 +104,7 @@ class DeltaSPH2D:
         self.surface = torch.zeros(n, dtype=torch.bool, device=device)
         self.surfaceDilated = self.surface
         self.history = []
+        self._fgroups = None                                   # (FusedGroup tuple, {output role: group index}, config key) of the fused wall evaluation
         self._wallCache = None                                 # (x, body poses, adjacency, pair moments, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
 
     # ---------------------------------------------------------------------------------------------------------------- helpers
@@ -123,20 +128,53 @@ class DeltaSPH2D:
         ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
         poses = [(b.center.clone(), float(b.angle)) for b in self.scene.bodies]
         c = self._wallCache
-        if c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[6], self.Hvec) and torch.equal(c[7], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)):
+        fused = self.cfg.fusedWall and FusedWall.supported(self.scene)
+        if c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[6], self.Hvec) and torch.equal(c[7], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)) and isinstance(c[2], FusedWall) == fused and (not fused or c[2].key == self._fused_key()):
             adj, pm, lam, G = c[2], c[3], c[4], c[5]            # same positions, same poses: lam and G do not depend on the densities or the gravity
+        elif fused and bool((self.Hvec == self.H).all()):
+            adj = self._fused_state(ps)
+            pm, lam, G = None, self.cfg.wallMass * adj.out["lam"], self.cfg.wallMass * adj.out["G"]
+            self._wallCache = (x.clone(), poses, adj, pm, lam, G, self.Hvec.clone(), self.kinds.clone())
         else:
             adj = self.scene.adjacency(ps, self._props(WarpOperation.Density))
             pm = self.scene.precompute(adj, self._props(WarpOperation.Density))
             lam = self._wall_op(ps, pm, WarpOperation.Density, BodyField(rho=1.0))
             G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
             self._wallCache = (x.clone(), poses, adj, pm, lam, G, self.Hvec.clone(), self.kinds.clone())
+        if isinstance(adj, FusedWall):
+            a1 = torch.stack([self.cfg.rho0 * (self.g[None] - b.accelerationAt(x)) for b in self.scene.bodies])
+            return lam, G, self.cfg.wallMass * adj.evaluate((WallOutput("A", 0, "a1g1"),), a1=a1)["A"], adj
         flds = []
         for b in self.scene.bodies:
             a1 = self.cfg.rho0 * (self.g[None] - b.accelerationAt(x))
             flds.append(BodyField(torch.zeros(len(x), dtype=F64, device=self.dev), a1, rho=1.0, perQuery=True))
         A = self._wall_op(ps, pm, WarpOperation.Gradient, flds)
         return lam, G, A, adj
+
+    def _fused_key(self):
+        return (self.cfg.kernel, bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian"))
+
+    def _fused_state(self, ps):
+        """the fused wall evaluation at the positions of `ps`: adjacency, one stage-1 launch family for the kernels the step needs, and every static output of this position set in `.out`
+        (lam, G, Cov of the kernel, `cover` = g0 of the degree-1 cone kernel per body, `lap` = sum(2 lam - tr g1) of lw, `tens` = g0 of wp5, per body, raw: factors applied by the consumers)."""
+        key = self._fused_key()
+        if self._fgroups is None or self._fgroups[2] != key:          # the layout follows the config flags (tests and sweeps change them on a live solver)
+            name = kernelName(self.cfg.kernel)
+            groups, idx = [FusedGroup(name), FusedGroup("cone", (3, 4))], {"w": 0, "cone": 1}
+            if self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian":
+                fam = self._family(); lap_factor(1.0, fam)                       # registers the kernel
+                idx["lap"] = len(groups); groups.append(FusedGroup("l" + fam))
+            fam = self._family(); tensile_factor(1.0, fam)                       # `shift` may be called whatever cfg.shifting says: the tensile group (4 terms) is always there
+            idx["tens"] = len(groups); groups.append(FusedGroup(fam + "p5", (3, 4)))
+            self._fgroups = (tuple(groups), idx, key)
+        groups, idx, _ = self._fgroups
+        fw = FusedWall(self.scene, self.scene.adjacency(ps, self._props(WarpOperation.Density)), groups)
+        outs = [WallOutput("lam", 0, "lam"), WallOutput("G", 0, "g0"), WallOutput("Cov", 0, "cov"), WallOutput("cover", idx["cone"], "g0")]
+        if "lap" in idx: outs.append(WallOutput("lap", idx["lap"], "lap"))
+        if "tens" in idx: outs.append(WallOutput("tens", idx["tens"], "g0"))
+        fw.out = fw.evaluate(outs)
+        fw.key = key
+        return fw
 
     def _wall_excess(self, A, G, pp):
         """p_b >= 0 (dfsph-validation.md s.7): the hydrostatic term mu int (a1.y) grad W is an effective wall pressure offset q (times mu grad lambda); the effective wall pressure p_i + q is clamped
@@ -177,7 +215,11 @@ class DeltaSPH2D:
         C = self._sum(unit, ii)
         nw = cfg.wallMass / self.dx ** 2
         if len(near):
-            C = C.index_add(0, near, nw * cover_vector_scene(self.scene, x[near], self.H, None if adj is None else adj.restrict(near)))          # grad int K = int unit(x - x'), no minus
+            if isinstance(adj, FusedWall):
+                cover = -(math.pi * self.H ** 3 / 3) * adj.out["cover"].sum(0)[near]                 # grad int K over the solid = -(pi H^3 / 3) g0 of the cone kernel (cover.cover_vector_scene)
+            else:
+                cover = cover_vector_scene(self.scene, x[near], self.H, None if adj is None else adj.restrict(near))
+            C = C.index_add(0, near, nw * cover)          # grad int K = int unit(x - x'), no minus
         norm = C.norm(dim=1)
         c = C / norm.clamp(min=1e-300)[:, None]
         cosang = -((unit) * c[ii]).sum(1)                                                            # -n_ij . c
@@ -256,7 +298,7 @@ class DeltaSPH2D:
         if cfg.viscosity and cfg.wallViscosity and len(near):
             fac = cfg.alpha * cfg.c0 * H / self.xi
             if cfg.wallViscosityForm == "laplacian":
-                dl = lap_lambda_scene(self.scene, x[near], H, self._family(), adj.restrict(near))             # [B, Q]  int_solid lap W dA', per body
+                dl = lap_factor(H, self._family()) * adj.out["lap"][:, near] if isinstance(adj, FusedWall) else lap_lambda_scene(self.scene, x[near], H, self._family(), adj.restrict(near))             # [B, Q]  int_solid lap W dA', per body
             elif cfg.wallViscosityForm == "pairwise":
                 ins, u, rk, dr, dphi = self._solid_samples(x, near)                                         # the polar grid exists only for this form
                 wprime = self.dW(rk, H) * dr                                                          # W'(r) dr  [R] (negative)
@@ -296,11 +338,15 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None:
             ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
-            adj = self.scene.adjacency(ps, self._props(WarpOperation.Density))
-            pm = self.scene.precompute(adj, self._props(WarpOperation.Density))
-            lam = self._wall_op(ps, pm, WarpOperation.Density, BodyField(rho=1.0))
-            G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
-            Mw = self._wall_op(ps, pm, WarpOperation.Covariance, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev))).reshape(self.nb, len(x), 2, 2)
+            if self.cfg.fusedWall and FusedWall.supported(self.scene) and bool((self.Hvec == self.H).all()):
+                adj = self._fused_state(ps)
+                lam, G, Mw = self.cfg.wallMass * adj.out["lam"], self.cfg.wallMass * adj.out["G"], self.cfg.wallMass * adj.out["Cov"]
+            else:
+                adj = self.scene.adjacency(ps, self._props(WarpOperation.Density))
+                pm = self.scene.precompute(adj, self._props(WarpOperation.Density))
+                lam = self._wall_op(ps, pm, WarpOperation.Density, BodyField(rho=1.0))
+                G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
+                Mw = self._wall_op(ps, pm, WarpOperation.Covariance, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev))).reshape(self.nb, len(x), 2, 2)
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
         surface = self._detect_surface(x, i, j, r, lam, adj)
         F = self._sum(surface[j].to(F64), i) > 0.5
@@ -327,7 +373,7 @@ class DeltaSPH2D:
             wall = st["G"].sum(0)
             near = st["near"]
             if len(near):
-                T = tensile_vector_scene(self.scene, x[near], H, self._family(), st["adj"].restrict(near))
+                T = tensile_factor(H, self._family()) * st["adj"].out["tens"].sum(0)[near] if isinstance(st["adj"], FusedWall) else tensile_vector_scene(self.scene, x[near], H, self._family(), st["adj"].restrict(near))
                 wall = wall.index_add(0, near, cfg.wallMass * cfg.shiftR / w0 ** 4 * T)
             raw = raw + (cfg.rho0 / (4.0 * rho))[:, None] * wall
         vmax = float(v.norm(dim=1).max())

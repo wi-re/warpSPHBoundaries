@@ -25,7 +25,7 @@ from edgebound.scene.scene import Scene
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
 
-CFG = lambda device: DeltaSPHConfig(noPen="impulse", shifting=True)
+CFG = lambda device, fused=True: DeltaSPHConfig(noPen="impulse", shifting=True, fusedWall=fused)
 
 
 def _disable_cache(sim):
@@ -41,9 +41,11 @@ def _disable_cache(sim):
 
 
 def _counting_adjacency():
-    """a (counter, restore) pair: counter[0] counts Scene.adjacency calls, counter[1] Scene.precompute calls (class-level, restored by calling restore())."""
-    counter = [0, 0]
-    orig_a, orig_p = Scene.adjacency, Scene.precompute
+    """a (counter, restore) pair: counter[0] counts Scene.adjacency calls, counter[1] Scene.precompute calls, counter[2] the stage-1 launches of the fused wall evaluation
+    (`FusedWall` constructions) (class-level, restored by calling restore())."""
+    from edgebound.scene import fused as F
+    counter = [0, 0, 0]
+    orig_a, orig_p, orig_f = Scene.adjacency, Scene.precompute, F.FusedWall.__init__
 
     def counting_a(self, *a, **k):
         counter[0] += 1
@@ -53,20 +55,26 @@ def _counting_adjacency():
         counter[1] += 1
         return orig_p(self, *a, **k)
 
-    Scene.adjacency, Scene.precompute = counting_a, counting_p
+    def counting_f(self, *a, **k):
+        counter[2] += 1
+        return orig_f(self, *a, **k)
+
+    Scene.adjacency, Scene.precompute, F.FusedWall.__init__ = counting_a, counting_p, counting_f
 
     def restore():
-        Scene.adjacency, Scene.precompute = orig_a, orig_p
+        Scene.adjacency, Scene.precompute, F.FusedWall.__init__ = orig_a, orig_p, orig_f
 
     return counter, restore
 
 
 @pytest.mark.parametrize("device", DEVICES)
-def test_reuse_saves_one_adjacency_per_step(device):
-    """(e) over 4 steps after a warm-up step: exactly 3 adjacency and 9 precompute calls per step with the cache, 4 and 10 with it disabled
-    (host-call counts, deterministic)."""
-    # with the cache (default)
-    sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device, cfg=CFG(device))
+@pytest.mark.parametrize("fused", [True, False])
+def test_reuse_saves_one_adjacency_per_step(device, fused):
+    """(e) over 4 steps after a warm-up step, host-call counts (deterministic): per step with the cache / with it disabled
+      fused wall evaluation (default):  3 adjacency, 3 stage-1 launch families (FusedWall), 0 precompute  /  4, 4, 0
+      sceneOperation path (fusedWall=False):  3 adjacency, 0, 9 precompute  /  4, 0, 10."""
+    expect_cache, expect_nocache = ((3.0, 3.0, 0.0), (4.0, 4.0, 0.0)) if fused else ((3.0, 0.0, 9.0), (4.0, 0.0, 10.0))
+    sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device, cfg=CFG(device, fused))
     sim.step()                                                          # warm-up
     counter, restore = _counting_adjacency()
     try:
@@ -74,11 +82,10 @@ def test_reuse_saves_one_adjacency_per_step(device):
             sim.step()
     finally:
         restore()
-    per_step, per_step_pc = counter[0] / 4, counter[1] / 4
-    assert (per_step, per_step_pc) == (3.0, 9.0), (per_step, per_step_pc)
-    print(f"(e) with cache: {counter[0]} adjacency, {counter[1]} precompute over 4 steps = {per_step:.2f} / {per_step_pc:.2f} per step (== 3 / 9)")
-    # with the cache disabled
-    sim2, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device, cfg=CFG(device))
+    got = (counter[0] / 4, counter[2] / 4, counter[1] / 4)
+    assert got == expect_cache, got
+    print(f"(e) fused={fused} with cache: adjacency / fused / precompute per step = {got} (== {expect_cache})")
+    sim2, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device, cfg=CFG(device, fused))
     sim2.step()                                                         # warm-up
     orig_wd = _disable_cache(sim2)
     counter2, restore2 = _counting_adjacency()
@@ -88,9 +95,9 @@ def test_reuse_saves_one_adjacency_per_step(device):
     finally:
         restore2()
         sim2._wall_state = orig_wd
-    per_step2, per_step2_pc = counter2[0] / 4, counter2[1] / 4
-    assert (per_step2, per_step2_pc) == (4.0, 10.0), (per_step2, per_step2_pc)
-    print(f"(e) without cache: {counter2[0]} adjacency, {counter2[1]} precompute over 4 steps = {per_step2:.2f} / {per_step2_pc:.2f} per step (== 4 / 10)")
+    got2 = (counter2[0] / 4, counter2[2] / 4, counter2[1] / 4)
+    assert got2 == expect_nocache, got2
+    print(f"(e) fused={fused} without cache: {got2} (== {expect_nocache})")
 
 
 @pytest.mark.parametrize("device", DEVICES)

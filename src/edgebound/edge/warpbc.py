@@ -530,7 +530,7 @@ def _clenshaw(cc: wp.array(dtype=real), c0: int, c1: int, x: real) -> real:
 @wp.func
 def _cheb_integral(a: int, b: int, lo: real, hi: real, z: real, R: real, n0: real, n1: real, t0: real, t1: real,
                    cc: wp.array(dtype=real), c0: int, c1: int, gx: wp.array(dtype=real), gw: wp.array(dtype=real),
-                   nn: int, panels: int) -> real:
+                   nn: int, panels: int, gofs: int) -> real:
     """int_lo^hi y0^a y1^b P(r) ds  (y = z n + s t, r = sqrt(s^2 + z^2), P = the Chebyshev series cc[c0:c1] on [0, R]) by Gauss-Legendre
     (nn nodes per panel) on the dyadic panels of the chord around the foot point s = 0: per side, breakpoints 0, |z|, 2|z|, ..., 2^(panels-1)|z|
     (clipped to the side's chord end, last panel up to the end; empty panels skipped)."""
@@ -557,7 +557,7 @@ def _cheb_integral(a: int, b: int, lo: real, hi: real, z: real, R: real, n0: rea
                 half = (pb - pa) / real(2.0)
                 mid = (pa + pb) / real(2.0)
                 for k in range(nn):
-                    s = sg * (mid + half * gx[k])
+                    s = sg * (mid + half * gx[gofs + k])
                     r = wp.sqrt(s * s + z * z)
                     xx = wp.clamp(real(2.0) * r / R - real(1.0), real(-1.0), real(1.0))
                     y0 = z * n0 + s * t0
@@ -567,7 +567,7 @@ def _cheb_integral(a: int, b: int, lo: real, hi: real, z: real, R: real, n0: rea
                         m = m * y0
                     for _ in range(b):
                         m = m * y1
-                    tot += half * gw[k] * m * _clenshaw(cc, c0, c1, xx)
+                    tot += half * gw[gofs + k] * m * _clenshaw(cc, c0, c1, xx)
     return tot
 
 
@@ -677,7 +677,7 @@ def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dty
                     ni = n0
                     if e_i[t] == 1:
                         ni = n1
-                    ch[e_ch[t]] = ch[e_ch[t]] + ni * _cheb_integral(e_a[t], e_b[t], lo, hi, z, R, n0, n1, t0, t1, cc, e_c0[t], e_c1[t], gx, gw, nn, panels)
+                    ch[e_ch[t]] = ch[e_ch[t]] + ni * _cheb_integral(e_a[t], e_b[t], lo, hi, z, R, n0, n1, t0, t1, cc, e_c0[t], e_c1[t], gx, gw, nn, panels, 0)
     for t in range(n_v):
         if (v_var[t] != 1) and (v_gate[t] != 2):
             R = radii[v_R[t]]
@@ -686,7 +686,7 @@ def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dty
                 lo = wp.max(s0, -L)
                 hi = wp.min(s1, L)
                 if lo < hi:
-                    poly = _cheb_integral(0, 0, lo, hi, z, R, n0, n1, t0, t1, cc, v_c0[t], v_c1[t], gx, gw, nn, panels)
+                    poly = _cheb_integral(0, 0, lo, hi, z, R, n0, n1, t0, t1, cc, v_c0[t], v_c1[t], gx, gw, nn, panels, 0)
                     ch[v_ch[t]] = ch[v_ch[t]] + z * poly - v_mR[t] * _dangle(z, lo, hi)
     for k in range(9):
         cout[tid, k] = inv_pi * ch[k]
@@ -741,7 +741,7 @@ def _edge_terms_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=
                     ni = n0
                     if e_i[t] == 1:
                         ni = n1
-                    ta[tid] = ni * _cheb_integral(e_a[t], e_b[t], lo, hi, z, R, n0, n1, t0, t1, cc, e_c0[t], e_c1[t], gx, gw, nn, panels)
+                    ta[tid] = ni * _cheb_integral(e_a[t], e_b[t], lo, hi, z, R, n0, n1, t0, t1, cc, e_c0[t], e_c1[t], gx, gw, nn, panels, 0)
     else:
         u = t - n_e
         if (v_var[u] != 1) and (v_gate[u] != 2):
@@ -751,7 +751,7 @@ def _edge_terms_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=
                 lo = wp.max(s0, -L)
                 hi = wp.min(s1, L)
                 if lo < hi:
-                    poly = _cheb_integral(0, 0, lo, hi, z, R, n0, n1, t0, t1, cc, v_c0[u], v_c1[u], gx, gw, nn, panels)
+                    poly = _cheb_integral(0, 0, lo, hi, z, R, n0, n1, t0, t1, cc, v_c0[u], v_c1[u], gx, gw, nn, panels, 0)
                     ta[tid] = z * poly
                     tb[tid] = v_mR[u] * _dangle(z, lo, hi)
 

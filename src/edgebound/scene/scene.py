@@ -118,11 +118,22 @@ class SurfaceTopology:
     e: torch.Tensor                  # [P] int32 edge
     supMax: float                    # largest support of the rows when the pairs were found (sizes the cell list of the indicator)
     _ind: Optional[torch.Tensor] = None        # [rows] winding number + background, computed on first use
+    _csr: Optional[tuple] = None               # (pair order sorted by row, row offsets [rows + 1]): the fused contraction sums the pairs of a row in a fixed order
 
     def indicator(self, rep, lpos):
         if self._ind is None:
             self._ind = rep.indicatorFast(lpos, self.supMax)
         return self._ind
+
+    def csr(self, rows):
+        """(perm [P] int32, start [rows + 1] int32): the pair ids sorted by row (stable) and the first sorted position of every row; computed once per topology."""
+        if self._csr is None:
+            q = self.qi.long()
+            order = torch.sort(q, stable=True).indices
+            start = torch.zeros(rows + 1, dtype=torch.long, device=q.device)
+            start[1:] = torch.cumsum(torch.bincount(q, minlength=rows), 0)
+            self._csr = (order.to(torch.int32), start.to(torch.int32))
+        return self._csr
 
     def restrict(self, rowmap, rows):
         """the topology of the rows `rows` (sorted, into the candidate list) with new row numbers `rowmap` (-1 for dropped rows)."""
