@@ -112,6 +112,7 @@ class DeltaSPH2D:
         self.surface = torch.zeros(n, dtype=torch.bool, device=device)
         self.surfaceDilated = self.surface
         self.history = []
+        self._wallCache = None                                 # (x, body poses, adjacency, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
 
     # ---------------------------------------------------------------------------------------------------------------- helpers
     def _sum(self, vals, i):
@@ -128,10 +129,15 @@ class DeltaSPH2D:
     def _wall_data(self, x, rho):
         """per-body wall integrals at positions x: lam [B,N], G = mu grad lambda [B,N,2], A = mu int (a1.y) grad W [B,N,2] with a1 = rho0 (g - a_wall)."""
         ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
-        adj = self.scene.buildAdjacency(ps, self._props(WarpOperation.Density))
-        one = BodyField(torch.tensor(1.0, dtype=F64, device=self.dev))
-        lam = self._wall_op(ps, adj, WarpOperation.Density, BodyField(rho=1.0))
-        G = self._wall_op(ps, adj, WarpOperation.Gradient, one)
+        poses = [(b.center.clone(), float(b.angle)) for b in self.scene.bodies]
+        c = self._wallCache
+        if c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[5], self.Hvec) and torch.equal(c[6], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)):
+            adj, lam, G = c[2], c[3], c[4]                      # same positions, same poses: lam and G do not depend on the densities or the gravity
+        else:
+            adj = self.scene.buildAdjacency(ps, self._props(WarpOperation.Density))
+            lam = self._wall_op(ps, adj, WarpOperation.Density, BodyField(rho=1.0))
+            G = self._wall_op(ps, adj, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
+            self._wallCache = (x.clone(), poses, adj, lam, G, self.Hvec.clone(), self.kinds.clone())
         flds = []
         for b in self.scene.bodies:
             a1 = self.cfg.rho0 * (self.g[None] - b.accelerationAt(x))
