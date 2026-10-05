@@ -1,4 +1,4 @@
-# why a single adjacency "breaks": (1) it stores kernel moments, the operation only contracts them; (2) cost split of buildAdjacency; (3) multi-kernel evaluation on one pair list
+# why a single adjacency "breaks": (1) it stores kernel moments, the operation only contracts them; (2) cost split of pairMoments; (3) multi-kernel evaluation on one pair list
 import time, torch
 from edgebound.sim.cases import marrone_dambreak
 from edgebound.scene.viscosity import lap_lambda_scene
@@ -19,13 +19,13 @@ def t(f, n=15):
     f(); torch.cuda.synchronize(); t0=time.time()
     for _ in range(n): f()
     torch.cuda.synchronize(); return (time.time()-t0)/n*1e3
-adj = sim.scene.buildAdjacency(ps, P("cone"))
+adj = sim.scene.pairMoments(ps, P("cone"))
 print("adjacency.kernel =", adj.kernel)
 a = sceneOperation(ps, P("lw2"), sim.scene, adj, None, F, perBody=True)          # lw2 requested, cone adjacency
 b = sceneOperation(ps, P("cone"), sim.scene, None, None, F, perBody=True)        # cone, own adjacency
 c = sceneOperation(ps, P("lw2"), sim.scene, None, None, F, perBody=True)         # lw2, own adjacency
 print("(1) 'lw2 with cone adjacency' vs 'cone with its own adjacency': max|diff| = %.2e (scale %.3e);  vs 'lw2 own': %.2e" % (float((a-b).abs().max()), float(b.abs().max()), float((a-c).abs().max())))
-# (2) split of buildAdjacency for the surface rep
+# (2) split of pairMoments for the surface rep
 body = sim.scene.bodies[0]; rep = body.reps[0]
 pos, sup = ps.positions, ps.supports
 cand = torch.arange(len(pos), device=pos.device)
@@ -42,4 +42,4 @@ print("    kernel-independent  pair list (cell list + segment-distance cull): %.
 print("    kernel-independent  indicator (indicatorFast): %.2f ms" % t(lambda: rep.indicatorFast(lpos, float(sup.max()))))
 for k in ("cone", "lw2", "w2", "w2p5"):
     print("    kernel-DEPENDENT    edge_channels(%-5s): %.2f ms" % (k, t(lambda: warpbc.edge_channels(qi, e, lpos, sup, rep.vertices, rep.edges, k, device=str(pos.device)))))
-print("    whole buildAdjacency cone / w2p5: %.2f / %.2f ms" % (t(lambda: sim.scene.buildAdjacency(ps, P("cone"))), t(lambda: sim.scene.buildAdjacency(ps, P("w2p5")))))
+print("    whole pairMoments cone / w2p5: %.2f / %.2f ms" % (t(lambda: sim.scene.pairMoments(ps, P("cone"))), t(lambda: sim.scene.pairMoments(ps, P("w2p5")))))

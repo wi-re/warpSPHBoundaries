@@ -176,7 +176,7 @@ class DFSPH2D:
         self.forceFriction = torch.zeros((nb, 2), dtype=F64, device=device)    # friction (boundary viscosity) part
         self.history = []                                                       # per step: dict(t, dt, pressure [B,2], friction [B,2], balance)
         self.balance = 0.0
-        self._adjNext = None
+        self._pmNext = None
         self.stats = {}
         self.kinds = torch.zeros(n, dtype=torch.int32, device=device)
 
@@ -191,8 +191,8 @@ class DFSPH2D:
         self.gW = torch.where((r > 1e-14 * hij)[:, None], dwendland2(r, hij)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         self.ps = self._particleState(torch.ones_like(self.V))
         if self.scene is not None:
-            self.adj = self._adjNext if self._adjNext is not None else self.scene.buildAdjacency(self.ps, self._props(WarpOperation.Density))
-            self._adjNext = None
+            self.pm = self._pmNext if self._pmNext is not None else self.scene.pairMoments(self.ps, self._props(WarpOperation.Density))
+            self._pmNext = None
             self.wallDiv = self._wall_div() if self._moving() else None
             self.lam = self.cfg.wallMass * self._boundary(WarpOperation.Density, BodyField(rho=1.0))
             self.gkb = self.cfg.wallMass * self._boundary(WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)), perBody=True)    # [B,N,2] mu int grad W per body
@@ -235,10 +235,10 @@ class DFSPH2D:
     def _props(self, op, mode=GradientScheme.Naive):
         return OperationProperties(kernel=self.cfg.kernel, operation=op, gradientMode=mode, operationMode=OperationDirection.BoundaryToFluid)
 
-    def _boundary(self, op, fld, mode=GradientScheme.Naive, queryValues=None, rho=None, perBody=False, adj=None, ps=None):
+    def _boundary(self, op, fld, mode=GradientScheme.Naive, queryValues=None, rho=None, perBody=False, pm=None, ps=None):
         ps = ps if ps is not None else (self.ps if rho is None else self._particleState(rho))
         flds = fld if isinstance(fld, list) else [fld] * len(self.scene.bodies)
-        return sceneOperation(ps, self._props(op, mode), self.scene, adj or self.adj, queryValues, flds, perBody=perBody)
+        return sceneOperation(ps, self._props(op, mode), self.scene, pm or self.pm, queryValues, flds, perBody=perBody)
 
     def _moving(self):
         return self.scene is not None and any(float(b.angularVelocity) != 0.0 or float(b.linearVelocity.norm()) != 0.0 for b in self.scene.bodies)
@@ -407,9 +407,9 @@ class DFSPH2D:
         # boundary friction at the new positions, relative to the wall velocity (per body)
         if self.scene is not None and cfg.boundaryFriction > 0:
             self.ps = self._particleState(torch.ones_like(self.V))
-            adj = self.scene.buildAdjacency(self.ps, self._props(WarpOperation.Density))
-            lam = cfg.wallMass * self._boundary(WarpOperation.Density, BodyField(rho=1.0), perBody=True, adj=adj, ps=self.ps)           # [B,N]
-            gk = cfg.wallMass * self._boundary(WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)), perBody=True, adj=adj, ps=self.ps)
+            pm = self.scene.pairMoments(self.ps, self._props(WarpOperation.Density))
+            lam = cfg.wallMass * self._boundary(WarpOperation.Density, BodyField(rho=1.0), perBody=True, pm=pm, ps=self.ps)           # [B,N]
+            gk = cfg.wallMass * self._boundary(WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)), perBody=True, pm=pm, ps=self.ps)
             dv = torch.zeros_like(self.v)
             for bi, b in enumerate(self.scene.bodies):
                 moving = float(b.angularVelocity) != 0.0 or float(b.linearVelocity.norm()) != 0.0
@@ -417,7 +417,7 @@ class DFSPH2D:
                 if moving:
                     f = [BodyField(torch.zeros(2, dtype=F64, device=self.dev))] * len(self.scene.bodies)
                     f[bi] = BodyField.rigid(b)
-                    num = self._boundary(WarpOperation.Interpolate, f, perBody=True, adj=adj, ps=self.ps)[bi]
+                    num = self._boundary(WarpOperation.Interpolate, f, perBody=True, pm=pm, ps=self.ps)[bi]
                     ok = lam[bi] > 1e-8 * cfg.wallMass                                 # the ratio is meaningless where lambda is round-off
                     vw = torch.where(ok[:, None], num * cfg.wallMass / lam[bi].clamp(min=1e-300)[:, None], torch.zeros_like(num))
                 nrm = gk[bi].norm(dim=1, keepdim=True)
@@ -429,7 +429,7 @@ class DFSPH2D:
                 dv = dv + d
                 self.forceFriction[bi] = -(self.V[:, None] * d).sum(0) / dt            # force of the fluid on body b (omniSPH: + m fac tang / dt)
             self.v = self.v + dv
-            self._adjNext = adj
+            self._pmNext = pm
         # momentum bookkeeping: d(sum m v) = dt (m g - sum F_pressure - sum F_friction), exact up to round-off
         mtot = self.V.sum()
         expected = dt * (mtot * g - self.forcePressure.sum(0) - self.forceFriction.sum(0))

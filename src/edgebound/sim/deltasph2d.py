@@ -100,7 +100,7 @@ class DeltaSPH2D:
         self.surface = torch.zeros(n, dtype=torch.bool, device=device)
         self.surfaceDilated = self.surface
         self.history = []
-        self._wallCache = None                                 # (x, body poses, adjacency, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
+        self._wallCache = None                                 # (x, body poses, adjacency, pair moments, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
 
     # ---------------------------------------------------------------------------------------------------------------- helpers
     def _sum(self, vals, i):
@@ -110,28 +110,33 @@ class DeltaSPH2D:
     def _props(self, op, mode=GradientScheme.Naive):
         return OperationProperties(kernel=self.cfg.kernel, operation=op, gradientMode=mode, operationMode=OperationDirection.BoundaryToFluid)
 
-    def _wall_op(self, ps, adj, op, flds, mode=GradientScheme.Naive):
+    def _wall_op(self, ps, pm, op, flds, mode=GradientScheme.Naive):
         flds = flds if isinstance(flds, list) else [flds] * self.nb
-        return self.cfg.wallMass * sceneOperation(ps, self._props(op, mode), self.scene, adj, None, flds, perBody=True)
+        return self.cfg.wallMass * sceneOperation(ps, self._props(op, mode), self.scene, pm, None, flds, perBody=True)
 
     def _wall_data(self, x, rho):
         """per-body wall integrals at positions x: lam [B,N], G = mu grad lambda [B,N,2], A = mu int (a1.y) grad W [B,N,2] with a1 = rho0 (g - a_wall)."""
+        return self._wall_state(x, rho)[:3]
+
+    def _wall_state(self, x, rho):
+        """`_wall_data` and the wall adjacency at x (the near-wall consumers -- cover, Laplacian, tensile -- take its `restrict` instead of searching again)."""
         ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
         poses = [(b.center.clone(), float(b.angle)) for b in self.scene.bodies]
         c = self._wallCache
-        if c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[5], self.Hvec) and torch.equal(c[6], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)):
-            adj, lam, G = c[2], c[3], c[4]                      # same positions, same poses: lam and G do not depend on the densities or the gravity
+        if c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[6], self.Hvec) and torch.equal(c[7], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)):
+            adj, pm, lam, G = c[2], c[3], c[4], c[5]            # same positions, same poses: lam and G do not depend on the densities or the gravity
         else:
-            adj = self.scene.buildAdjacency(ps, self._props(WarpOperation.Density))
-            lam = self._wall_op(ps, adj, WarpOperation.Density, BodyField(rho=1.0))
-            G = self._wall_op(ps, adj, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
-            self._wallCache = (x.clone(), poses, adj, lam, G, self.Hvec.clone(), self.kinds.clone())
+            adj = self.scene.adjacency(ps, self._props(WarpOperation.Density))
+            pm = self.scene.precompute(adj, self._props(WarpOperation.Density))
+            lam = self._wall_op(ps, pm, WarpOperation.Density, BodyField(rho=1.0))
+            G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
+            self._wallCache = (x.clone(), poses, adj, pm, lam, G, self.Hvec.clone(), self.kinds.clone())
         flds = []
         for b in self.scene.bodies:
             a1 = self.cfg.rho0 * (self.g[None] - b.accelerationAt(x))
             flds.append(BodyField(torch.zeros(len(x), dtype=F64, device=self.dev), a1, rho=1.0, perQuery=True))
-        A = self._wall_op(ps, adj, WarpOperation.Gradient, flds)
-        return lam, G, A
+        A = self._wall_op(ps, pm, WarpOperation.Gradient, flds)
+        return lam, G, A, adj
 
     def _wall_excess(self, A, G, pp):
         """p_b >= 0 (dfsph-validation.md s.7): the hydrostatic term mu int (a1.y) grad W is an effective wall pressure offset q (times mu grad lambda); the effective wall pressure p_i + q is clamped
@@ -159,9 +164,10 @@ class DeltaSPH2D:
         if fam is None:  raise NotImplementedError("exact wall operations: Wendland C2 and C4 only")
         return fam
 
-    def _detect_surface(self, x, i, j, r, lam):
+    def _detect_surface(self, x, i, j, r, lam, adj=None):
         """warpSPH `detectFreeSurfaceBarecasco`: C = sum unit(x_i - x_j) over neighbours (W > 0), c = C/|C|; surface iff no neighbour (j != i) has angle(x_j - x_i, c) <= threshold/2
-        (all neighbours count when C = 0).  Wall: the continuum of wall particles (density mu/dx^2), the exact edge reduction (cover) and closed-form area (cone).  No scene: lam of shape [0, N], near empty, nothing added."""
+        (all neighbours count when C = 0).  Wall: the continuum of wall particles (density mu/dx^2), the exact edge reduction (cover) and closed-form area (cone).  No scene: lam of shape [0, N], near empty, nothing added.
+        `adj`: the wall adjacency at x (the cover vector takes its restriction to the near-wall particles)."""
         cfg = self.cfg
         near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
         nz = i != j
@@ -171,7 +177,7 @@ class DeltaSPH2D:
         C = self._sum(unit, ii)
         nw = cfg.wallMass / self.dx ** 2
         if len(near):
-            C = C.index_add(0, near, nw * cover_vector_scene(self.scene, x[near], self.H))          # grad int K = int unit(x - x'), no minus
+            C = C.index_add(0, near, nw * cover_vector_scene(self.scene, x[near], self.H, None if adj is None else adj.restrict(near)))          # grad int K = int unit(x - x'), no minus
         norm = C.norm(dim=1)
         c = C / norm.clamp(min=1e-300)[:, None]
         cosang = -((unit) * c[ii]).sum(1)                                                            # -n_ij . c
@@ -194,8 +200,9 @@ class DeltaSPH2D:
         d = x[i] - x[j]
         gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))      # grad_i W_ij
         P = cfg.c0 ** 2 * (rho - cfg.rho0)
+        adj = None
         if self.scene is not None:
-            lam, G, A = self._wall_data(x, rho)
+            lam, G, A, adj = self._wall_state(x, rho)
         else:
             lam = torch.zeros((0, len(x)), dtype=F64, device=self.dev)
             G = torch.zeros((0, len(x), 2), dtype=F64, device=self.dev)
@@ -203,7 +210,7 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None:
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
-        self.surface = self._detect_surface(x, i, j, r, lam)
+        self.surface = self._detect_surface(x, i, j, r, lam, adj)
         if cfg.dilateSurface:
             self.surfaceDilated = self._sum(self.surface[j].to(F64), i) > 0.5            # pairs include i = j
         else:
@@ -249,7 +256,7 @@ class DeltaSPH2D:
         if cfg.viscosity and cfg.wallViscosity and len(near):
             fac = cfg.alpha * cfg.c0 * H / self.xi
             if cfg.wallViscosityForm == "laplacian":
-                dl = lap_lambda_scene(self.scene, x[near], H, self._family())                              # [B, Q]  int_solid lap W dA', per body
+                dl = lap_lambda_scene(self.scene, x[near], H, self._family(), adj.restrict(near))             # [B, Q]  int_solid lap W dA', per body
             elif cfg.wallViscosityForm == "pairwise":
                 ins, u, rk, dr, dphi = self._solid_samples(x, near)                                         # the polar grid exists only for this form
                 wprime = self.dW(rk, H) * dr                                                          # W'(r) dr  [R] (negative)
@@ -278,27 +285,28 @@ class DeltaSPH2D:
 
     # ---------------------------------------------------------------------------------------------------------------- particle shifting (delta+) and no-penetration
     def _surface_state(self, x, rho):
-        """pair data, detector and renormalisation matrices at positions x: dict(i, j, r, d, gW, V, lam [B,N], G, near, surface, F (dilated), Mf [N,2,2], Mt [N,2,2])."""
+        """pair data, detector and renormalisation matrices at positions x: dict(i, j, r, d, gW, V, lam [B,N], G, adj (the wall adjacency), near, surface, F (dilated), Mf [N,2,2], Mt [N,2,2])."""
         H = self.H
         i, j, r = neighbor_pairs(x, self.Hvec)
         nz = i != j
         d = x[i] - x[j]
         gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         V = self.m / rho
-        lam, G, Mw = torch.zeros((0, len(x)), dtype=F64, device=self.dev), None, None
+        lam, G, Mw, adj = torch.zeros((0, len(x)), dtype=F64, device=self.dev), None, None, None
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None:
             ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
-            adj = self.scene.buildAdjacency(ps, self._props(WarpOperation.Density))
-            lam = self._wall_op(ps, adj, WarpOperation.Density, BodyField(rho=1.0))
-            G = self._wall_op(ps, adj, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
-            Mw = self._wall_op(ps, adj, WarpOperation.Covariance, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev))).reshape(self.nb, len(x), 2, 2)
+            adj = self.scene.adjacency(ps, self._props(WarpOperation.Density))
+            pm = self.scene.precompute(adj, self._props(WarpOperation.Density))
+            lam = self._wall_op(ps, pm, WarpOperation.Density, BodyField(rho=1.0))
+            G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
+            Mw = self._wall_op(ps, pm, WarpOperation.Covariance, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev))).reshape(self.nb, len(x), 2, 2)
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
-        surface = self._detect_surface(x, i, j, r, lam)
+        surface = self._detect_surface(x, i, j, r, lam, adj)
         F = self._sum(surface[j].to(F64), i) > 0.5
         Mf = torch.zeros((len(x), 2, 2), dtype=F64, device=self.dev).index_add_(0, i, V[j][:, None, None] * (-d)[:, :, None] * gW[:, None, :])
         Mt = Mf + (Mw.sum(0) if Mw is not None else 0.0)
-        return dict(i=i, j=j, r=r, d=d, gW=gW, V=V, lam=lam, G=G, near=near, surface=surface, F=F, Mf=Mf, Mt=Mt)
+        return dict(i=i, j=j, r=r, d=d, gW=gW, V=V, lam=lam, G=G, adj=adj, near=near, surface=surface, F=F, Mf=Mf, Mt=Mt)
 
     def shift(self, dt):
         """delta+ particle shift (warpSPH `solveShifting`, projection 'surfaceNormal', one iteration): raw shift
@@ -319,7 +327,7 @@ class DeltaSPH2D:
             wall = st["G"].sum(0)
             near = st["near"]
             if len(near):
-                T = tensile_vector_scene(self.scene, x[near], H, self._family())
+                T = tensile_vector_scene(self.scene, x[near], H, self._family(), st["adj"].restrict(near))
                 wall = wall.index_add(0, near, cfg.wallMass * cfg.shiftR / w0 ** 4 * T)
             raw = raw + (cfg.rho0 / (4.0 * rho))[:, None] * wall
         vmax = float(v.norm(dim=1).max())

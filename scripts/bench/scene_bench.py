@@ -43,13 +43,13 @@ def run(N=1_000_000, nBodies=100, dev="cuda:0", h_over_dx=3.0):
     sceneOperation(ps, pr, scene, bodyFields=fields)                  # warm up
     torch.cuda.synchronize()
     t0 = time.perf_counter()
-    adj = scene.buildAdjacency(ps, pr)
+    adj = scene.pairMoments(ps, pr)
     torch.cuda.synchronize(); t1 = time.perf_counter()
     sceneOperation(ps, pr, scene, adj, bodyFields=fields)
     torch.cuda.synchronize(); t2 = time.perf_counter()
     for b in bodies[1:]:
         b.move(1e-3)
-    adj = scene.buildAdjacency(ps, pr)
+    adj = scene.pairMoments(ps, pr)
     torch.cuda.synchronize(); t3 = time.perf_counter()
     print(f"N = {len(pos)}, h = {h:.4f}, bodies = {len(bodies)} (tank loop 2000 edges + {nBodies} small bodies)")
     print(f"adjacency {1e3 * (t1 - t0):.0f} ms ({adj.stats['pairs']} pair terms, candidates per body: max {max(adj.stats['candidates'])}), operation {1e3 * (t2 - t1):.0f} ms, "

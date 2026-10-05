@@ -15,12 +15,12 @@ def T(f, n=30):
     f(); torch.cuda.synchronize(); t0 = time.time()
     for _ in range(n): f()
     torch.cuda.synchronize(); return (time.time() - t0) / n * 1e3
-orig = S.Scene.buildAdjacency
+orig = S.Scene.pairMoments
 def full(*a, **k):
     k.pop("channels", None); return orig(*a, **k)
 res = {}
 for name, f in (("cover", lambda: cover_vector_scene(sim.scene, x[near], H)), ("tensile w2", lambda: tensile_vector_scene(sim.scene, x[near], H, "w2")), ("tensile w4", lambda: tensile_vector_scene(sim.scene, x[near], H, "w4"))):
-    S.Scene.buildAdjacency = orig; tp = T(f); op = f()
-    S.Scene.buildAdjacency = full; tf = T(f); of = f()
-    S.Scene.buildAdjacency = orig
+    S.Scene.pairMoments = orig; tp = T(f); op = f()
+    S.Scene.pairMoments = full; tf = T(f); of = f()
+    S.Scene.pairMoments = orig
     print("%-11s pruned %6.2f ms   full %6.2f ms   bit-identical %s  (max|diff| %.1e)" % (name, tp, tf, bool(torch.equal(op, of)), float((op - of).abs().max())))

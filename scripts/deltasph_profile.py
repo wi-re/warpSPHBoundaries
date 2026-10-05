@@ -71,7 +71,7 @@ def _reset():
 _TRACK = [
     ("deltasph2d.neighbor_pairs", "mod", d2d, "neighbor_pairs"),
     ("deltasph2d.sceneOperation", "mod", d2d, "sceneOperation"),
-    ("Scene.buildAdjacency", "cls", Scene, "buildAdjacency"),
+    ("Scene.pairMoments", "cls", Scene, "pairMoments"),
     ("Scene.inside", "cls", Scene, "inside"),
     ("Scene.signed_distance", "cls", Scene, "signed_distance"),
     ("DeltaSPH2D._solid_samples", "cls", DeltaSPH2D, "_solid_samples"),
@@ -119,7 +119,7 @@ def _unpatch(saved):
 ORDER = ["DeltaSPH2D.step", "DeltaSPH2D.rhs", "DeltaSPH2D.shift", "DeltaSPH2D.no_penetration",
          "DeltaSPH2D._wall_data", "DeltaSPH2D._surface_state", "DeltaSPH2D._detect_surface",
          "DeltaSPH2D._solid_samples", "deltasph2d.neighbor_pairs", "deltasph2d.sceneOperation",
-         "Scene.buildAdjacency", "Scene.inside", "Scene.signed_distance"]
+         "Scene.pairMoments", "Scene.inside", "Scene.signed_distance"]
 
 
 def _run_case(label, build, warm, timed):
@@ -157,7 +157,7 @@ def _run_case(label, build, warm, timed):
             pct = 100.0 * _STATS["inclusive"].get(n, 0.0) / step_inc
             print("%-28s %10.3f %14.4f %14.4f %9.2f" % (n, c, inc, sf, pct))
         # answers
-        ba = _STATS["calls"].get("Scene.buildAdjacency", 0) / nstep
+        ba = _STATS["calls"].get("Scene.pairMoments", 0) / nstep
         sop = _STATS["calls"].get("deltasph2d.sceneOperation", 0) / nstep
         inside_pts = _INSIDE_POINTS / nstep
         inside_pct = 100.0 * _STATS["inclusive"].get("Scene.inside", 0.0) / step_inc
@@ -170,7 +170,7 @@ def _run_case(label, build, warm, timed):
         fluid = rhs_inc - scene_det
         fluid_pct = 100.0 * fluid / step_inc
         costs = sorted(((1000.0 * _STATS["self"].get(n, 0.0) / nstep, n) for n in ORDER), reverse=True)
-        print("\n(a) buildAdjacency calls/step = %.3f ; sceneOperation calls/step = %.3f" % (ba, sop))
+        print("\n(a) pairMoments calls/step = %.3f ; sceneOperation calls/step = %.3f" % (ba, sop))
         print("(b) positions through Scene.inside per step = %.0f  ; Scene.inside = %.2f%% of the step" % (inside_pts, inside_pct))
         print("(c) fluid pair sums (rhs - scene - detector) = %.4f ms/step = %.2f%% of the step" % (fluid / nstep * 1000.0, fluid_pct))
         print("(e) three largest single costs (self ms/step): " + ";  ".join("%s = %.4f" % (n, ms) for ms, n in costs[:3]))

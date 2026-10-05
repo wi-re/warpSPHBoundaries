@@ -13,10 +13,10 @@ def tank(**kw):
     return sim
 def counted(sim):
     n = {"b": 0}
-    orig = S.Scene.buildAdjacency
+    orig = S.Scene.pairMoments
     def wrap(self, *a, **k):
         n["b"] += 1; return orig(self, *a, **k)
-    S.Scene.buildAdjacency = wrap
+    S.Scene.pairMoments = wrap
     return n, orig
 for use_cache in (True, False):
     sim = tank()
@@ -26,8 +26,8 @@ for use_cache in (True, False):
         sim._wall_data = lambda x, rho, o=o: (setattr(sim, "_wallCache", None), o(x, rho))[1]
     n, orig = counted(sim)
     for _ in range(4): sim.step()
-    S.Scene.buildAdjacency = orig
-    print("T8.3 small tank, cache %-5s: buildAdjacency calls per step = %.2f" % (use_cache, n["b"] / 4))
+    S.Scene.pairMoments = orig
+    print("T8.3 small tank, cache %-5s: pairMoments calls per step = %.2f" % (use_cache, n["b"] / 4))
 # bit-identity over 8 steps, cache on vs off (two fresh sims, the same initial state)
 def run(use_cache, steps=8):
     sim = tank()
@@ -44,7 +44,7 @@ n, orig = counted(sim)
 sim._wall_data(sim.x, sim.rho); sim._wall_data(sim.x, sim.rho); c1 = n["b"]
 sim._wall_data(sim.x + 1e-3, sim.rho); c2 = n["b"]
 sim.scene.bodies[0].angle = float(sim.scene.bodies[0].angle) + 1e-3; sim._wall_data(sim.x + 1e-3, sim.rho); c3 = n["b"]
-S.Scene.buildAdjacency = orig
+S.Scene.pairMoments = orig
 print("T8.3 builds: same x twice (after one miss) %d ; moved x +1 = %d ; rotated body +1 = %d   (expected pattern: 1 or 0, 1, 1)" % (c1, c2 - c1, c3 - c2))
 # gravity changes, positions do not: A must follow the new g, lam and G come from the cache
 sim = tank(); sim.step()
@@ -58,9 +58,9 @@ print("T8.3 new g: A1 == fresh A2 %s ; A1 != A0 %s ; lam, G equal %s %s" % (bool
 sim = tank(); x = sim.x; H = sim.H
 ps = ParticleState(positions=x, supports=sim.Hvec, masses=torch.full_like(sim.rho, sim.m), kinds=sim.kinds, densities=sim.rho)
 pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive, operationMode=OperationDirection.BoundaryToFluid)
-adj = sim.scene.buildAdjacency(ps, pr, channels=(3, 4))
+adj = sim.scene.pairMoments(ps, pr, channels=(3, 4))
 one = BodyField(torch.tensor(1.0, dtype=torch.float64, device=dev))
-full = sim.scene.buildAdjacency(ps, pr)
+full = sim.scene.pairMoments(ps, pr)
 ok = sceneOperation(ps, pr, sim.scene, adj, None, [one], perBody=True); ref = sceneOperation(ps, pr, sim.scene, full, None, [one], perBody=True)
 print("T8.2 pruned Gradient == full Gradient (torch.equal):", bool(torch.equal(ok, ref)), " adj.channels", sorted(adj.channels), " full.channels", full.channels)
 def tryit(label, f):
@@ -74,7 +74,7 @@ tryit("Density", lambda: sceneOperation(ps, prD, sim.scene, adj, None, [BodyFiel
 tryit("Covariance", lambda: sceneOperation(ps, prC, sim.scene, adj, None, [one], perBody=True))
 tryit("Gradient perQuery a1", lambda: sceneOperation(ps, pr, sim.scene, adj, None, [BodyField(torch.zeros(len(x), dtype=torch.float64, device=dev), torch.zeros(len(x), 2, dtype=torch.float64, device=dev), rho=1.0, perQuery=True)], perBody=True))
 tryit("Gradient returnReaction", lambda: sceneOperation(ps, pr, sim.scene, adj, None, [one], returnReaction=True))
-tryit("channels without 3,4 + Gradient", lambda: sceneOperation(ps, pr, sim.scene, sim.scene.buildAdjacency(ps, pr, channels=(0,)), None, [one], perBody=True))
+tryit("channels without 3,4 + Gradient", lambda: sceneOperation(ps, pr, sim.scene, sim.scene.pairMoments(ps, pr, channels=(0,)), None, [one], perBody=True))
 # ---- T8.1 / T8.2 plan arithmetic
 for kern in ("cone", "lw2", "w2"):
     p = warpbc._device_plan(kern, dev, (3, 4)); print("T8.2 plan terms (3,4) %-5s E %d V %d" % (kern, p.nE, p.nV))

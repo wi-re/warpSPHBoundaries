@@ -19,9 +19,9 @@ lap_lambda_scene(sim.scene, x[near][:2], H, "w2"); tensile_vector_scene(sim.scen
 ps = ParticleState(positions=x, supports=sim.Hvec, masses=torch.full_like(rho, sim.m), kinds=sim.kinds, densities=rho)
 for kern in ("cone", "w2p5", "lw2", sim.cfg.kernel):
     pr = OperationProperties(kernel=kern, operation=WarpOperation.Density, gradientMode=GradientScheme.Naive, operationMode=OperationDirection.BoundaryToFluid)
-    print("buildAdjacency(all N, kernel=%s): %.2f ms" % (kern, t(lambda: sim.scene.buildAdjacency(ps, pr))))
+    print("pairMoments(all N, kernel=%s): %.2f ms" % (kern, t(lambda: sim.scene.pairMoments(ps, pr))))
 pr = OperationProperties(kernel="cone", operation=WarpOperation.Density, gradientMode=GradientScheme.Naive, operationMode=OperationDirection.BoundaryToFluid)
-adj = sim.scene.buildAdjacency(ps, pr)
+adj = sim.scene.pairMoments(ps, pr)
 # (1) cover with a shared adjacency (built for ALL particles with the kernel `cone`, positions = all x) vs the near-only call
 ref = cover_vector_scene(sim.scene, x[near], H)
 got = cover_vector_scene(sim.scene, x, H, adjacency=adj)[near]

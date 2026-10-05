@@ -356,12 +356,12 @@ def test_one_adjacency_per_call(device):
     ps = ParticleState(positions=pos, supports=torch.full((n,), float(H), dtype=F64, device=device),
                        masses=torch.ones(n, dtype=F64, device=device), kinds=torch.zeros(n, dtype=torch.int32, device=device),
                        densities=torch.ones(n, dtype=F64, device=device))
-    orig = Scene.buildAdjacency
+    orig = Scene.pairMoments
     counts = {"n": 0}
-    def counting(self, queryParticles, operationProperties):
+    def counting(self, queryParticles, operationProperties, channels=None):
         counts["n"] += 1
-        return orig(self, queryParticles, operationProperties)
-    Scene.buildAdjacency = counting
+        return orig(self, queryParticles, operationProperties, channels)
+    Scene.pairMoments = counting
     try:
         for fam in ("w2", "w4"):
             counts["n"] = 0
@@ -383,4 +383,4 @@ def test_one_adjacency_per_call(device):
             assert err <= 1e-12 * s, (fam, err, s)
             print("(h) %s: one lap_lambda_scene call builds %d adjacency (expect 1); two-adjacency route max|diff| = %.2e (tol 1e-12 * %.3e)" % (fam, n_adj, err, s))
     finally:
-        Scene.buildAdjacency = orig
+        Scene.pairMoments = orig

@@ -116,7 +116,7 @@ def cover_vector_np(points, verts_or_edges, H):
     return out[0] if single else out
 
 
-def cover_vector_scene(scene, positions, H, adjacency=None):
+def cover_vector_scene(scene, positions, H, adjacency=None):  # adjacency: a SceneAdjacency of `positions` (e.g. `restrict` of a larger one) or its PairMoments (cone, channels 3, 4)
     """grad_x int_{solid} K dA' for `positions` [N,2] (units length^2), the scene-layer route (Q3a): the unmodified
     Warp edge kernel with the degree-1 kernel `cone`,  W_cone = 3 (1 - q) / (pi h^2)  (normalisation 3),  so that
     W_cone = -3 K(r) / (pi H^3) for  K(r) = (r - H) 1[r <= H]  at h = H  and  grad_x int K dA' = -(pi H^3 / 3) * g0,
@@ -142,6 +142,6 @@ def cover_vector_scene(scene, positions, H, adjacency=None):
     pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
     one = BodyField(torch.tensor(1.0, dtype=torch.float64, device=dev))
-    adjacency = adjacency if adjacency is not None else scene.buildAdjacency(ps, pr, channels=(3, 4))        # the Naive gradient of a constant needs g0 only
-    out = sceneOperation(ps, pr, scene, adjacency, None, [one] * len(scene.bodies), perBody=True)
+    pm = scene.moments(adjacency, ps, pr, channels=(3, 4))                                       # the Naive gradient of a constant needs g0 only
+    out = sceneOperation(ps, pr, scene, pm, None, [one] * len(scene.bodies), perBody=True)
     return -(math.pi * float(H) ** 3 / 3) * out.sum(0)

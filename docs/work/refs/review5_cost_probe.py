@@ -17,7 +17,7 @@ def t(f, n=20):
     f(); torch.cuda.synchronize(); t0=time.time()
     for _ in range(n): f()
     torch.cuda.synchronize(); return (time.time()-t0)/n*1e3
-nb = S.Scene.buildAdjacency
+nb = S.Scene.pairMoments
 cnt = {"adj":0}
 def wrap(*a, **k):
     cnt["adj"] += 1; return nb(*a, **k)
@@ -30,7 +30,7 @@ rows = [("cover_vector_scene", lambda: cover_vector_scene(sim.scene, x[near], H)
         ("_wall_data (existing, per call)", lambda: sim._wall_data(x, rho), 3)]
 tot = 0
 for name, f, calls in rows:
-    S.Scene.buildAdjacency = wrap; cnt["adj"]=0; f(); S.Scene.buildAdjacency = nb
+    S.Scene.pairMoments = wrap; cnt["adj"]=0; f(); S.Scene.pairMoments = nb
     ms = t(f)
     print("%-32s %7.2f ms/call  adjacency builds/call %d   calls/step %d  -> %6.2f ms/step" % (name, ms, cnt["adj"], calls, ms*calls))
     if not name.startswith("_wall"): tot += ms*calls

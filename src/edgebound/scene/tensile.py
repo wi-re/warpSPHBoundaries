@@ -54,7 +54,7 @@ def tensile_factor(H, family="w2"):
     return (1.0 / 5.0) * c ** 5 / (math.pi ** 4 * c5 * float(H) ** 8)
 
 
-def tensile_vector_scene(scene, positions, H, family="w2"):
+def tensile_vector_scene(scene, positions, H, family="w2", adjacency=None):
     """T_i = int_solid W^4 grad_x W dA' for `positions` [N,2] (the wall part of the shifting tensile control, Q2), the
     scene-layer route: the exact edge kernel W^5 (the kernel `{family}p5`) in the Gradient operation,
 
@@ -63,7 +63,8 @@ def tensile_vector_scene(scene, positions, H, family="w2"):
     Identity: grad_x W^5 = 5 W^4 grad_x W and W^5 vanishes with its first derivative at the support edge (no boundary
     term); both families are routed through the Chebyshev-quadrature plan (warpbc.STABLE_KERNELS).  Sign: T points
     INTO the wall (a particle just above a flat floor, solid below it, gets T_y < 0).  Units: the integral over the
-    solid.  SurfaceRep bodies only.  Returns [N,2] float64 on scene.device."""
+    solid.  SurfaceRep bodies only.  `adjacency`: the SceneAdjacency of `positions` (e.g. `restrict` of the wall adjacency at the same positions) instead of a fresh
+    search.  Returns [N,2] float64 on scene.device."""
     if family not in ("w2", "w4"):
         raise NotImplementedError("tensile_vector_scene: Wendland C2 and C4 only")
     import torch
@@ -83,6 +84,6 @@ def tensile_vector_scene(scene, positions, H, family="w2"):
     pr = OperationProperties(kernel=family + "p5", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
     one = BodyField(torch.tensor(1.0, dtype=torch.float64, device=dev))
-    adj = scene.buildAdjacency(ps, pr, channels=(3, 4))                                        # the Naive gradient of a constant needs g0 only
-    out = sceneOperation(ps, pr, scene, adj, None, [one] * len(scene.bodies), perBody=True)
+    pm = scene.moments(adjacency, ps, pr, channels=(3, 4))                                     # the Naive gradient of a constant needs g0 only
+    out = sceneOperation(ps, pr, scene, pm, None, [one] * len(scene.bodies), perBody=True)
     return tensile_factor(H, family) * out.sum(0)

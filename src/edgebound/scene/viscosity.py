@@ -32,8 +32,8 @@ term of the solver is (fac/8) (lap v + 2 grad div v) in 2D (expand v to second o
 term uses the same nu_eff, so wall and bulk share the Laplacian coefficient (the bulk pairwise term is (fac/8)(lap v + 2 grad div v), the wall term carries the lap part only).  The pairwise and the Laplacian wall terms are DIFFERENT
 operators near the wall (the Laplacian form damps the wall-normal velocity 3-12x less close to the wall): an intended change of
 discretisation (user decision, HANDOFF Part A Q1), see docs/derivations/laplacian-wall.md.  SurfaceRep bodies only; the first
-moments of lap W (a position-dependent mirror field) are not implemented.  The adjacency (the per-(query, edge) moments of the
-kernel) is built once per call and passed to both scene operations -- one kernel, one adjacency (scene.py rejects an adjacency whose kernel does not match the operation's).  Torch / warpSPHCore / scene are imported here so the
+moments of lap W (a position-dependent mirror field) are not implemented.  The pair moments (the per-(query, edge) integrals of the
+kernel) are precomputed once per call and passed to both scene operations -- one kernel, one PairMoments (scene.py rejects moments whose kernel does not match the operation's).  Torch / warpSPHCore / scene are imported here so the
 module stays importable without them (as in tensile.py).
 """
 from fractions import Fraction
@@ -66,7 +66,7 @@ def lap_factor(H, family="w2"):
     return float(PRE[family]) * c / (cl * float(H) ** 2)
 
 
-def lap_lambda_scene(scene, positions, H, family="w2"):
+def lap_lambda_scene(scene, positions, H, family="w2", adjacency=None):
     """Delta-lambda_i = int_solid lap W dA' (per body) for `positions` [N,2] (the exact wall part of the naive-Laplacian artificial
     viscosity, Q1), the scene-layer route without any Warp code:
 
@@ -76,7 +76,8 @@ def lap_lambda_scene(scene, positions, H, family="w2"):
     identity lap W = div(L y) = 2 L + r L').  Sign: positive for a fluid-side particle (z > 0 above a floor), 0 for a particle
     with the support fully inside the solid and beyond H; the indicator pseudo-pair cancels exactly (2*ind - tr(ind*I) = 0) --
     registering lap W directly would not (it would give a spurious c/H^2 inside a body).  Units: 1/length^2, per body.
-    SurfaceRep bodies only.  Returns [B, N] float64 on scene.device."""
+    SurfaceRep bodies only.  `adjacency`: the SceneAdjacency of `positions` (e.g. `restrict` of the wall adjacency at the same positions) instead of a fresh
+    search.  Returns [B, N] float64 on scene.device."""
     from .scene import SurfaceRep
     for body in scene.bodies:
         for rep in body.reps:
@@ -93,14 +94,14 @@ def lap_lambda_scene(scene, positions, H, family="w2"):
     ps = ParticleState(positions=pos, supports=torch.full((n,), float(H), dtype=torch.float64, device=dev),
                        masses=torch.ones(n, dtype=torch.float64, device=dev), kinds=torch.zeros(n, dtype=torch.int32, device=dev),
                        densities=torch.ones(n, dtype=torch.float64, device=dev))
-    adj = scene.buildAdjacency(ps, OperationProperties(kernel="l" + family, operation=WarpOperation.Density,
-                                                       gradientMode=GradientScheme.Naive,
-                                                       operationMode=OperationDirection.BoundaryToFluid))
+    pm = scene.moments(adjacency, ps, OperationProperties(kernel="l" + family, operation=WarpOperation.Density,
+                                                          gradientMode=GradientScheme.Naive,
+                                                          operationMode=OperationDirection.BoundaryToFluid))
     lam = cov = None
     for op in (WarpOperation.Density, WarpOperation.Covariance):
         pr = OperationProperties(kernel="l" + family, operation=op, gradientMode=GradientScheme.Naive,
                                  operationMode=OperationDirection.BoundaryToFluid)
-        out = sceneOperation(ps, pr, scene, adj, None, [BodyField(rho=1.0)] * B, perBody=True)
+        out = sceneOperation(ps, pr, scene, pm, None, [BodyField(rho=1.0)] * B, perBody=True)
         if op == WarpOperation.Density:
             lam = out.reshape(B, n)
         else:

@@ -1,8 +1,29 @@
 # Plan after WORK-008: adjacency = who interacts with whom; integrals are evaluated, not stored
 
-Status 2026-10-05, `main` = `local-model` = `0ccfcf4` (not pushed). Supersedes HANDOFF Part A4 "Phase 2" (the candidate list there is folded in below); phases 3–5 of A4 stand. Written for continuing without the local-model protocol: steps are sized for one sitting each, with a verification route and a stop rule, not as work documents.
+Status 2026-10-05 (evening), `main` = `repo-layout` = `09ff4ca` (layout + cleanup 1/2 merged, not pushed); `paper-audit` = `d97ef10` is one docs/paper commit on top; `local-model` (`0ccfcf4`) and `wall-evaluation` (`2d2a727`) are stale and can be deleted. Supersedes HANDOFF Part A4 "Phase 2" (the candidate list there is folded in below); phases 3–5 of A4 stand. Written for continuing without the local-model protocol: steps are sized for one sitting each, with a verification route and a stop rule, not as work documents.
 
-> **Prerequisite (done 2026-10-05, branch `repo-layout`):** `docs/work-item-repo-layout.md` — `src/edgebound/{edge,scene,sim}` + `scripts/`, pyproject; the cleanup pass listed there (§7, §9) is still open.
+> **Prerequisite (done, merged to `main`):** `docs/work-item-repo-layout.md` — `src/edgebound/{edge,scene,sim}` + `scripts/`, pyproject, cleanup pass. Paths below use the new layout (`src/edgebound/scene/scene.py`, `edge/warpbc.py`, `sim/deltasph2d.py`, `tests/{scene,sim}`).
+
+## 0. Next steps, in order (resumed 2026-10-05 after the layout landed)
+
+Order differs from §4 in one respect: step 2 (refactor, deterministic) does not depend on step 1 (measurement-gated), so the measurement goes first and costs one sitting; the refactor then proceeds while the kernel decision is made. Work on a new branch off `main` (`wall-eval`); `paper-audit` is merged or not at your call, it touches only `paper/`, `docs/`, `scripts/derivation_checks`.
+
+| # | what | sitting | gate to leave the step |
+|---|---|---|---|
+| 0 | **Baseline.** `pytest tests` (expect 816 passed), `check --physics --cases tank,dambreak`, `profile` (dam break ≈ 35.5 ms/step) on `main`; note the GPU load (`nvidia-smi`: it was at 89 % utilisation with 72 GB resident from the local LLM when this was written, so absolute timings from the probes below are only comparable if A/B-interleaved or taken with the LLM unloaded) | ½ | numbers recorded in §8 |
+| 1a | **Measure, don't build** (step 1 first half): extend `docs/work/refs/review8_latency_probe.py` to (i) the stable Chebyshev kernel (`stable=(8,6)`, f64), (ii) an f32 copy of the stable kernel in a scratch module (`warpbc` is f64-only; copy `_edge_channels_cheb_kernel` with `f32` and `vec2f`, same plans cast), curves at 484 / 4 840 / 48 400 / 484 000 pairs for `w2`, `w2p5`, `cone`; (iii) one `ncu`/`nsys` run of the monomial f64 kernel at 484 pairs: registers, local-memory spills (the dynamic `ch[e_ch[t]]` write into a 9-vector is the suspect), achieved occupancy | 1 | decision table: latency-bound in f32? yes → 1b; no → skip 1b, step 3 uses the f32 stable kernel as is |
+| 2a | **Evaluation schedule — DONE** (`docs/work/refs/schedule_probe.py`, counts only; table in §8). Result: 4 position sets per dam-break step, each with a full query set (all N) and a near-wall subset (272 of 1152), the subset being an *exact row subset* (same positions, same supports; checked bitwise) of the full set; the full-set adjacency of x^n is the cross-step cache. So the target is not "9 → 4" but **9 → 3 full-set builds per dam-break step (2 per sloshing step), the subset consumers (cover, lap, tensile) take a restriction of the full adjacency** (select pairs with `q ∈ near`, remap `q`), which needs a query-subset operation on the adjacency in 2b | done | `test_wall_data_reuse.py::(e)` pin unchanged |
+| 2b | **Split adjacency from precompute — DONE** on branch `wall-eval` (suite 821 passed = 816 + 5 new in `tests/scene/test_adjacency_split.py`; `Scene.adjacency` / `precompute` / `pairMoments` / `moments`, `SceneAdjacency.restrict`, `SurfaceTopology`, `PairMoments`; per dam-break step 3 adjacencies + 9 precomputes, was 9 builds; `DeltaSPH2D._wall_state` carries the wall adjacency, cover / lap / tensile take `restrict(near)`). Named test edits: `test_wall_data_reuse.py` ((e) pins now 3 / 9 and 4 / 10, `_disable_cache` patches `_wall_state`, cache tuple index), `test_scene.py` (kernel-guard test uses `moments=` and the new message), `test_viscosity_scene.py` (`counting` takes `channels`) | done | suite + harness |
+| 1b | only if 1a says latency-bound: term-parallel prototype | 1–2 | ≥ 2× at 484 pairs, else stop |
+| 2c | **`BoxRep`** (`docs/box-domain-primitive.md`): axis-aligned boxes (every validation domain) as four corner lookups of two 2D tables per kernel, one `RepMoments` row per query, no pairs; test against `SurfaceRep.box` incl. inside / thin / corner / tangent, then the tank, dam break, sloshing, DFSPH tank run on it | 2–3 | gradient error ≤ 1e-7 of scale in f64 at a table size that fits one block; harness unchanged within margin |
+| 3 | fused `evaluate` for `SurfaceRep`, output by output (§4 step 3) | 4–6 | each output equal to the old path on the L-shape + tank, harness after each switch-over |
+
+Design constraints that came out of the paper audit and must be in the step-3 spec (not extra work): (a) the output spec names a kernel *and* a moment order — `plan-exact-wall-laplacian.md` needs moments of `∇²W` up to degree 2 in the wall frame per (query, edge) (6 channels per component, E6 there), so `spec` must accept `(kernel, channels, contraction)` where the contraction is a per-query coefficient vector, not a fixed list of the 9 current channels; (b) the 3D face→edge chain must not be hard-coded out (term groups and per-(query, element) geometry are the element-specific part).
+
+What step 2 actually has to handle, from reading `scene.py` (the plan text above says "pair topology only" but the three representation types differ):
+* `SurfaceRep`: topology = `(qi, e)` after the segment-distance filter (kernel-independent; depends on `lsup`) plus the indicator candidates `(nz, ind)` (winding number, kernel-independent, only needed when a `lam`/`g1` channel is requested). `rep.pairs` today computes both and the moments in one call: it splits into `rep.topology(lpos, lsup)` and `rep.moments(topology, kernel, channels)`.
+* `ImplicitRep` / `SdfRep`: no pairs; the "adjacency" is `(cand, idx = sel, low)` and the tier-3 closed forms are *evaluated* (kernel-dependent: `tier3Table(name)`), plus the `fallback` SurfaceRep pairs for `low` queries. Topology = the selection; precompute = the tier-3 values. Note `sel` depends on `lam != 0`, which is kernel-dependent, so it is *not* pure topology: either keep `low` (tier flag, depends on `lsup` and the SDF smoothness, not on the kernel) as the topology and let a zero `lam` produce a zero contribution, or accept that implicit reps keep a kernel-keyed precompute. Decide in 2b by checking that the second option changes no result.
+* `VolumeRep`: `BoundaryAdjacency` already is topology + weights (`weights`, `gradWeights`); the split is the same follow-up as `boundaryOps` (§4 step 2, last bullet). Out of scope for 2b unless the DFSPH tests need it.
 
 ## 1. The terminology decision (user, 2026-10-05)
 
@@ -63,7 +84,7 @@ fields     = scene.evaluate(adjacency, particles, spec) # one fused pass: all ke
 
 **Step 2 — split adjacency from precompute (refactor, results bit-identical).**
 * `Scene.buildAdjacency` → topology only; `Scene.precompute(adjacency, kernel, channels) -> PairMoments`; `sceneOperation(…, adjacency | pair_moments)` (an adjacency alone triggers a precompute for the call, so every current consumer keeps working; consumers that call several operations pass the `PairMoments`).
-* One adjacency per position set shared by wall / lap / cover / tensile: 9 builds → 4 adjacencies (the 0.8 ms kernel-independent part × 5 saved ≈ −4 ms/step, estimate).
+* One adjacency per position set shared by wall / lap / cover / tensile: 9 builds → 3 (dam break; the cache supplies x^n; sloshing 6 → 2). The near-wall subset consumers (`_detect_surface` → cover / cone, `lap_lambda_scene`, `tensile_vector_scene` on `x[near]`) need `adjacency.restrict(query_index)`: row-subset of the same positions and supports (measured exact), so restriction is a mask on `q` plus a remap, not a rebuild. Saving: the kernel-independent 0.8 ms × 6 ≈ −5 ms/step (estimate).
 * Delete: the kernel and channels guards of `sceneOperation` in their adjacency form (re-home on `PairMoments`), `SceneAdjacency.channels`; keep the `DeltaSPH2D._wallCache` (it caches *results*, `lam`/`G`, keyed on state — rename `_wallResultCache`).
 * Rename in code and docs (`scene-architecture.md` §6b needs a rewrite of the section that describes the adjacency as holding moments); `boundaryOps.BoundaryAdjacency` gets the same split in the same step or a follow-up (weights → `BoundaryPrecompute`).
 * Tests to edit deliberately: `test_wall_data_reuse.py::(e)` pins "9 builds"; it becomes "4 adjacencies" and a precompute count; `test_channel_pruning.py` (c) guard tests move from the adjacency to `PairMoments`; `test_scene.py::test_adjacency_kernel_guard`. Name them in the commit message.
@@ -104,6 +125,21 @@ After step 5 the scene path is a handful of launches per position set on a fixed
 * Whether `Scene.inside` / `signed_distance` move into the adjacency step (both are brute force over edges; `signed_distance` is 0.7 ms/step now, negligible until large scenes).
 
 ## 8. Facts and files
+
+* Evaluation schedule (2026-10-05, `docs/work/refs/schedule_probe.py`, one dam-break step, nx = 40 / sloshing nx = 60; the schedule does not depend on nx). Position sets: x^n (cache hit, `P0`), x^{n+½} (`P2`), x^{n+1} before shifting (`P4`), after shifting (`P6`); `Nsub` = near-wall subset (272 of 1152) at the same positions as the full set before it.
+
+| positions | query set | consumer | kernel, channels | scene ops |
+|---|---|---|---|---|
+| x^n | full (cached adjacency) | `_wall_data` (first RHS) | w2, all | Gradient (A) only: lam, G come from the cache |
+| x^n | sub | `_detect_surface` → cover | cone, (3,4) | Gradient |
+| x^n | sub | `lap_lambda_scene` | lw2, all | Density, Covariance |
+| x^{n+½} | full | `_wall_data` | w2, all | Density, Gradient (G), Gradient (A) |
+| x^{n+½} | sub | cover; lap | cone (3,4); lw2 all | Gradient; Density, Covariance |
+| x^{n+1} pre-shift | full | `_surface_state` | w2, all | Density, Gradient, Covariance |
+| x^{n+1} pre-shift | sub | cover; tensile | cone (3,4); w2p5 (3,4) | Gradient; Gradient |
+| x^{n+1} post-shift | full | `_wall_data` in `no_penetration` | w2, all | Density, Gradient, Gradient (A) (→ cache for the next step) |
+
+Sloshing (no shifting, no `no_penetration` cache, `w4`): two position sets, each full `_wall_data` + sub cover + sub lap = 6 builds, 12 ops. Kernels per position set: w2 (3 channel sets of one kernel), lw2, cone, w2p5 — i.e. step 3's fused pass is one launch family per position set with 4 kernels. Note `lap` needs Density and Covariance of lw2 only on the subset; `_surface_state` needs lam, G, Cov of w2 on the full set.
 
 * Probes: `docs/work/refs/review8_build_breakdown_probe.py` (per-build table), `docs/work/refs/review8_latency_probe.py` (pairs-vs-time curve), `review7_edge_cost_probe.py`, `review7_prune_probe.py`.
 * The `buildAdjacency` = 9/step pin: `tests/sim/test_wall_data_reuse.py::test_reuse_saves_one_adjacency_per_step`.

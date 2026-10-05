@@ -247,7 +247,7 @@ def test_mixed_types_accumulate_and_stats(device):
     total = sceneOperation(ps, pr, Scene(bodies, device))
     parts = sum(sceneOperation(ps, pr, Scene([b], device)) for b in bodies)
     np.testing.assert_allclose(total.cpu().numpy(), parts.cpu().numpy(), atol=1e-13)
-    adj = Scene(bodies, device).buildAdjacency(ps, pr)
+    adj = Scene(bodies, device).pairMoments(ps, pr)
     assert len(adj.stats["candidates"]) == 4 and adj.stats["pairs"] > 0
 
 
@@ -422,9 +422,9 @@ def test_adjacency_kernel_guard(device):
     sc = Scene([Body(bodyId=0, reps=[SurfaceRep.polygon(unit)])], device)
     pts = np.array([[0.5, 0.3], [0.2, 0.8], [1.3, 0.4], [0.5, 1.2], [0.1, 0.1]])
     ps = state(pts, device, sup=0.4)
-    adj = sc.buildAdjacency(ps, props(WarpOperation.Density, kernel="cone"))
-    with pytest.raises(ValueError, match="built for kernel"):
-        sceneOperation(ps, props(WarpOperation.Density, kernel="lw2"), sc, adjacency=adj)
-    got = sceneOperation(ps, props(WarpOperation.Density, kernel="cone"), sc, adjacency=adj)
+    adj = sc.pairMoments(ps, props(WarpOperation.Density, kernel="cone"))
+    with pytest.raises(ValueError, match="moments are those of kernel"):
+        sceneOperation(ps, props(WarpOperation.Density, kernel="lw2"), sc, moments=adj)
+    got = sceneOperation(ps, props(WarpOperation.Density, kernel="cone"), sc, moments=adj)
     ref = sceneOperation(ps, props(WarpOperation.Density, kernel="cone"), sc)
     assert float((got - ref).abs().max()) <= 1e-12

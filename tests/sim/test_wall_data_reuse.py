@@ -1,12 +1,13 @@
 """Reuse of the wall adjacency of no_penetration in the next step's first RHS (WORK-008 T8.3).
 
-`_wall_data` keeps `(x, body poses, adjacency, lam, G, Hvec, kinds)` of its last build and reuses `adj, lam, G` when the
+`_wall_state` keeps `(x, body poses, adjacency, pair moments, lam, G, Hvec, kinds)` of its last build and reuses `adj, pm, lam, G` when the
 positions, the poses, the supports and the kinds are unchanged; `lam` and `G` do not depend on the densities or the gravity, so
 a cache hit is valid for a different `rho` and `g` (`A`, which depends on `g`, is always recomputed from the cached or fresh
 adjacency).  Nothing in the solver modifies `lam` or `G` in place (the read-only contract).
 
 Tolerances (stated before looking):
-  (e) host-call counts, exact (deterministic): 9 buildAdjacency/step with the cache, 10 without (reviewer measured 9.00 / 10.00).
+  (e) host-call counts, exact (deterministic): 3 Scene.adjacency + 9 Scene.precompute per step with the cache, 4 + 10 without (the near-wall consumers take
+      `restrict` of the wall adjacency; before the adjacency / precompute split the same schedule was 9 / 10 buildAdjacency calls).
   (f) max|Δ| <= 1e-12 for x, v, rho: the same-code GPU run-to-run spread was measured at 8.7e-16 in v and 0 in x, rho, so 1e-12
       is three orders above it and six below the 1e-6 effect a stale cache would have.
   (g) a cache hit is torch.equal to a fresh evaluation; a rebuild is max|Δ| <= 1e-13 * max|fresh| (the index_add_ atomics of the
@@ -28,37 +29,41 @@ CFG = lambda device: DeltaSPHConfig(noPen="impulse", shifting=True)
 
 
 def _disable_cache(sim):
-    """wrap sim._wall_data so the cache is cleared before every call (forces a fresh build each time)."""
-    orig = sim._wall_data
+    """wrap sim._wall_state (what rhs and _wall_data call) so the cache is cleared before every call (forces a fresh build each time)."""
+    orig = sim._wall_state
 
     def no_cache(x, rho):
         sim._wallCache = None
         return orig(x, rho)
 
-    sim._wall_data = no_cache
+    sim._wall_state = no_cache
     return orig
 
 
 def _counting_adjacency():
-    """a (counter, restore) pair: counts Scene.buildAdjacency calls (class-level, restored by calling restore())."""
-    counter = [0]
-    orig = Scene.buildAdjacency
+    """a (counter, restore) pair: counter[0] counts Scene.adjacency calls, counter[1] Scene.precompute calls (class-level, restored by calling restore())."""
+    counter = [0, 0]
+    orig_a, orig_p = Scene.adjacency, Scene.precompute
 
-    def counting(self, *a, **k):
+    def counting_a(self, *a, **k):
         counter[0] += 1
-        return orig(self, *a, **k)
+        return orig_a(self, *a, **k)
 
-    Scene.buildAdjacency = counting
+    def counting_p(self, *a, **k):
+        counter[1] += 1
+        return orig_p(self, *a, **k)
+
+    Scene.adjacency, Scene.precompute = counting_a, counting_p
 
     def restore():
-        Scene.buildAdjacency = orig
+        Scene.adjacency, Scene.precompute = orig_a, orig_p
 
     return counter, restore
 
 
 @pytest.mark.parametrize("device", DEVICES)
 def test_reuse_saves_one_adjacency_per_step(device):
-    """(e) over 4 steps after a warm-up step: exactly 9 buildAdjacency/step with the cache, 10/step with it disabled
+    """(e) over 4 steps after a warm-up step: exactly 3 adjacency and 9 precompute calls per step with the cache, 4 and 10 with it disabled
     (host-call counts, deterministic)."""
     # with the cache (default)
     sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device, cfg=CFG(device))
@@ -69,9 +74,9 @@ def test_reuse_saves_one_adjacency_per_step(device):
             sim.step()
     finally:
         restore()
-    per_step = counter[0] / 4
-    assert per_step == 9.0, per_step
-    print(f"(e) with cache: {counter[0]} buildAdjacency over 4 steps = {per_step:.2f}/step (== 9)")
+    per_step, per_step_pc = counter[0] / 4, counter[1] / 4
+    assert (per_step, per_step_pc) == (3.0, 9.0), (per_step, per_step_pc)
+    print(f"(e) with cache: {counter[0]} adjacency, {counter[1]} precompute over 4 steps = {per_step:.2f} / {per_step_pc:.2f} per step (== 3 / 9)")
     # with the cache disabled
     sim2, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device, cfg=CFG(device))
     sim2.step()                                                         # warm-up
@@ -82,10 +87,10 @@ def test_reuse_saves_one_adjacency_per_step(device):
             sim2.step()
     finally:
         restore2()
-        sim2._wall_data = orig_wd
-    per_step2 = counter2[0] / 4
-    assert per_step2 == 10.0, per_step2
-    print(f"(e) without cache: {counter2[0]} buildAdjacency over 4 steps = {per_step2:.2f}/step (== 10)")
+        sim2._wall_state = orig_wd
+    per_step2, per_step2_pc = counter2[0] / 4, counter2[1] / 4
+    assert (per_step2, per_step2_pc) == (4.0, 10.0), (per_step2, per_step2_pc)
+    print(f"(e) without cache: {counter2[0]} adjacency, {counter2[1]} precompute over 4 steps = {per_step2:.2f} / {per_step2_pc:.2f} per step (== 4 / 10)")
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -100,7 +105,7 @@ def test_reuse_does_not_change_the_dynamics(device):
             simA.step()
             simB.step()
     finally:
-        simB._wall_data = orig_wd
+        simB._wall_state = orig_wd
     for name in ("x", "v", "rho"):
         d = float((getattr(simA, name) - getattr(simB, name)).abs().max())
         assert d <= 1e-12, (name, d)
@@ -136,7 +141,7 @@ def test_reuse_invalidation(device):
         # (i) a position change (x + 1e-3 in y): exactly one build; the stale cache would have been wrong by |Δlam| > 1e-4
         sim._wallCache = None
         lam0, G0, A0 = sim._wall_data(sim.x, sim.rho)                   # clean cache at the current state
-        old_lam = sim._wallCache[3].clone()
+        old_lam = sim._wallCache[4].clone()
         x_i = sim.x.clone()
         x_i[:, 1] += 1e-3
         c0 = counter[0]
@@ -152,7 +157,7 @@ def test_reuse_invalidation(device):
         # (ii) the body rotated by 1e-3 rad: one build; |Δlam| > 1e-4
         sim._wallCache = None
         lam0, G0, A0 = sim._wall_data(sim.x, sim.rho)
-        old_lam = sim._wallCache[3].clone()
+        old_lam = sim._wallCache[4].clone()
         body = sim.scene.bodies[0]
         old_angle = float(body.angle)
         body.angle = old_angle + 1e-3

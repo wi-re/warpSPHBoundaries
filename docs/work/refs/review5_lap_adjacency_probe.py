@@ -14,7 +14,7 @@ def shared(scene, pos, H, fam):
     ps = ParticleState(positions=pos, supports=torch.full((n,), float(H), dtype=torch.float64, device=dev), masses=torch.ones(n, dtype=torch.float64, device=dev),
                        kinds=torch.zeros(n, dtype=torch.int32, device=dev), densities=torch.ones(n, dtype=torch.float64, device=dev))
     pr = lambda op: OperationProperties(kernel="l"+fam, operation=op, gradientMode=GradientScheme.Naive, operationMode=OperationDirection.BoundaryToFluid)
-    adj = scene.buildAdjacency(ps, pr(WarpOperation.Density))
+    adj = scene.pairMoments(ps, pr(WarpOperation.Density))
     l = sceneOperation(ps, pr(WarpOperation.Density), scene, adj, None, [BodyField(rho=1.0)]*B, perBody=True).reshape(B, n)
     c = sceneOperation(ps, pr(WarpOperation.Covariance), scene, adj, None, [BodyField(rho=1.0)]*B, perBody=True).reshape(B, n, 2, 2)
     return lap_factor(H, fam) * (2*l - c[:,:,0,0] - c[:,:,1,1])

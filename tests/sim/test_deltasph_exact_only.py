@@ -4,7 +4,7 @@ selected by cfg.wallViscosityForm ("laplacian" default, "pairwise" kept).
   (i)    DeltaSPHConfig has none of the removed switches, keeps surfaceSamples, and wallViscosityForm = "laplacian".
   (ii)   a bogus wallViscosityForm raises ValueError in rhs (matching the form name).
   (iii)  three sim.step(): Scene.inside is called 0 times with the default ("laplacian") form and > 0 with "pairwise"
-         (the polar grid is built only for the pairwise wall term); Scene.buildAdjacency per step in the default form
+         (the polar grid is built only for the pairwise wall term); Scene.pairMoments per step in the default form
          is also counted (information).
 """
 import pytest
@@ -39,10 +39,10 @@ def test_bogus_wall_viscosity_form_raises(device):
 @pytest.mark.parametrize("device", DEVICES)
 def test_inside_calls_by_form(device):
     """(iii) three sim.step(): Scene.inside called 0 times with the default ("laplacian") form, > 0 with "pairwise";
-    Scene.buildAdjacency per step in the default form is printed (information)."""
+    Scene.pairMoments per step in the default form is printed (information)."""
     counts = {"inside": 0, "build": 0}
     orig_inside = Scene.inside
-    orig_build = Scene.buildAdjacency
+    orig_build = Scene.pairMoments
 
     def counting_inside(self, *a, **k):
         counts["inside"] += 1
@@ -54,7 +54,7 @@ def test_inside_calls_by_form(device):
 
     sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device)
     Scene.inside = counting_inside
-    Scene.buildAdjacency = counting_build
+    Scene.pairMoments = counting_build
     try:
         counts["inside"] = 0
         counts["build"] = 0
@@ -68,10 +68,10 @@ def test_inside_calls_by_form(device):
         n_inside_pairwise = counts["inside"]
     finally:
         Scene.inside = orig_inside
-        Scene.buildAdjacency = orig_build
+        Scene.pairMoments = orig_build
         sim.cfg.wallViscosityForm = "laplacian"
     assert n_inside_default == 0, n_inside_default
     assert n_inside_pairwise > 0, n_inside_pairwise
-    print("(iii) default (laplacian) form: Scene.inside calls over 3 steps = %d (expect 0); Scene.buildAdjacency = %d (information)"
+    print("(iii) default (laplacian) form: Scene.inside calls over 3 steps = %d (expect 0); Scene.pairMoments = %d (information)"
           % (n_inside_default, n_build_default))
     print("(iii) pairwise form: Scene.inside calls over 3 steps = %d (expect > 0)" % n_inside_pairwise)

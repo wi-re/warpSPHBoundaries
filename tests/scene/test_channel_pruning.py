@@ -111,8 +111,8 @@ def test_pruned_adjacency_guard_and_equality(device):
     pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
     one = BodyField(torch.tensor(1.0, dtype=TD, device=dev))
-    adj = sim.scene.buildAdjacency(ps, pr, channels=(3, 4))
-    full = sim.scene.buildAdjacency(ps, pr)
+    adj = sim.scene.pairMoments(ps, pr, channels=(3, 4))
+    full = sim.scene.pairMoments(ps, pr)
     assert adj.channels == frozenset({3, 4}), adj.channels
     assert full.channels is None, full.channels
     got = sceneOperation(ps, pr, sim.scene, adj, None, [one], perBody=True)
@@ -133,7 +133,7 @@ def test_pruned_adjacency_guard_and_equality(device):
         sceneOperation(ps, pr, sim.scene, adj, None, [pq], perBody=True)
     with pytest.raises(ValueError, match="built with the channels"):
         sceneOperation(ps, pr, sim.scene, adj, None, [one], returnReaction=True, perBody=True)
-    adj0 = sim.scene.buildAdjacency(ps, pr, channels=(0,))
+    adj0 = sim.scene.pairMoments(ps, pr, channels=(0,))
     assert adj0.channels == frozenset({0})
     with pytest.raises(ValueError, match="built with the channels"):
         sceneOperation(ps, pr, sim.scene, adj0, None, [one], perBody=True)
@@ -161,7 +161,7 @@ def test_cover_and_tensile_pruned_equal_full(device, monkeypatch):
                        densities=torch.ones(n, dtype=TD, device=dev))
     pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
-    full_adj = sc.buildAdjacency(ps, pr)
+    full_adj = sc.pairMoments(ps, pr)
     assert full_adj.channels is None
     got_c = cover.cover_vector_scene(sc, pos, H)                       # default: the (3,4)-pruned adjacency
     ref_c = cover.cover_vector_scene(sc, pos, H, adjacency=full_adj)   # explicit full adjacency
@@ -170,12 +170,12 @@ def test_cover_and_tensile_pruned_equal_full(device, monkeypatch):
     assert dc <= 1e-13 * sc_c, (dc, sc_c)
     print(f"(d) cover: max|Δ| = {dc:.2e} (<= 1e-13 * scale {sc_c:.3f})")
     got_t = {fam: tensile.tensile_vector_scene(sc, pos, H, fam) for fam in ("w2", "w4")}     # default: pruned
-    orig = Scene.buildAdjacency
+    orig = Scene.pairMoments
 
     def _full_only(self, queryParticles, operationProperties, channels=None):
         return orig(self, queryParticles, operationProperties)         # drop `channels` -> the full adjacency
 
-    monkeypatch.setattr(Scene, "buildAdjacency", _full_only)
+    monkeypatch.setattr(Scene, "pairMoments", _full_only)
     for fam in ("w2", "w4"):
         ref_t = tensile.tensile_vector_scene(sc, pos, H, fam)          # patched: full
         dt_ = float(np.abs(got_t[fam].cpu().numpy() - ref_t.cpu().numpy()).max())

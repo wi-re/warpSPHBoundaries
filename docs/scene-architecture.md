@@ -20,15 +20,15 @@ Scene ── Body (pose: centre, angle; linear / angular velocity; OBB in the lo
                   SdfRep       sampled signed distance + optional fallback  tier 3 / fallback surface (hard)           (model)
 ```
 
-Per step (`Scene.buildAdjacency`):
+Per position set (`Scene.adjacency`, steps 1–2 and the topology of 3; `Scene.precompute` makes the integrals of 3, `sceneOperation` is 4):
 
 1. **Broadphase.** Particles are sorted once into a uniform cell grid (`ParticleCells`, cell = largest support). A body gathers the cells under the world
    box of its OBB (inflated by the support) and tests those particles *exactly* — support sphere against the OBB in the body frame (a rigid map keeps the sphere a
    sphere). Cost: O(particles near the body), independent of the number of other bodies' particles.
 2. **Narrow phase per representation**, in the body frame: SurfaceRep → static edge cell list + exact point–segment distance; VolumeRep → static element grid;
    Implicit → analytic distance, hard tier per particle; Sdf → probe test (below).
-3. **One adjacency per type** (`SceneAdjacency.entries[b]`: `surface`, `implicit`, `volume`), already rotated to the world frame
-   (`MomentPairs.toWorld`: λ is invariant, g0 and m1 rotate as vectors, g1 as `R g1 Rᵀ`).
+3. **One pair set per type** (`PairMoments.entries[b]`: `surface`, `implicit`, `volume`), already rotated to the world frame
+   (`RepMoments.toWorld`: λ is invariant, g0 and m1 rotate as vectors, g1 as `R g1 Rᵀ`).
 4. **One operation per type** (`sceneOperation`): all boundary terms are linear in the boundary data, so every type accumulates into the same output
    (`index_add_`); tests check "scene = sum of single-body scenes" and rotation covariance (rotating bodies + particles rotates the vector results).
 
@@ -114,26 +114,19 @@ a handful of bodies.
 Not in the interface yet: Laplacian / Covariance, periodic domains, the p = 2 weights for the exact torque of position-dependent fields, batching of many small bodies,
 autograd through the weights.
 
-## 6b. What an adjacency really is (REVIEW-005 investigation, 2026-10-04): per-kernel moments, not a neighbour list
+## 6b. Adjacency, precompute, evaluation (REVIEW-005 investigation 2026-10-04; split done 2026-10-05, `docs/plan-wall-evaluation.md` step 2b)
 
-`Scene.buildAdjacency(particles, props)` is **not** a kernel-independent neighbour list. For a `SurfaceRep` it (a) finds the (query, edge) pairs inside one support (cell list + segment-distance cull), (b) evaluates `warpbc.edge_channels` for **the kernel named in `props`**, giving per pair the integrals `lam = ∫W`, `m1 = ∫yW`, `g0 = ∫∇W`, `g1 = ∫y⊗∇W` of the kernel over the solid (the edge-reduction terms), and (c) adds the body-indicator pseudo-pairs. `sceneOperation` then only *contracts* these stored moments with the body field (`Density`, `Gradient`, `Covariance`, ... are algebra on `lam, g0, m1, g1`); the kernel in the `props` handed to `sceneOperation` is **ignored** when an adjacency is passed.
+Until 2026-10-05 `Scene.buildAdjacency` returned an object whose entries held the per-pair integrals of **one kernel** (REVIEW-005 found that out the hard way: `Density` of `lw2` with a `cone` adjacency returned the `cone` moments, bit for bit). The terminology decision of the plan now matches the code:
 
-Consequences (all measured, `docs/work/refs/review5_adjacency_why_probe.py`, developed dam-break state, 484 pairs):
-* Reusing an adjacency for another kernel is silently wrong: `Density` of `lw2` with a `cone` adjacency is **bit-identical** (0.0 difference) to `Density` of `cone` — it returns the `cone` moments — and differs from the true `lw2` result by 0.18 against a scale of 0.62. `SceneAdjacency.kernel` records the name but nothing checks it (a guard is part of WORK-006 T6.2).
-* Within one kernel, reuse is exact: the three `Density`/`Gradient`/`Covariance` operations of `_wall_data` and `_surface_state` share one adjacency, and `lap_lambda_scene` can share one between its `Density` and `Covariance` (bit-identical, 7.2 → 3.7 ms).
-* Cost split of a build (ms): kernel-independent — pair list 0.37, indicator 0.50 (≈ 0.9 of 2.7 for `cone`); kernel-dependent — `edge_channels` 1.2 (`cone`), 1.7 (`lw2`), 2.3 (`w2`), **8.5 (`w2p5`, Chebyshev (16, 8))**. Sharing only the pair list across kernels would save ≈ 1 ms per extra kernel; the cost is the channel evaluation.
-* Where the phase-2 saving is: (i) **channel pruning** — every kernel evaluates all nine channels (21 terms: `m` 5, `g0` 4, `g1` 12 terms, identical for every kernel) although the consumers need a subset: tensile and cover need `g0` only (4 of 21 terms), the wall Laplacian needs `lam` and `g1` (13 of 21); (ii) fusing the kernels of one `rhs` call into one pass over the shared edge geometry (`z, s0, s1`, chord clip). Both are estimates from the term counts, not measurements.
+| term | object | built by | holds |
+|---|---|---|---|
+| adjacency | `SceneAdjacency` (`bodies: [BodyAdjacency]`) | `Scene.adjacency(particles, props)` | integers and kernel-free geometry: per body the candidate queries, their body-frame positions and supports, and per `SurfaceRep` a `SurfaceTopology` (the `(row, edge)` pairs inside one support; the winding-number indicator on first use). `props` supplies only `operationMode`. Implicit / SDF / volume representations have no topology yet (their selection depends on the kernel: `lam != 0`), they are evaluated in `precompute` from the candidate list |
+| precompute | `PairMoments` (`kernel`, `channels`, `entries`) | `Scene.precompute(adjacency, props, channels=None)` (`Scene.pairMoments` = both) | the integrals `lam = ∫W`, `m1 = ∫yW`, `g0 = ∫∇W`, `g1 = ∫y⊗∇W` of ONE kernel (and channel set), per pair, rotated to the world frame (72 B per pair) |
+| evaluation | `sceneOperation(.., moments, ..)` | | the contraction with the body field; accepts `PairMoments` (several operations at one position set share one), a `SceneAdjacency` (precomputed for this call, for a single operation) or None (both built). The kernel guard (the kernel of the operation must be the one of the moments) and the channel guard (pruned moments serve the `Naive` `Gradient` of a constant scalar field and nothing else) live on `PairMoments` |
 
-What WORK-008 added (2026-10-05, phase 2a — removes work, no result changes).  `Scene.buildAdjacency(..., channels=)`
-restricts `edge_channels` to the asked channels (the others exactly 0; the asked ones bit-identical — independent sums,
-no reduction) and skips the indicator pseudo-pairs when no lam/g1 channel is asked; a pruned adjacency
-(`SceneAdjacency.channels`) serves only the `Naive` `Gradient` of a constant scalar field — no `perQuery`, no `a1`, no
-reaction, `{3,4} ⊆ channels` — else `sceneOperation` raises `ValueError`.  The cover vector and tensile term now build a
-`(3,4)`-pruned adjacency (4 of 21 terms); the monomial `DevicePlan` arrays are cached per `(kernel, device, channels)`;
-and the wall adjacency of `no_penetration` is reused by the next step's first `rhs` (key: positions, body poses,
-supports, kinds; `lam`, `G` are density- and gravity-independent, `A` always recomputed).  Measured: pruned plan 4 vs
-21 terms; `buildAdjacency` 10 → 9, `sceneOperation` 12 → 10 calls/step; 58.079 → 36.479 ms/step (dam break, −37.2 %) and
-72.043 → 46.490 (sloshing, −35.5 %); cover / tensile bit-identical and the bit-level harness still PASSes (≤ 0.011).
+`SceneAdjacency.restrict(index)` is the adjacency of an ascending subset of the queries at the same positions and supports (rows renumbered, pair lists filtered; the cached indicator is sliced): the near-wall consumers of `DeltaSPH2D` (cover vector, Laplacian, tensile) take it from the wall adjacency instead of searching again. Measured schedule of a dam-break step (`docs/work/refs/schedule_probe.py`): 9 → 3 adjacencies (4 position sets, the first one comes from the cross-step cache), 9 precomputes (one per consumer and kernel), 10 `sceneOperation` calls.
+
+What the REVIEW-005 / WORK-008 measurements still say (dam-break state, 484 pairs): the cost of a build is the channel evaluation, not the pair list: kernel-independent — pair list 0.37, indicator 0.50 ms; kernel-dependent — `edge_channels` 1.2 (`cone`), 1.7 (`lw2`), 2.3 (`w2`), 8.5 (`w2p5`, Chebyshev (16, 8)). Channel pruning (WORK-008): `precompute(.., channels=)` restricts `edge_channels` to the asked channels (the others exactly 0, the asked ones bit-identical: independent sums, no reduction) and skips the indicator pseudo-pairs when no lam/g1 channel is asked; the cover vector and the tensile term use the `(3,4)` pruning (4 of 21 terms); the monomial `DevicePlan` arrays are cached per `(kernel, device, channels)`; the wall results of `no_penetration` are reused by the next step's first `rhs` (key: positions, body poses, supports, kinds; `lam`, `G` are density- and gravity-independent, `A` always recomputed). Within one kernel reuse is exact, across kernels the guard raises.
 
 ## 7. What carries over to 3D
 
