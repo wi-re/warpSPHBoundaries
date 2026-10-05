@@ -16,7 +16,7 @@ from fractions import Fraction
 
 import mpmath as mp
 
-from .kernels import KERNELS, kernel
+from .kernels import kernel
 
 
 def _to_mpf(x) -> mp.mpf:

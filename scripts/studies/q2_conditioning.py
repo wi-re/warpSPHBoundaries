@@ -20,7 +20,6 @@ usage: python scripts/studies/q2_conditioning.py
 """
 import time
 from fractions import Fraction as F
-from math import comb
 
 import numpy as np
 

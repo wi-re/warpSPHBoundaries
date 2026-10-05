@@ -9,7 +9,6 @@ Element: a fixed triangle shape scaled by L = L_T (edge length ~ L), evaluation 
 """
 from fractions import Fraction as F
 
-import mpmath as mp
 import numpy as np
 
 from edgebound.edge import fem, np_fem

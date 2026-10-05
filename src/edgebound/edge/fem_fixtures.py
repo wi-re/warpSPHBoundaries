@@ -8,14 +8,12 @@ mesh : covering mesh with a continuous polynomial field of degree <= 3: per-elem
        (and the gradient integral = disk integral of grad A) for the whole mesh -> reproduction test for every backend.
 """
 import json
-import sys
 import time
 from fractions import Fraction as F
-from pathlib import Path
 
 import mpmath as mp
 
-from . import core, fem
+from . import fem
 from .. import paths
 from .fixtures import DPS, DIGITS, fs, ns, on_edge, off_edge, tiling, pt, poly_json
 from .kernels import disk_moment, kernel as get_kernel

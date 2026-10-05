@@ -295,7 +295,6 @@ def _shape_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2d
     tid = wp.tid()
     h = hs[tid]
     xv = xs[tid]
-    pv = wp.vec3d()
     p0 = (verts[tid, 0] - xv) / h
     p1 = (verts[tid, 1] - xv) / h
     p2 = (verts[tid, 2] - xv) / h

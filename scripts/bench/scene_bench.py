@@ -45,7 +45,7 @@ def run(N=1_000_000, nBodies=100, dev="cuda:0", h_over_dx=3.0):
     t0 = time.perf_counter()
     adj = scene.buildAdjacency(ps, pr)
     torch.cuda.synchronize(); t1 = time.perf_counter()
-    out = sceneOperation(ps, pr, scene, adj, bodyFields=fields)
+    sceneOperation(ps, pr, scene, adj, bodyFields=fields)
     torch.cuda.synchronize(); t2 = time.perf_counter()
     for b in bodies[1:]:
         b.move(1e-3)

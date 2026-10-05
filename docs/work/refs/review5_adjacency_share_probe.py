@@ -1,6 +1,6 @@
 # reviewer probe for WORK-006: can ONE adjacency (built for all N, one kernel) serve the exact ops of other kernels?  cost of op vs adjacency.
 import time, math, torch
-from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.sim.cases import marrone_dambreak
 from edgebound.scene.cover import cover_vector_scene
 from edgebound.scene.tensile import tensile_vector_scene, tensile_factor
 from edgebound.scene.viscosity import lap_lambda_scene

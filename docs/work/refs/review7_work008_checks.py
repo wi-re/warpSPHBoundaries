@@ -2,14 +2,14 @@
 # reviewer probe for WORK-008 (run on the tree with docs/work/refs/review7_work008_proto.diff applied): every number the work document quotes for its tests
 import torch, numpy as np
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from edgebound.sim import deltasph2d as D
+from edgebound.sim import cases, deltasph2d as D
 from edgebound.scene import scene as S
 from edgebound.edge import warpbc
 from edgebound.scene.scene import BodyField, sceneOperation
 dev = "cuda:0"
 # ---- T8.3 on the small tank (the fixture of tests/sim/test_deltasph.py: hydrostatic_tank dp=0.04, noPen impulse, shifting on)
 def tank(**kw):
-    sim, info = D.hydrostatic_tank(dp=0.04, domain="surface", device=dev, cfg=D.DeltaSPHConfig(noPen="impulse", shifting=True, **kw))
+    sim, info = cases.hydrostatic_tank(dp=0.04, domain="surface", device=dev, cfg=D.DeltaSPHConfig(noPen="impulse", shifting=True, **kw))
     return sim
 def counted(sim):
     n = {"b": 0}

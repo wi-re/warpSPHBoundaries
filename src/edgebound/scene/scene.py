@@ -28,7 +28,7 @@ import torch
 from warpSPHCore import GradientScheme, OperationProperties, WarpOperation
 
 from ..edge import warpbc
-from .boundaryOps import (BoundaryAdjacency, BoundaryMesh, _modeValues, _queryAllowed, _tier3, _tier4, boundaryOperation,
+from .boundaryOps import (BoundaryMesh, _queryAllowed, _tier3, _tier4, boundaryOperation,
                           buildBoundaryAdjacency, buildElementGrid, kernelName)
 from .implicitBodies import DiskBody, HalfPlaneBody, TierPolicy, evaluateBody
 
@@ -843,7 +843,6 @@ def sceneOperation(queryParticles, operationProperties: OperationProperties, sce
     bodyFields = bodyFields or [BodyField() for _ in range(nb)]
     rhoI = queryParticles.densities.to(dev, F64) if getattr(queryParticles, "densities", None) is not None else torch.ones(N, dtype=F64, device=dev)
     qv = None if queryValues is None else queryValues.to(dev, F64)
-    shape = None
     out = None
     force = torch.zeros((nb, 2), dtype=F64, device=dev)
     torque = torch.zeros(nb, dtype=F64, device=dev)

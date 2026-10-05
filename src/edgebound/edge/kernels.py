@@ -128,8 +128,6 @@ KERNELS = {n: _build(n) for n in _SRC}
 # --------------------------------------------------------------------------------------------------------------
 def _from_terms(name, terms):
     """terms: [(coef, knot, power)] truncated powers; or for poly6 pass the polynomial via _from_poly."""
-    from math import comb
-    q = [Fraction(0), Fraction(1)]
     blocks = {}
     for c, R, pw in terms:
         R = Fraction(R)

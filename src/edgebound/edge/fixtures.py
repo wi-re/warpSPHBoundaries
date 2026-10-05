@@ -22,7 +22,6 @@ given h: value ~ h^0, grad ~ h^-1, moment_alpha ~ h^|alpha|, moment_grad ~ h^(|a
 Tolerances per backend: docs/backends-and-verification.md.
 """
 import json
-import sys
 import time
 from fractions import Fraction as F
 from pathlib import Path
@@ -195,7 +194,6 @@ def build_cases():
     base = [(F(-3), F(-2)), (F(6), F(-1)), (F(1), F(7))]
     for sc in (F(1, 10**6), F(1, 10**3), F(1, 10**2), F(1, 10), F(1, 2), F(1)):
         T = [(a * sc / 10, b * sc / 10) for a, b in base]
-        L_T = max(abs(T[i][0] - T[j][0]) + abs(T[i][1] - T[j][1]) for i in range(3) for j in range(i))
         tag = f"1e{len(str(sc.denominator)) - 1}" if sc != 1 else "1"
         add(f"small_element-{tag}-x_near", ["small_element"], T, (F(1, 5), F(-1, 7)))
         add(f"small_element-{tag}-x_vertex", ["small_element", "x_at_vertex"], T, T[0])

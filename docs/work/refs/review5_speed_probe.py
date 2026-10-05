@@ -1,6 +1,6 @@
 # reviewer probe for WORK-006: ms/step, default (polar) vs all four exact switches, dam break nx=67 and sloshing nx=200
 import time, sys, torch
-from edgebound.sim.deltasph2d import marrone_dambreak, sloshing_tank
+from edgebound.sim.cases import marrone_dambreak, sloshing_tank
 def run(build, warm, timed, **kw):
     sim, info = build(**kw)
     for _ in range(warm): sim.step()

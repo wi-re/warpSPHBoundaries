@@ -10,7 +10,6 @@ import sys
 import time
 
 import numpy as np
-import torch
 
 from edgebound.sim import dfsph_ref as R
 from edgebound import paths
@@ -185,5 +184,4 @@ if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "closure":
     closure_study()
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "obstacle":
-    import os
     obstacle(out_png=str(paths.results_dir() / "dfsph" / "dam_hexagon.png"))

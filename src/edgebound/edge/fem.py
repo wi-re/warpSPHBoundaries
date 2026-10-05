@@ -14,8 +14,6 @@ for rational geometry B is exact rational.  Node ordering (p = 3 shown):
     then the centroid (P3 bubble node).  P0: a single constant function (centroid value).
 """
 from fractions import Fraction
-from itertools import product
-from typing import Dict, List, Tuple
 
 import mpmath as mp
 

@@ -62,8 +62,6 @@ def run(verbose=True):
     data = fx.load()
     hard = [c for c in data["cases"] if c["kind"] == "element" and len(c["polygon"]) == 3 and "nonconvex" not in c["tags"]]
     gen = [c for c in hard if c["id"].startswith("generic")]
-    near = [c for c in hard if "z_to_0" not in c["tags"] and "x_on_edge" not in c["tags"] and "x_at_vertex" not in c["tags"]
-            and "tiny_chord" not in c["tags"]]
     rows = []
     variants = [("float64 closed form (split + unsplit)", dict()),
                 ("float64 closed form, no unsplit", dict(unsplit=False)),

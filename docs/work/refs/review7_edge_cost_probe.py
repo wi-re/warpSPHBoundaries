@@ -2,7 +2,7 @@
 # reviewer probe for WORK-008: where one SurfaceRep adjacency build spends its time (dam-break state, 300 steps), per kernel:
 # plan construction (DevicePlan / ChebPlan host->device) vs the launch, and the effect of dropping the terms of unused channels
 import time, torch, numpy as np
-from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.sim.cases import marrone_dambreak
 from edgebound.edge import warpbc
 sim, _ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()

@@ -6,8 +6,9 @@ sys.path.insert(0, "python"); sys.path.insert(0, "docs/work/refs")
 import numpy as np, torch
 from edgebound.edge import kernels, warpbc, np2d
 from edgebound.q2_conditioning import terms
-from edgebound.sim.deltasph2d import hydrostatic_tank, DeltaSPHConfig, sloshing_tank
-from edgebound.sim.dfsph2d import F64
+from edgebound.sim.deltasph2d import DeltaSPHConfig
+from edgebound.sim.cases import hydrostatic_tank, sloshing_tank
+from edgebound.sim.pairs import F64
 from edgebound.scene.scene import Body, BodyField, Scene, SurfaceRep, sceneOperation
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 import stable_plan_probe as sp

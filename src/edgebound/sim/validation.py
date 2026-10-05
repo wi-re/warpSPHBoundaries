@@ -7,13 +7,12 @@
         Scored exactly as the probe's `_score`: bulk = 2 dx below the surface and off every wall, near wall = within 2 dx of the bed or a side wall, settled KE = mean over the last 25 % of the record.
 """
 import math
-import sys
 import time
 
 import numpy as np
-import torch
 
-from edgebound.sim.deltasph2d import english_wedge, hydrostatic_tank, marrone_dambreak, sloshing_probes, sloshing_tank, triangle_distance, wall_probes
+from edgebound.sim.cases import english_wedge, hydrostatic_tank, marrone_dambreak, sloshing_tank, triangle_distance
+from edgebound.sim.probes import sloshing_probes, wall_probes
 
 
 def score_tank(sim, info, dp, L=2.4, t=None, ke=None):
@@ -69,7 +68,6 @@ def report_tank(s):
 def score_wedge(sim, info, dp, t=None, ke=None):
     """the probe's wedge bands: face (0.3 dp < d < 3 dp off the sloped faces), apex (within 4 dp, outside), base corners (within 4 dp), on top of `score_tank`."""
     out = score_tank(sim, info, dp, L=info["L"], t=t, ke=ke)
-    H, g = info["Hwater"], info["g"]
     xy = sim.x.cpu().numpy()
     resid = out["resid"]
     dW = triangle_distance(xy, info["tri"])
@@ -143,7 +141,6 @@ def run_dambreak(nx=67, T=1.9, every=10, snapDt=None, out=None, verbose=True, **
 
 
 def report_dambreak(res, ref=None):
-    ts = res["tStar"]
     print(f"{res['steps']} steps, {res['wall']:.0f} s; rho in [{res['minDensity'].min():.4f}, {res['maxDensity'].max():.4f}], max|v| {res['maxVelocity'].max():.2f}")
     for q, name in enumerate(("P1", "P2", "P3")):
         for suffix, label in (("Star", "wall"), ("In1Star", "1dx in")):

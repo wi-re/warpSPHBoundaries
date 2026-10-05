@@ -3,7 +3,6 @@
 omniSPH walls are thick triangle slabs of thickness `eps_adj` around the box [domain.min, domain.max]; the inner faces are placed half a lattice spacing outside the
 outermost particles, so the lattice continues into the wall.  Needs the working directory of omniSPH's `cfg/` (a symlink in the scratch directory)."""
 import math
-import os
 import sys
 
 import numpy as np

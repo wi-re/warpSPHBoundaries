@@ -129,7 +129,6 @@ def arc_value(kname, center, Rd, x=(0, 0), nodes=40, dps=40):
             return Msup
 
         # angles on the circle where |p| equals a kernel radius (p = x' - x = centre + Rr (cos,sin))
-        ph0 = mp.atan2(-cy, -cx) if du > 0 else mp.mpf(0)       # direction from the centre towards x
         breaks = [mp.mpf(0), 2 * mp.pi]
         for R in sorted({hi for lo, hi, c in pieces}):
             Rq = mpq(R)

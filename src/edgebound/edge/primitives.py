@@ -25,7 +25,6 @@ def I_all(M: int, s, z):
     if M >= 1:
         tail = zz * mp.asinh(s / abs(z)) if z != 0 else mp.mpf(0)
         out.append((s * r + tail) / 2)
-    rm = r2          # r^2
     for m in range(2, M + 1):
         # r^m: even m -> r2**(m//2) exact powers; odd m via r * r2**((m-1)//2)
         rpow = r2 ** (m // 2) if m % 2 == 0 else r * r2 ** ((m - 1) // 2)

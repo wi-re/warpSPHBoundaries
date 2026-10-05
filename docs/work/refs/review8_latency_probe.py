@@ -1,6 +1,6 @@
 # is edge_channels latency-bound? time vs number of (query, edge) pairs, dam-break state
 import time, torch
-from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.sim.cases import marrone_dambreak
 from edgebound.edge import warpbc
 from edgebound.scene.scene import queryCellList, _segment_distance
 sim, _ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")

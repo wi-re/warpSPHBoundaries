@@ -3,7 +3,6 @@ import time
 
 import numpy as np
 import torch
-import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 from edgebound.scene import boundaryOps as B

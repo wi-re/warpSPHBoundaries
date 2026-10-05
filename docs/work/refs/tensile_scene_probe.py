@@ -8,8 +8,8 @@ sys.path.insert(0, "python")
 import torch
 from edgebound.edge import kernels
 from edgebound.q2_conditioning import terms
-from edgebound.sim.deltasph2d import hydrostatic_tank
-from edgebound.sim.dfsph2d import F64, neighbor_pairs
+from edgebound.sim.cases import hydrostatic_tank
+from edgebound.sim.pairs import F64, neighbor_pairs
 from edgebound.scene.scene import BodyField, sceneOperation
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 

@@ -33,15 +33,16 @@ import torch
 import warp as wp
 from warpSPHCore import KernelFunctions
 
-from edgebound.sim import deltasph2d as D
-from edgebound.sim.deltasph2d import DeltaSPHConfig, hydrostatic_tank
+from edgebound.sim import cases, deltasph2d as D
+from edgebound.sim.deltasph2d import DeltaSPHConfig
+from edgebound.sim.cases import hydrostatic_tank
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64
 
 
 def small_tank(device, dp=0.04, L=0.8, Ht=0.6, Hw=0.3, domain="surface", **cfgkw):
-    sim, info = D.hydrostatic_tank(dp=dp, L=L, Htank=Ht, Hwater=Hw, domain=domain, device=device)
+    sim, info = cases.hydrostatic_tank(dp=dp, L=L, Htank=Ht, Hwater=Hw, domain=domain, device=device)
     sim.cfg.__dict__.update(cfgkw)
     return sim, info
 

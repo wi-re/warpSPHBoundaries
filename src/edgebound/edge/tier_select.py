@@ -6,7 +6,6 @@ switching between neighbouring tiers (the continuity question of HANDOFF §10).
 """
 from fractions import Fraction as F
 
-import mpmath as mp
 import numpy as np
 
 from . import np2d, tier3, tier4

@@ -5,8 +5,9 @@
 import math, sys, os
 import torch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "python"))
-from edgebound.sim import deltasph2d as D
-from edgebound.sim.deltasph2d import DeltaSPHConfig, hydrostatic_tank
+from edgebound.sim import cases, deltasph2d as D
+from edgebound.sim.deltasph2d import DeltaSPHConfig
+from edgebound.sim.cases import hydrostatic_tank
 dev = "cuda:0" if torch.cuda.is_available() else "cpu"
 F64 = torch.float64
 sim, info = hydrostatic_tank(dp=0.04, domain="surface", device=dev, cfg=DeltaSPHConfig())
@@ -36,7 +37,7 @@ for f in (0.5, 1.0, 2.0, 4.0):
     rows = [bulk[k] + f / 2.0 * (tot[k] - bulk[k]) for k in range(4)]
     print("(2) prefactor %.1f (implemented: 2): Couette rows %s  max|.|/0.06014 = %.3f (tol 0.2)" % (f, ["%+.4f" % r for r in rows], max(abs(r) for r in rows) / 0.06014))
 # (3) nu_eff scale in the dam break
-sim2, info2 = D.hydrostatic_tank(dp=0.04, device=dev)[0:2]
+sim2, info2 = cases.hydrostatic_tank(dp=0.04, device=dev)[0:2]
 c = sim2.cfg
 print("(3) tank dp=0.04: alpha=%g c0=%g H=%g xi=%g nu_eff=%.3e m2/s  (water 1.0e-6)  ratio %.0f" % (c.alpha, c.c0, sim2.H, sim2.xi, c.alpha * c.c0 * sim2.H / sim2.xi / 8, c.alpha * c.c0 * sim2.H / sim2.xi / 8 / 1e-6))
 print("(3) boundary layer sqrt(nu_eff t) at t=0.5 s: %.4f m = %.2f dp; physical sqrt(1e-6*0.5) = %.2e m" % (math.sqrt(c.alpha * c.c0 * sim2.H / sim2.xi / 8 * 0.5), math.sqrt(c.alpha * c.c0 * sim2.H / sim2.xi / 8 * 0.5) / dp, math.sqrt(5e-7)))

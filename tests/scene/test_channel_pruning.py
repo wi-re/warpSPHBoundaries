@@ -102,7 +102,7 @@ def test_pruned_adjacency_guard_and_equality(device):
     use of a pruned adjacency: a Density, a Covariance, a Gradient of a perQuery field with a1, a Gradient with
     returnReaction, and a Gradient through an adjacency pruned to a set that does not contain {3,4} (channels=(0,))."""
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-    from edgebound.sim.deltasph2d import hydrostatic_tank
+    from edgebound.sim.cases import hydrostatic_tank
     from edgebound.scene.scene import BodyField, sceneOperation
     dev = str(device)
     sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device)

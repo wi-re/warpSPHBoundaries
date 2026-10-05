@@ -18,7 +18,6 @@ Scaling with the support radius:  value h^0, gradient h^-1, m_alpha h^k, grad m_
 Moments (a) use the compact-potential recursion; (b) is the far-field form kept as a
 cross-check (it needs z != 0 on every edge with a non-empty chord).
 """
-from math import comb
 
 import mpmath as mp
 

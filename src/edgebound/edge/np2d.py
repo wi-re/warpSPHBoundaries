@@ -592,7 +592,6 @@ def grad_moment(verts, x, kernel, alpha, h=1, dtype=np.float64, quad=None, unspl
         g_j = -sum_e n_j int_edge y^alpha Q ds + alpha_j int_T y^{alpha - e_j} Q dA,     Q = pi W - pi W(0),
     where both terms scale like r^2: no cancellation."""
     alpha = tuple(alpha)
-    k = alpha[0] + alpha[1]
     ctx = _prep(verts, x, h, dtype, None if stable is not None else quad, stable)
     g, num = ctx.g, ctx.g.num
     # truncated (general) form

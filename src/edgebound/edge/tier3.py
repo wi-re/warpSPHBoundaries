@@ -81,7 +81,6 @@ def F_k(kname, d, k, dps=40):
         blocks[2] = _deriv_blocks(blocks[0], 2)
         tot = mp.mpf(0)
         for (order, a, b), coef in _F_terms()[f"F{k}"].items():
-            cf = sp.Poly(coef, sp.Symbol("d")) if coef.free_symbols else None
             val = sp.Rational(coef.subs(sp.Symbol("d"), sp.Rational(d.numerator, d.denominator))) if coef.free_symbols else sp.Rational(coef)
             c = Fraction(int(val.p), int(val.q))
             if c == 0:

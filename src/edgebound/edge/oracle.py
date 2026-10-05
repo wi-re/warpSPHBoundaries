@@ -15,7 +15,6 @@ It shares NO code with core.py / primitives.py (only the exact vertex list from
 Profiles: list of pieces (lo, hi, coeffs) with exact Fraction coefficients,
 g(r) = sum_i coeffs[i] r^i on [lo, hi]  (e.g. pi*W of an EdgeKernel).
 """
-from fractions import Fraction
 
 import mpmath as mp
 

@@ -20,7 +20,7 @@ import warp as wp
 
 from . import np2d
 from .np2d import _compile_profile_moment, _inner_profile, compile_moment, kernel_profile
-from .warp2d import _asinh, _binom, _dangle, _edge_integral, _Im, _isqrt, _S, _sdiff, _ypoly_coef, f64
+from .warp2d import _dangle, _edge_integral, _isqrt, _sdiff, f64
 
 wp.config.quiet = True
 

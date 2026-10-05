@@ -20,34 +20,22 @@ Units as warpSPH (rest density 1, P* = P / (rho0 g H)); Wendland C2, support H =
 Wall pressure: `P_b >= 0` (`clampWallPressure`): the hydrostatic extrapolation is a suction at a ceiling (dfsph-validation.md s.7); warpSPH's mDBC carries the ghost's own (possibly negative) pressure there.
 """
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
 import torch
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
 from ..scene.cone_area import cone_area_scene
 from ..scene.cover import cover_vector_scene
-from .dfsph2d import F64, dwendland2, neighbor_pairs, wendland2
-from ..scene.scene import BodyField, Scene, buildCellList, sceneOperation  # noqa: F401  (buildCellList re-exported for callers)
+from ..scene.scene import BodyField, Scene, sceneOperation
 from ..scene.tensile import tensile_vector_scene
 from ..scene.viscosity import lap_lambda_scene
+from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
 KSCALE = 1.897367                       # warpSPHCore sphKernelScale(Wendland2, 2D): support / smoothing length
-
-
-def wendland4(r, h):
-    """Wendland C4 in 2D, support radius h: 9/(pi h^2) (1 - q)^6 (1 + 6 q + 35 q^2 / 3)."""
-    q = r / h
-    return torch.where(q < 1, 9.0 / (math.pi * h * h) * (1 - q) ** 6 * (1 + 6 * q + 35.0 / 3.0 * q * q), torch.zeros_like(q))
-
-
-def dwendland4(r, h):
-    q = r / h
-    return torch.where(q < 1, -9.0 / (math.pi * h ** 3) * (56.0 / 3.0) * q * (1 + 5 * q) * (1 - q) ** 5, torch.zeros_like(q))
 
 
 # kernel -> (W, dW/dr, xi = warpSPHCore sphKernel_xi, kernel scale = support / smoothing length)
@@ -174,7 +162,7 @@ class DeltaSPH2D:
     def _detect_surface(self, x, i, j, r, lam):
         """warpSPH `detectFreeSurfaceBarecasco`: C = sum unit(x_i - x_j) over neighbours (W > 0), c = C/|C|; surface iff no neighbour (j != i) has angle(x_j - x_i, c) <= threshold/2
         (all neighbours count when C = 0).  Wall: the continuum of wall particles (density mu/dx^2), the exact edge reduction (cover) and closed-form area (cone).  No scene: lam of shape [0, N], near empty, nothing added."""
-        cfg, N = self.cfg, len(x)
+        cfg = self.cfg
         near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
         nz = i != j
         ii, jj, rr = i[nz], j[nz], r[nz]
@@ -481,189 +469,3 @@ class DeltaSPH2D:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- cases
-def hydrostatic_tank(dp=0.02, L=2.4, Htank=1.2, Hwater=0.5, c0Ratio=20.0, domain="surface", device="cuda:0", cfg: Optional[DeltaSPHConfig] = None):
-    """English et al. 2022 s.4.1 still water: tank L x Htank (inner faces), water of depth Hwater on the hydrostatic density profile, particles at the lattice mid-points (first row dp/2 from every wall,
-    as warpSPH's `alignBoundaryLattice`), h/dp = 2 (support 4 dp), c0 = c0Ratio sqrt(g Hwater)."""
-    from .dfsph2d import domain_scene
-    g = 9.81
-    c0 = c0Ratio * math.sqrt(g * Hwater)
-    nx, ny = int(round(L / dp)), int(round(Hwater / dp))
-    X, Y = np.meshgrid(-L / 2 + dp * (np.arange(nx) + 0.5), -Htank / 2 + dp * (np.arange(ny) + 0.5), indexing="ij")
-    pos = np.stack([X.ravel(), Y.ravel()], 1)
-    depth = np.clip(-Htank / 2 + Hwater - pos[:, 1], 0.0, None)
-    rho = 1.0 * (1.0 + g * depth / c0 ** 2)
-    scene = domain_scene(domain, (-L / 2, -Htank / 2), (L / 2, Htank / 2), 4 * dp, device)
-    cfg = cfg or DeltaSPHConfig(gravity=(0.0, -g), c0=c0)
-    sim = DeltaSPH2D(pos, np.zeros_like(pos), rho, dp, scene, cfg, device)
-    return sim, dict(g=g, c0=c0, Hwater=Hwater, bed=-Htank / 2, nx=nx, ny=ny)
-
-
-WEDGE_APEX = (0.0, 0.24)                    # above the bed
-WEDGE_HALF_BASE = 0.27733333333333343       # warpSPH `equilateralBottom` (aspectRatio 2, maxExtent 0.2903): apex 0.24 above the bed, half base 0.2773 (98 deg apex)
-
-
-def triangle_distance(p, tri):
-    """signed distance of points p [M,2] to the triangle tri [3,2] (negative inside); numpy."""
-    a, b, c = tri
-    d = np.full(len(p), np.inf)
-    for u, w in ((a, b), (b, c), (c, a)):
-        e = w - u
-        t = np.clip(((p - u) @ e) / (e @ e), 0.0, 1.0)
-        d = np.minimum(d, np.linalg.norm(p - (u + t[:, None] * e), axis=1))
-    def sgn(p1, p2, p3):
-        return (p1[:, 0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[:, 1] - p3[1])
-    d1, d2, d3 = sgn(p, a, b), sgn(p, b, c), sgn(p, c, a)
-    inside = ~(((d1 < 0) | (d2 < 0) | (d3 < 0)) & ((d1 > 0) | (d2 > 0) | (d3 > 0)))
-    return np.where(inside, -d, d)
-
-
-def english_wedge(dp=0.02, L=2.4, Htank=1.2, Hwater=0.5, c0Ratio=20.0, domain="surface", device="cuda:0", cfg: Optional[DeltaSPHConfig] = None, margin=0.5, wedge=True, staircase=False):
-    """English et al. 2022 s.4.1 with the sharp wedge on the bed (apex 0.24 m above the bed, `WEDGE_HALF_BASE`, centred): the flat tank of `hydrostatic_tank` plus a `SurfaceRep` triangle body
-    with exact corners.  Lattice points closer than `margin * dp` to the wedge are removed (the first fluid row keeps the half-spacing it has at the flat walls)."""
-    from .dfsph2d import domain_scene
-    from ..scene.scene import Body, Scene, SurfaceRep
-    g = 9.81
-    c0 = c0Ratio * math.sqrt(g * Hwater)
-    bed = -Htank / 2
-    nx, ny = int(round(L / dp)), int(round(Hwater / dp))
-    X, Y = np.meshgrid(-L / 2 + dp * (np.arange(nx) + 0.5), bed + dp * (np.arange(ny) + 0.5), indexing="ij")
-    pos = np.stack([X.ravel(), Y.ravel()], 1)
-    tri = np.array([[-WEDGE_HALF_BASE, bed], [WEDGE_HALF_BASE, bed], [WEDGE_APEX[0], bed + WEDGE_APEX[1]]])
-    stair = None
-    if wedge and staircase:
-        # control: the wall IS the lattice staircase (the union of the removed lattice cells), as for warpSPH's wall particles: every first fluid row is exactly dp/2 from the wall
-        rem = triangle_distance(pos, tri) < 0
-        cols = np.round((pos[:, 0] - (-L / 2 + 0.5 * dp)) / dp).astype(int)
-        top = np.zeros(nx)
-        for c in np.unique(cols[rem]):
-            top[c] = (rem & (cols == c)).sum() * dp
-        pts = []
-        for c in range(nx):
-            if top[c] > 0:
-                xl, xr = -L / 2 + c * dp, -L / 2 + (c + 1) * dp
-                pts += [(xl, bed + top[c]), (xr, bed + top[c])]
-        first = next(c for c in range(nx) if top[c] > 0)
-        last = max(c for c in range(nx) if top[c] > 0)
-        poly = [(-L / 2 + first * dp, bed)] + pts + [(-L / 2 + (last + 1) * dp, bed)]
-        stair = np.array(poly)
-        pos = pos[~rem]
-    elif wedge:
-        pos = pos[triangle_distance(pos, tri) >= margin * dp]
-    depth = np.clip(bed + Hwater - pos[:, 1], 0.0, None)
-    rho = 1.0 * (1.0 + g * depth / c0 ** 2)
-    dom = domain_scene(domain, (-L / 2, bed), (L / 2, bed + Htank), 4 * dp, device).bodies[0]
-    bodies = [dom]
-    if wedge:
-        bodies.append(Body(bodyId=1, reps=[SurfaceRep.polygon(stair if stair is not None else tri, solid="inside")]))
-    cfg = cfg or DeltaSPHConfig(gravity=(0.0, -g), c0=c0)
-    sim = DeltaSPH2D(pos, np.zeros_like(pos), rho, dp, Scene(bodies, device), cfg, device)
-    return sim, dict(g=g, c0=c0, Hwater=Hwater, bed=bed, nx=nx, ny=ny, tri=tri, L=L)
-
-
-# ---------------------------------------------------------------------------------------------------------------------------- Marrone 3.1 dam break
-_GAUSS7_NODES = (-0.9491079123427585, -0.7415311855993945, -0.4058451513773972, 0.0, 0.4058451513773972, 0.7415311855993945, 0.9491079123427585)
-_GAUSS7_WEIGHTS = (0.1294849661688697, 0.2797053914892766, 0.3818300505051189, 0.4179591836734694, 0.3818300505051189, 0.2797053914892766, 0.1294849661688697)
-_DISC_CHORD_WEIGHTS = tuple(w * max(0.0, 1.0 - x * x) ** 0.5 for x, w in zip(_GAUSS7_NODES, _GAUSS7_WEIGHTS))
-
-
-def marrone_dambreak(nx=67, c0Ratio=40.0, domain="surface", device="cuda:0", cfg: Optional[DeltaSPHConfig] = None, **cfgkw):
-    """Marrone et al. 2011 s.3.1 as warpSPH's `dambreak` case builds it (`probe_deltaSPHMarrone.py`): column 2H x H (H = 0.6) in the left corner of a closed tank 5.366 H long, ceiling 0.985 m above the bed
-    (L = 1 m, dx = L/nx, walls dx/2 outside the first lattice row on all sides), c0 = c0Ratio sqrt(g H), uniform rho0 at t = 0 (no hydrostatic init), time-centred continuity on.
-    x-spacing of warpSPH's lattice is W/round(W/dx) (0.13 % smaller at nx = 67); here dx in both directions."""
-    from .dfsph2d import domain_scene
-    H, L, g = 0.6, 1.0, 9.81
-    Wt = 5.366 * H
-    dx = L / nx
-    c0 = c0Ratio * math.sqrt(g * H)
-    xl, xr, yb, yt = -Wt / 2 + dx / 2, Wt / 2 - dx / 2, -L / 2 + dx / 2, L / 2 - dx / 2
-    ncol, nrow = int(math.ceil(2 * H / dx - 1e-9)), int(math.floor(H / dx + 1e-9))
-    X, Y = np.meshgrid(xl + dx * (np.arange(ncol) + 0.5), yb + dx * (np.arange(nrow) + 0.5), indexing="ij")
-    pos = np.stack([X.ravel(), Y.ravel()], 1)
-    scene = domain_scene(domain, (xl, yb), (xr, yt), 4 * dx, device)
-    cfg = cfg or DeltaSPHConfig(gravity=(0.0, -g), c0=c0, timeCentred=True, **cfgkw)
-    sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, device)
-    return sim, dict(g=g, c0=c0, H=H, Wt=Wt, xl=xl, xr=xr, yb=yb, yt=yt, dx=dx, nx=nx)
-
-
-def mls_pressure(sim, q, neighbor_threshold=4):
-    """first-order MLS (Liu-Liu) fit of the fluid pressure at query points q [M,2] (warpSPH `_mlsPressureDevice`): weights V_j W, a + b.(x_j - q), Shepard fallback where the 3x3 system is ill-conditioned
-    or has fewer than `neighbor_threshold` neighbours, clamped >= 0.  Returns (value [M], neighbours [M])."""
-    x, H = sim.x, sim.H
-    P = sim.pressure()
-    V = sim.m / sim.rho
-    M = len(q)
-    d = x[None, :, :] - q[:, None, :]                                           # [M,N,2]
-    r = d.norm(dim=2)
-    inside = r < H
-    w = torch.where(inside, V[None] * sim.W(r, H), torch.zeros_like(r))     # [M,N]
-    nn = inside.sum(1)
-    y = d / H
-    B = torch.stack([torch.ones_like(r), y[..., 0], y[..., 1]], 2)              # [M,N,3]
-    A = torch.einsum("mn,mni,mnj->mij", w, B, B)
-    b = torch.einsum("mn,mni,n->mi", w, B, P)
-    ev = torch.linalg.eigvalsh(A)
-    wc = (nn >= neighbor_threshold) & (ev[:, 0] > 1e-6 * ev[:, 2].clamp(min=1e-300))
-    sol = torch.linalg.solve(A + torch.where(wc, 0.0, 1.0)[:, None, None] * torch.eye(3, dtype=F64, device=x.device)[None], b[:, :, None])[:, :, 0]
-    shep = torch.where(A[:, 0, 0] > 0, b[:, 0] / A[:, 0, 0].clamp(min=1e-300), torch.zeros_like(r[:, 0]))
-    val = torch.where(wc, sol[:, 0], shep).clamp(min=0.0)
-    return val, nn
-
-
-def wall_probes(sim, info, heights=(0.16, 0.584, 1.0), disc=0.045, inset=0.0):
-    """P* = P / (rho0 g H) of the three impact-wall probes (disc-averaged with the 7-point chord quadrature, samples with <= 1 neighbour dry) at the wall and one dx into the fluid."""
-    xw = info["xr"] - inset
-    out = []
-    for xq in (xw, xw - info["dx"]):
-        q = torch.tensor([[xq, info["yb"] + z + disc * s] for z in heights for s in _GAUSS7_NODES], dtype=F64, device=sim.dev)
-        val, nn = mls_pressure(sim, q)
-        val, nn = val.reshape(len(heights), 7), nn.reshape(len(heights), 7)
-        w = torch.tensor(_DISC_CHORD_WEIGHTS, dtype=F64, device=sim.dev)[None] * (nn > 1).to(F64)
-        ws = w.sum(1)
-        out.append(torch.where(ws > 0, (val * w).sum(1) / ws.clamp(min=1e-12), torch.zeros_like(ws)) / (sim.cfg.rho0 * info["g"] * info["H"]))
-    return out[0].cpu().numpy(), out[1].cpu().numpy()
-
-
-# ---------------------------------------------------------------------------------------------------------------------------- SPHERIC test case 10 (sloshing tank)
-SPHERIC_DIR = "/home/lu26029/dev/warpSPH/examples/sloshingTank/SPHERIC_TestCase10/data_files"
-
-
-def load_roll(path=None):
-    """SPHERIC roll table lateral_water_1x.txt -> (t [s], theta [rad], measured sensor pressure [Pa]); columns t, p [mbar], smoothed roll angle [deg], ..."""
-    raw = np.genfromtxt(path or SPHERIC_DIR + "/lateral_water_1x.txt", delimiter="\t", skip_header=1)
-    return raw[:, 0], np.radians(raw[:, 2]), raw[:, 1] * 100.0
-
-
-def sloshing_tank(nx=200, T_unused=None, domain="surface", device="cuda:0", cfg: Optional[DeltaSPHConfig] = None, rollFile=None, **cfgkw):
-    """SPHERIC test case 10, lateral water, as warpSPH's `sloshingTank` case (`examples/sloshingTank`): tank 0.9 x 0.508 m, still water 0.093 m (rows of dx = 0.9/nx up to the fill depth), Wendland C4, support 4 dx,
-    c0 = 20, constant dt = 1e-4, isothermal EOS, alpha = 0.02, time-centred continuity, free-slip walls.  The tank is NOT moved: it rolls in the tank-fixed frame by rotating gravity,
-    g(t) = 9.81 (-sin theta(t), -cos theta(t)), theta from the measured roll table, updated after every step (as warpSPH's `postStep`).  Sensor 1 at (-0.45, 0.093) on the left wall."""
-    from .dfsph2d import domain_scene
-    L, Ht, fill, g = 0.9, 0.508, 0.093, 9.81
-    dx = L / nx
-    nrow = int(round(fill / dx))
-    X, Y = np.meshgrid(-L / 2 + dx * (np.arange(nx) + 0.5), dx * (np.arange(nrow) + 0.5), indexing="ij")
-    pos = np.stack([X.ravel(), Y.ravel()], 1)
-    scene = domain_scene(domain, (-L / 2, 0.0), (L / 2, Ht), 4 * dx, device)
-    cfg = cfg or DeltaSPHConfig(gravity=(0.0, -g), c0=20.0, alpha=0.02, kernel=KernelFunctions.Wendland4, fixedDt=1e-4, timeCentred=True, **cfgkw)
-    sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, device)
-    t, th, pexp = load_roll(rollFile)
-    sim.gravityFn = lambda tt: (-g * math.sin(float(np.interp(tt, t, th))), -g * math.cos(float(np.interp(tt, t, th))))
-    sim.g = torch.tensor(sim.gravityFn(0.0), dtype=F64, device=device)
-    return sim, dict(g=g, L=L, Ht=Ht, fill=fill, dx=dx, sensor=(-L / 2, fill), roll=(t, th, pexp), rho0Phys=1000.0)
-
-
-def sloshing_probes(sim, info, radius=0.02):
-    """Sensor-1 pressure in Pa: (a) warpSPH's `sensorPressureProbe`: Gaussian Shepard average (exp(-(r / (radius / 2))^2), fluid particles within `radius`) of the Tait pressure rho0 c0^2 / 7 ((rho / rho0)^7 - 1) x rho0Phys;
-    (b) first-order MLS of the (linear) EOS pressure at the wall point of the sensor.  NaN where fewer than 3 neighbours."""
-    c0, rho0, rp = sim.cfg.c0, sim.cfg.rho0, info["rho0Phys"]
-    q = torch.tensor(info["sensor"], dtype=F64, device=sim.dev)
-    r = (sim.x - q[None]).norm(dim=1)
-    near = r < radius
-    if int(near.sum()) >= 3:
-        w = torch.exp(-(r[near] / (0.5 * radius)) ** 2)
-        tait = rp * rho0 * c0 ** 2 / 7.0 * ((sim.rho[near] / rho0) ** 7 - 1.0)
-        pg = float((w * tait).sum() / w.sum())
-    else:
-        pg = float("nan")
-    val, nn = mls_pressure(sim, q[None])
-    return pg, float(val[0]) * rp

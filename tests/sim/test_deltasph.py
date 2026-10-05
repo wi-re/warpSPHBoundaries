@@ -8,7 +8,7 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.sim import deltasph2d as D
+from edgebound.sim import cases, deltasph2d as D
 from edgebound.sim.dfsph2d import domain_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
@@ -16,7 +16,7 @@ F64 = torch.float64
 
 
 def small_tank(device, dp=0.04, L=0.8, Ht=0.6, Hw=0.3, domain="surface", **cfgkw):
-    sim, info = D.hydrostatic_tank(dp=dp, L=L, Htank=Ht, Hwater=Hw, domain=domain, device=device)
+    sim, info = cases.hydrostatic_tank(dp=dp, L=L, Htank=Ht, Hwater=Hw, domain=domain, device=device)
     sim.cfg.__dict__.update(cfgkw)
     return sim, info
 
@@ -117,8 +117,8 @@ def test_deltasph_requires_surface_walls(device):
 def test_pair_list_is_complete_for_a_lattice_whose_spacing_divides_the_support(device):
     """regression: with support = 4 dx the lattice puts particles exactly on the cell-list borders; the cell index was rounded differently at insertion and at query and ~2 % of the reverse pairs went missing
     (the pairwise antisymmetric forces then no longer conserved momentum).  The pair list must equal the brute-force list of r < H, in both directions."""
-    from edgebound.sim.dfsph2d import neighbor_pairs
-    sim, _ = D.hydrostatic_tank(dp=0.02, device=device)                       # the English 2.4 x 1.2 m tank: the bug needs this lattice / cell alignment
+    from edgebound.sim.pairs import neighbor_pairs
+    sim, _ = cases.hydrostatic_tank(dp=0.02, device=device)                       # the English 2.4 x 1.2 m tank: the bug needs this lattice / cell alignment
     x = sim.x
     i, j, r = neighbor_pairs(x, sim.Hvec)
     n = len(x)
@@ -135,7 +135,7 @@ def test_pair_list_is_complete_for_a_lattice_whose_spacing_divides_the_support(d
 def test_wall_viscous_term_matches_the_half_plane_integral(device):
     """a particle dp/2 above a flat wall moving into it at u_n: the free-slip alpha-viscosity wall term is  (alpha c0 H / xi) (2 u_n / rho) mu M2nn n  with M2nn = int_{y_n > d} int W'(r) y_n^2 / r^3 dy_t dy_n
     (checked against a fine tensor-grid quadrature of the half plane); it decelerates the approach, is zero for tangential motion, and vanishes without viscosity."""
-    from edgebound.sim.dfsph2d import dwendland2
+    from edgebound.sim.pairs import dwendland2
     sim, info = small_tank(device)
     sim.cfg.wallViscosityForm = "pairwise"                        # this test pins the pairwise (Monaghan) form, which is kept
     sim.cfg.ddt = False

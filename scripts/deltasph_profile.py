@@ -17,7 +17,8 @@ import numpy as np
 import torch
 
 import edgebound.sim.deltasph2d as d2d
-from edgebound.sim.deltasph2d import DeltaSPH2D, marrone_dambreak, sloshing_tank
+from edgebound.sim.deltasph2d import DeltaSPH2D
+from edgebound.sim.cases import marrone_dambreak, sloshing_tank
 from edgebound.scene.scene import Scene
 from edgebound import paths
 
@@ -211,7 +212,7 @@ def main():
     s_ms = 1000.0 * s_wall / s_steps
     print("\n(d) stored dambreak_B_nx67 series: wall = %.2f s, steps = %d  ->  %.3f ms/step" % (s_wall, s_steps, s_ms))
     print("    profiled dam-break ms/step (timer) = %.3f  ;  ratio profiled / series = %.3f" % (db["ms_step_incl"], db["ms_step_incl"] / s_ms))
-    sl = _run_case("sloshing  (sloshing_tank nx=200, shifting=True, noPen=impulse)",
+    _run_case("sloshing  (sloshing_tank nx=200, shifting=True, noPen=impulse)",
                    lambda: sloshing_tank(nx=200, shifting=True, noPen="impulse"), warm=100, timed=100)
     _profiler_dambreak(nsteps=20)
     print("\nDONE.")

@@ -20,14 +20,12 @@ Hard tier switching: explicit meshes are tiers 1/2 (exact elements); `BoundaryDe
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
-import numpy as np
 import torch
-import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, WarpOperation
 
 from ..edge import warpbc
-from .implicitBodies import DiskBody, HalfPlaneBody, Tier3, Tier4, TierPolicy, evaluateBody
+from .implicitBodies import DiskBody, Tier3, Tier4, TierPolicy, evaluateBody
 
 _KERNEL_NAMES = {KernelFunctions.CubicSpline: "cubic", KernelFunctions.QuarticSpline: "quartic", KernelFunctions.QuinticSpline: "quintic",
                  KernelFunctions.B7: "b7", KernelFunctions.B8: "b8", KernelFunctions.Poly6: "poly6",
@@ -166,7 +164,6 @@ def buildBoundaryAdjacency(queryParticles, operationProperties: OperationPropert
     E = [mesh0.elements.long()] if mesh0 is not None else []
     bid = [mesh0.bodyIds.long()] if mesh0 is not None else []
     nV = mesh0.vertices.shape[0] if mesh0 is not None else 0
-    polyElementTier = []                                     # per appended polygon body: tier [N] to filter pairs
     elementOwner = [torch.full((mesh0.elements.shape[0],), -1, dtype=torch.long, device=dev)] if mesh0 is not None else []
     for bi, body in enumerate(desc.bodies):
         lam, grad, tier, active = evaluateBody(body, pos, sup, name, dev, desc.policy, tables)
