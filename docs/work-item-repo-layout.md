@@ -56,11 +56,14 @@ Rule for what is library and what is a script: **if a test or another library mo
 
 ## 6. Order of work (each step is one commit and ends green)
 
-0. Baseline: record `pytest tests/edge -q` = **767 passed**, the five-file solver set = 82, `deltasph_regress check --physics --cases tank,dambreak` all PASS with margins. This item changes **no result**: the same three commands are the gate after every step. A margin change is a defect of the move (a path, an import order), not a physics matter.
-1. `pyproject.toml` + editable install, remove the `sys.path` hacks (both `conftest.py`), nothing moves yet. Gate.
-2. Cut the couplings of §3 in place (still flat): split `q2_conditioning` → library + study; move the case runners into one importable module; the `warp_bench` / `dfsph_ref` helpers out of the tests' import path. Gate.
-3. `paths.py`; replace every `__file__`-depth and cwd-relative path (§4). Gate.
-4. `git mv` into `src/edgebound/…` and `scripts/…` **without editing content** except imports (one commit per layer so `git log --follow` and blame survive; no formatting changes in a move commit). Gate after each.
+0. Baseline: record `pytest tests/edge -q` = **767 passed** and the five-file solver set = 82. This item changes **no result**, so the gate is tiered (user, 2026-10-05; the simulation set is not a per-step gate for renames and moves):
+   * **every step:** the full test suite (it imports every module and runs both solvers; ~5 min). A failure is a defect of the move, never a physics matter.
+   * **only where a step touches what the suite does not exercise:** the harness `deltasph_regress check --physics --cases tank,dambreak` (all bit-level PASS, margins as in REPORT-008) — after step 3 (`paths.py`: the harness reads the baseline JSON and the series `.npz` through the changed paths; the tests do not) and once at the end. The profiler (`deltasph_profile`, reads `results/deltasph/…`) and the fixture generators (`fixtures`, `fem_fixtures`, run once and `git diff` the JSON: must be empty) get a smoke run after the step that moves them.
+   * **not run:** sloshing, wedge, the long validation scripts, videos. They are scripts around the same library calls.
+1. `pyproject.toml` + editable install, remove the `sys.path` hacks (both `conftest.py`), nothing moves yet. Suite.
+2. Cut the couplings of §3 in place (still flat): split `q2_conditioning` → library + study; move the case runners into one importable module; the `warp_bench` / `dfsph_ref` helpers out of the tests' import path. Suite.
+3. `paths.py`; replace every `__file__`-depth and cwd-relative path (§4). Suite + harness.
+4. `git mv` into `src/edgebound/…` and `scripts/…` **without editing content** except imports (one commit per layer so `git log --follow` and blame survive; no formatting changes in a move commit). Suite after each; smoke runs of the moved scripts (`--help` or a 10-step case).
 5. Update the live docs and the command map; re-run the notebooks; delete or archive the root scripts (§2 H).
 6. Cleanup pass (see §7), one theme per commit.
 
@@ -78,4 +81,4 @@ Seen while surveying; to be verified when the file is open, not assumed:
 
 ## 8. Definition of done
 
-`pip install -e .` in the `warp` env, `pytest` from the repo root = 767 passed (+ the `curvbound` tests if that package is kept), the harness command from §4 reproduces all bit-level PASS lines with the recorded margins, `python -c "import edgebound"` works from any directory, no module in `src/` imports from `scripts/`, no test imports from `scripts/`, the live docs contain no stale command, `docs/work/README.md` has the command map, and `plan-wall-evaluation.md` step 1 can start from `src/edgebound/edge/warpbc.py`.
+`pip install -e .` in the `warp` env, `pytest` from the repo root = 767 passed (+ the `curvbound` tests if that package is kept), the harness command from §4 reproduces all bit-level PASS lines with the recorded margins (final run), `python -c "import edgebound"` works from any directory, no module in `src/` imports from `scripts/`, no test imports from `scripts/`, the live docs contain no stale command, `docs/work/README.md` has the command map, and `plan-wall-evaluation.md` step 1 can start from `src/edgebound/edge/warpbc.py`.
