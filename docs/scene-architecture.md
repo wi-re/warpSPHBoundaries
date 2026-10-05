@@ -15,6 +15,7 @@ frame and is static.
 Scene ── Body (pose: centre, angle; linear / angular velocity; OBB in the local frame)
             └── representations (all in LOCAL coordinates, each with its own static acceleration structure)
                   SurfaceRep   closed polylines, solid on the left          edge-local terms + body-level indicator   (exact)
+                  BoxRep       axis-aligned rectangle (obstacle / domain)   corner tables, no pairs (box-domain-primitive.md) (exact to 1e-7..1e-10 by kernel)
                   VolumeRep    triangles, P1 nodal fields                   boundaryOps pair engine                    (exact)
                   ImplicitRep  DiskBody / HalfPlaneBody                     tier 3 / tier 4 / polygon-surface (hard)   (model)
                   SdfRep       sampled signed distance + optional fallback  tier 3 / fallback surface (hard)           (model)

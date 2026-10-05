@@ -31,6 +31,7 @@ from warpSPHCore import GradientScheme, OperationProperties, WarpOperation
 from ..edge import warpbc
 from .boundaryOps import (BoundaryMesh, queryAllowed, tier3Table, tier4Table, boundaryOperation,
                           buildBoundaryAdjacency, buildElementGrid, kernelName)
+from .box import BoxTables, chebyshev_nodes, fit_panels
 from .implicitBodies import DiskBody, HalfPlaneBody, TierPolicy, evaluateBody
 
 F64 = torch.float64
@@ -312,6 +313,115 @@ class SurfaceRep:
         """topology + moments in one call (the fallback surfaces of implicit representations, which have no shared adjacency)."""
         topo = self.topology(lpos, lsup)
         return None if topo is None else self.moments(topo, lpos, lsup, qglobal, kernel, device, channels)
+
+
+_BOX_COEFFS = {}                                                              # (kernel, N, breaks) -> {'Phi': [np, np, N+1, N+1], 'Phi1': ...}: device independent
+_BOX_TABLES = {}                                                              # (kernel, N, breaks, device) -> BoxTables
+BOX_BREAKS = (-1.0, -0.5, -0.25, -0.0625, 0.0, 0.0625, 0.25, 0.5, 1.0)      # graded toward the origin (cusps of lw2 / odd powers of r), 8 panels per axis
+BOX_DEGREE = 20
+BOX_EXACT_KERNELS = frozenset({"cone"})                                      # profiles with a kink at the support edge (the table converges algebraically, 1e-3 on the gradient): exact polygon path
+
+
+def boxTables(kernel: str, device, N: int = BOX_DEGREE, breaks=BOX_BREAKS) -> BoxTables:
+    """the corner tables (`box.py`) of the registered kernel `kernel`, built once from the exact edge machinery: Phi(a, b) / Phi1(a, b) are the lam / m1_x channels of the quadrant
+    [-3, 0]^2 for a particle at (-a, -b) (support 1), with a, b on the Chebyshev nodes of every panel of the graded grid `breaks`."""
+    key = (kernel, N, tuple(breaks), str(device))
+    if key not in _BOX_TABLES:
+        ck = (kernel, N, tuple(breaks))
+        if ck not in _BOX_COEFFS:
+            nodes = chebyshev_nodes(N)
+            npan = len(breaks) - 1
+            rep = SurfaceRep.box((-3.0, -3.0), (0.0, 0.0)).to(device)
+            xs = np.concatenate([0.5 * (breaks[i] + breaks[i + 1]) + 0.5 * (breaks[i + 1] - breaks[i]) * nodes for i in range(npan)])       # [np (N+1)] all panel nodes of one axis
+            A, Bq = np.meshgrid(xs, xs, indexing="ij")
+            lpos = torch.as_tensor(np.stack([-A.ravel(), -Bq.ravel()], 1), dtype=F64, device=device)
+            n = len(lpos)
+            mp = rep.pairs(lpos, torch.ones(n, dtype=F64, device=device), torch.arange(n, device=device), kernel, device)
+            q = mp.q.long()
+            phi = torch.zeros(n, dtype=F64, device=device).index_add_(0, q, mp.lam).cpu().numpy().reshape(npan, N + 1, npan, N + 1)
+            phi1 = torch.zeros(n, dtype=F64, device=device).index_add_(0, q, mp.m1[:, 0]).cpu().numpy().reshape(npan, N + 1, npan, N + 1)
+            coeffs = {"Phi": np.zeros((npan, npan, N + 1, N + 1)), "Phi1": np.zeros((npan, npan, N + 1, N + 1))}
+            for i in range(npan):
+                for j in range(npan):
+                    coeffs["Phi"][i, j] = fit_panels(phi[i, :, j, :], N)
+                    coeffs["Phi1"][i, j] = fit_panels(phi1[i, :, j, :], N)
+            _BOX_COEFFS[ck] = coeffs
+        _BOX_TABLES[key] = BoxTables(_BOX_COEFFS[ck], breaks, N, device)
+    return _BOX_TABLES[key]
+
+
+class BoxRep:
+    """an axis-aligned rectangle in the body frame, [lo, hi]: the solid (`solid='inside'`, an obstacle / a baffle / a floor slab) or the fluid domain (`solid='outside'`: a tank,
+    channel, flume).  No edges, no pairs: every moment channel of every kernel is four corner lookups of two 2D tables (`box.py`, docs/box-domain-primitive.md), one `RepMoments` row per query
+    that sees the box; exact up to the table error (kernel-dependent: w2 1e-10 on lam, 1e-7 on the gradient channels; w4 1e-9; lw2 1e-6; w2p5 1e-10 at the default grid), no cancellation, no
+    indicator pseudo-pair.  Kernels in `BOX_EXACT_KERNELS` (a kink at the support edge: `cone`) use the exact polygon path of `surface()` instead.
+    `surface()` is the polygon of the same body (the reference, the cone-area detector, the SDF fallback)."""
+    kind = "box"
+
+    def __init__(self, lo, hi, solid: str = "inside"):
+        self.lo = torch.as_tensor(lo, dtype=F64)
+        self.hi = torch.as_tensor(hi, dtype=F64)
+        if solid not in ("inside", "outside"):
+            raise ValueError("solid must be 'inside' or 'outside'")
+        self.solid = solid
+        self._surface = None
+
+    def to(self, device):
+        self.lo, self.hi = self.lo.to(device), self.hi.to(device)
+        self._surface = None
+        return self
+
+    def bounds(self):
+        return self.lo, self.hi
+
+    def surface(self):
+        if self._surface is None:
+            self._surface = SurfaceRep.box(tuple(float(v) for v in self.lo), tuple(float(v) for v in self.hi), self.solid).to(self.lo.device)
+        return self._surface
+
+    def signed(self, lpos):
+        """(d, n): signed distance (positive in the fluid) and the unit normal from the wall into the fluid at the closest wall point, body frame."""
+        c, hw = 0.5 * (self.lo + self.hi), 0.5 * (self.hi - self.lo)
+        r = lpos - c
+        q = r.abs() - hw                                                          # > 0: outside the box along that axis
+        out = q.clamp(min=0).norm(dim=1)
+        sd = out + q.max(dim=1).values.clamp(max=0)                               # signed distance to the box, positive outside it
+        ax = (q[:, 1] > q[:, 0]).long()                                           # axis of the nearest face plane (the largest q)
+        sgn = torch.where(r.gather(1, ax[:, None])[:, 0] >= 0, 1.0, -1.0).to(F64)
+        face = torch.zeros_like(lpos).scatter_(1, ax[:, None], sgn[:, None])      # outward normal of the nearest face
+        closest = torch.minimum(torch.maximum(lpos, self.lo), self.hi)
+        dirv = lpos - closest
+        dn = dirv.norm(dim=1, keepdim=True)
+        outward = torch.where(dn > 1e-12, dirv / dn.clamp(min=1e-300), face)      # outside the box: from the closest point; inside: the nearest face
+        if self.solid == "inside":
+            return sd, outward
+        return -sd, -face                                                          # fluid inside the box: the wall normal into the fluid is the inward normal of the nearest face
+
+    def moments(self, lpos, lsup, qglobal, kernel, device, channels=None):
+        """RepMoments (body frame) of the queries `lpos` (supports `lsup`) against the box, one row per query with a non-zero channel; `channels` as for `SurfaceRep.moments`."""
+        if len(lpos) == 0:
+            return None
+        if kernel in BOX_EXACT_KERNELS:
+            return self.surface().pairs(lpos, lsup, qglobal, kernel, device, channels)
+        t = boxTables(kernel, device)
+        h = lsup
+        a0, a1 = (self.lo[0] - lpos[:, 0]) / h, (self.hi[0] - lpos[:, 0]) / h
+        b0, b1 = (self.lo[1] - lpos[:, 1]) / h, (self.hi[1] - lpos[:, 1]) / h
+        lam, m, g0, g1 = t.channels(a0, a1, b0, b1)
+        if self.solid == "outside":                                               # the solid is the whole plane minus the box: the constants of the plane minus the box channels
+            big = torch.full_like(a0, 1e3)
+            L, M, G0, G1 = t.channels(-big, big, -big, big)
+            lam, m, g0, g1 = L - lam, M - m, G0 - g0, G1 - g1
+        m1 = h[:, None] * m
+        g0 = g0 / h[:, None]
+        if channels is not None:
+            ch = set(int(k) for k in channels)
+            lam = lam if 0 in ch else torch.zeros_like(lam)
+            m1 = m1 if ch & {1, 2} else torch.zeros_like(m1)
+            g0 = g0 if ch & {3, 4} else torch.zeros_like(g0)
+            g1 = g1 if ch & {5, 6, 7, 8} else torch.zeros_like(g1)
+        keep = torch.nonzero((lam != 0) | (m1 != 0).any(1) | (g0 != 0).any(1) | (g1 != 0).flatten(1).any(1)).flatten()
+        return RepMoments(qglobal[keep], lam[keep], g0[keep], m1[keep], g1[keep])
 
 
 class VolumeRep:
@@ -605,6 +715,8 @@ class Scene:
             for rep in bd.reps:
                 if isinstance(rep, SurfaceRep):
                     out |= rep.indicator(lp) > 0.5
+                elif isinstance(rep, BoxRep):
+                    out |= rep.signed(lp)[0] < 0
                 elif isinstance(rep, SdfRep):
                     out |= rep.signed(lp)[0] < 0
                 elif isinstance(rep, ImplicitRep):
@@ -655,6 +767,9 @@ class Scene:
                     dirv = lp - cp
                     dn = dirv.norm(dim=1, keepdim=True)
                     n_loc = torch.where((dn > 1e-12) & (~ins[:, None]), dirv / dn.clamp(min=1e-300), n_loc)
+                    n = bd.pose.vecToWorld(n_loc)
+                elif isinstance(rep, BoxRep):
+                    d, n_loc = rep.signed(lp)
                     n = bd.pose.vecToWorld(n_loc)
                 elif isinstance(rep, SdfRep):
                     d, n_loc, _, _ = rep.signed(lp)
@@ -741,6 +856,10 @@ class Scene:
         pose = body.pose
         if isinstance(rep, SurfaceRep):
             ent["surface"].append(rep.moments(topo, lpos, lsup, cand, name, dev, channels).toWorld(pose))
+        elif isinstance(rep, BoxRep):
+            mom = rep.moments(lpos, lsup, cand, name, dev, channels)
+            if mom is not None and len(mom.q):
+                ent["implicit"].append(mom.toWorld(pose))
         elif isinstance(rep, VolumeRep):
             sub = _subState(queryParticles, cand, lpos, lsup, dev)
             adj = buildBoundaryAdjacency(sub, operationProperties, rep.mesh, grid=rep.grid(float(lsup.max())), supportMax=float(lsup.max()))

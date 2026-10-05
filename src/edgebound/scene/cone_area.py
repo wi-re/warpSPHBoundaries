@@ -137,15 +137,16 @@ def cone_area(points, axes, half_angle, H, vertices, edges, background=0):
 
 def cone_area_scene(scene, points, axes, half_angle, H):
     """area(solid ∩ disk(point, H) ∩ wedge(point, axis, half_angle)) for the SurfaceRep bodies of a `Scene`, summed over the bodies and their reps (units length²; `n_w · result` is a count; `half_angle >= π` = the full disk). The world vertices are `body.pose.toWorld(rep.vertices)`, recomputed on every call, so a moved body works without rebuilding the scene. Overlapping bodies are not supported (the sum would count their overlap twice)."""
-    from .scene import SurfaceRep
+    from .scene import BoxRep, SurfaceRep
     for body in scene.bodies:
         for rep in body.reps:
-            if not isinstance(rep, SurfaceRep):
-                raise NotImplementedError("cone_area_scene: SurfaceRep bodies only")
+            if not isinstance(rep, (SurfaceRep, BoxRep)):
+                raise NotImplementedError("cone_area_scene: SurfaceRep bodies only (BoxRep is accepted too)")
     dev = scene.device
     total = None
     for body in scene.bodies:
         for rep in body.reps:
+            rep = rep.surface() if isinstance(rep, BoxRep) else rep                              # a box is the polygon of the same body here (closed-form polar sectors per edge)
             world = body.pose.toWorld(rep.vertices.to(dev))
             term = cone_area(points, axes, half_angle, H, world, rep.edges, rep.background)
             total = term if total is None else total + term

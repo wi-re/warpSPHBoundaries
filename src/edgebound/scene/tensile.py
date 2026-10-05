@@ -69,11 +69,11 @@ def tensile_vector_scene(scene, positions, H, family="w2", adjacency=None):
         raise NotImplementedError("tensile_vector_scene: Wendland C2 and C4 only")
     import torch
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-    from .scene import BodyField, SurfaceRep, sceneOperation
+    from .scene import BodyField, BoxRep, SurfaceRep, sceneOperation
     for body in scene.bodies:
         for rep in body.reps:
-            if not isinstance(rep, SurfaceRep):
-                raise NotImplementedError("tensile_vector_scene: SurfaceRep bodies only")
+            if not isinstance(rep, (SurfaceRep, BoxRep)):
+                raise NotImplementedError("tensile_vector_scene: SurfaceRep bodies only (BoxRep is accepted too)")
     _register(family)
     dev = scene.device
     pos = positions.to(dev, torch.float64) if isinstance(positions, torch.Tensor) else torch.as_tensor(np.asarray(positions), dtype=torch.float64, device=dev)

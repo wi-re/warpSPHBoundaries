@@ -25,7 +25,7 @@ import torch
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
 from ..scene.implicitBodies import HalfPlaneBody
-from ..scene.scene import Body, BodyField, ImplicitRep, Scene, SdfRep, SurfaceRep, VolumeRep, sceneOperation
+from ..scene.scene import Body, BodyField, BoxRep, ImplicitRep, Scene, SdfRep, SurfaceRep, VolumeRep, sceneOperation
 from .pairs import F64, dwendland2, neighbor_pairs, wendland2
 
 PACKING = 0.399200743165053487            # omniSPH packing_2D (spacing / h)
@@ -87,11 +87,13 @@ def carve(positions, bodies, h, lamMax, device, kernel=KernelFunctions.Wendland2
 # ----------------------------------------------------------------------------------------------------------------------------- domains
 def domain_scene(kind: str, lo, hi, h: float, device, thickness: Optional[float] = None, volumeMode: str = "moments"):
     """closed box of fluid [lo, hi] (the INNER wall faces) as one body (`volume`: omniSPH's thick triangle slabs, `surface`: one clockwise loop in an infinite solid,
-    `sdf`: sampled box SDF with the loop as fallback near the corners, `halfplanes`: four half planes (negative control: double counts the corner regions))."""
+    `box`: the same loop as a `BoxRep`, `sdf`: sampled box SDF with the loop as fallback near the corners, `halfplanes`: four half planes (negative control: double counts the corner regions))."""
     (x0, y0), (x1, y1) = lo, hi
     t = thickness if thickness is not None else 2.5 * h
     if kind == "surface":
         return Scene([Body(reps=[SurfaceRep.box((x0, y0), (x1, y1), solid="outside")])], device)
+    if kind == "box":                                 # the same domain as a BoxRep: corner tables, no edge pairs (docs/box-domain-primitive.md)
+        return Scene([Body(reps=[BoxRep((x0, y0), (x1, y1), solid="outside")])], device)
     if kind == "volume":
         V = np.array([[x0 - t, y0 - t], [x0, y0 - t], [x1, y0 - t], [x1 + t, y0 - t],
                       [x0 - t, y0], [x0, y0], [x1, y0], [x1 + t, y0],

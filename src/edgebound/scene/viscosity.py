@@ -78,11 +78,11 @@ def lap_lambda_scene(scene, positions, H, family="w2", adjacency=None):
     registering lap W directly would not (it would give a spurious c/H^2 inside a body).  Units: 1/length^2, per body.
     SurfaceRep bodies only.  `adjacency`: the SceneAdjacency of `positions` (e.g. `restrict` of the wall adjacency at the same positions) instead of a fresh
     search.  Returns [B, N] float64 on scene.device."""
-    from .scene import SurfaceRep
+    from .scene import BoxRep, SurfaceRep
     for body in scene.bodies:
         for rep in body.reps:
-            if not isinstance(rep, SurfaceRep):
-                raise NotImplementedError("lap_lambda_scene: SurfaceRep bodies only")
+            if not isinstance(rep, (SurfaceRep, BoxRep)):
+                raise NotImplementedError("lap_lambda_scene: SurfaceRep bodies only (BoxRep is accepted too)")
     _register(family)
     import torch
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation

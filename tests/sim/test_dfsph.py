@@ -60,7 +60,7 @@ def test_lattice_calibration_is_a_rest_state(device):
     pos = lattice(40, 12, dx, dy, x0=0.1, y0=0.1)
     lo = pos.min(0) - np.array([cal["dwallX"], cal["dwallY"]])
     hi = np.array([pos[:, 0].max() + cal["dwallX"], 0.6])
-    for kind in ["surface", "volume", "sdf"]:
+    for kind in ["surface", "volume", "sdf", "box"]:
         sc = D.domain_scene(kind, lo, hi, h, device)
         sim = D.DFSPH2D(pos, np.zeros_like(pos), cal["V"], np.full(len(pos), h), sc, D.DFSPHConfig(wallMass=cal["mu"]), device)
         sim._prepare()
@@ -74,14 +74,14 @@ def test_lattice_calibration_is_a_rest_state(device):
 
 @pytest.mark.parametrize("device", DEVICES)
 def test_dynamics_independent_of_the_representation(device):
-    """30 steps of a settling block: volume slabs, surface loop and tier-3 SDF (+ corner fallback) give the same trajectories (3e-13 / 3e-13 / 1e-5)."""
+    """30 steps of a settling block: volume slabs, surface loop, tier-3 SDF (+ corner fallback) and the BoxRep corner tables give the same trajectories (3e-13 / 3e-13 / 1e-5 / 2e-10)."""
     dx, dy, h = 0.0089, 0.0088, 0.02236
     cal = D.lattice_calibration(dx, dy, h)
     pos = lattice(30, 10, dx, dy, x0=0.1, y0=0.1)
     lo = pos.min(0) - np.array([cal["dwallX"], cal["dwallY"]])
     hi = np.array([pos[:, 0].max() + cal["dwallX"], 0.5])
     xs = {}
-    for kind in ["surface", "volume", "sdf"]:
+    for kind in ["surface", "volume", "sdf", "box"]:
         sc = D.domain_scene(kind, lo, hi, h, device)
         sim = D.DFSPH2D(pos, np.zeros_like(pos), cal["V"], np.full(len(pos), h), sc, D.DFSPHConfig(wallMass=cal["mu"]), device)
         for _ in range(30):
@@ -89,6 +89,9 @@ def test_dynamics_independent_of_the_representation(device):
         xs[kind] = sim.x.cpu().numpy()
     assert np.abs(xs["volume"] - xs["surface"]).max() < 1e-10
     assert np.abs(xs["sdf"] - xs["surface"]).max() < 1e-4
+    box_dev = np.abs(xs["box"] - xs["surface"]).max()
+    print("box vs surface max|dx| =", box_dev)
+    assert box_dev < 1e-8                                        # measured 1.9e-10
     assert np.abs(xs["surface"] - pos).max() > 1e-6          # something actually happened
 
 
