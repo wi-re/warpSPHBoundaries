@@ -143,19 +143,38 @@ def build_cheb_plan(kernel):
     return pb, rin_idx
 
 
+def _channel_rows(pb, channels):
+    """the edge (E) and value (V) term rows of the plan builder `pb`, restricted to the terms of `channels` (None: all nine); the channels are independent sums, so the kept ones are bit-identical to the full plan."""
+    if channels is None:
+        return pb.E, pb.V
+    keep = set(int(c) for c in channels)
+    return [r for r in pb.E if r[0] in keep], [r for r in pb.V if r[0] in keep]
+
+
+_DEVICE_PLANS = {}
+
+
+def _device_plan(kernel, device, channels=None):
+    """DevicePlan cache per (kernel, device, channels): the plan arrays are constants of the kernel (building one costs 0.37 ms, a fifth to a third of an edge_channels call)."""
+    key = (kernel, str(device), None if channels is None else tuple(sorted(set(int(c) for c in channels))))
+    if key not in _DEVICE_PLANS:
+        _DEVICE_PLANS[key] = DevicePlan(kernel, device, channels)
+    return _DEVICE_PLANS[key]
+
+
 class DevicePlan:
     """the plan arrays resident on one device."""
 
-    def __init__(self, kernel, device):
+    def __init__(self, kernel, device, channels=None):
         pb, rin_idx = build_plan(kernel)
         self.rin_idx = rin_idx
-        self.nE, self.nV = len(pb.E), len(pb.V)
+        E, V = _channel_rows(pb, channels)
+        self.nE, self.nV = len(E), len(V)
         i32 = lambda rows, k: wp.array(np.array([r[k] for r in rows] or [0], dtype=np.int32), dtype=int, device=device)
         self.radii_host = list(pb.radii)
         self.radii = wp.array(np.array(pb.radii, dtype=np.float64), dtype=f64, device=device)
         self.cn = wp.array(np.array(pb.cn or [0], dtype=np.int32), dtype=int, device=device)
         self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np.float64), dtype=f64, device=device)
-        E, V = pb.E, pb.V
         self.e = [i32(E, k) for k in range(9)]          # ch, i, a, b, R, var, gate, c0, c1
         self.v = [i32(V, k) for k in range(6)]          # ch, R, var, gate, c0, c1 (+ mR below)
         self.v_mR = wp.array(np.array([r[6] for r in V] or [0.0], dtype=np.float64), dtype=f64, device=device)
@@ -179,18 +198,19 @@ class ChebPlan:
     arrays as DevicePlan (Chebyshev coefficient ranges, no cn) plus the Gauss-Legendre nodes/weights on [-1, 1]; `panels` is a
     launch argument of the kernel, not part of the arrays."""
 
-    def __init__(self, kernel, device, nodes=16, panels=8):
+    def __init__(self, kernel, device, nodes=16, panels=8, channels=None):
         pb, rin_idx = build_cheb_plan(kernel)
         self.rin_idx = rin_idx
         self.nodes = nodes
         self.panels = panels
-        self.nE, self.nV = len(pb.E), len(pb.V)
+        E, V = _channel_rows(pb, channels)
+        self.nE, self.nV = len(E), len(V)
         i32 = lambda rows, k: wp.array(np.array([r[k] for r in rows] or [0], dtype=np.int32), dtype=int, device=device)
         self.radii = wp.array(np.array(pb.radii, dtype=np.float64), dtype=f64, device=device)
         self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np.float64), dtype=f64, device=device)
-        self.e = [i32(pb.E, k) for k in range(9)]          # ch, i, a, b, R, var, gate, c0, c1
-        self.v = [i32(pb.V, k) for k in range(6)]          # ch, R, var, gate, c0, c1 (+ mR below)
-        self.v_mR = wp.array(np.array([r[6] for r in pb.V] or [0.0], dtype=np.float64), dtype=f64, device=device)
+        self.e = [i32(E, k) for k in range(9)]          # ch, i, a, b, R, var, gate, c0, c1
+        self.v = [i32(V, k) for k in range(6)]          # ch, R, var, gate, c0, c1 (+ mR below)
+        self.v_mR = wp.array(np.array([r[6] for r in V] or [0.0], dtype=np.float64), dtype=f64, device=device)
         gx, gw = np.polynomial.legendre.leggauss(nodes)
         self.gx = wp.array(gx, dtype=f64, device=device)       # on [-1, 1]
         self.gw = wp.array(gw, dtype=f64, device=device)
@@ -686,19 +706,19 @@ STABLE_KERNELS = {}
 _Cheb_plan_cache = {}
 
 
-def _cheb_plan_for(kernel, device, nodes):
-    key = (kernel, device, nodes)
+def _cheb_plan_for(kernel, device, nodes, channels=None):
+    key = (kernel, device, nodes, None if channels is None else tuple(sorted(set(int(c) for c in channels))))
     plan = _Cheb_plan_cache.get(key)
     if plan is None:
-        plan = ChebPlan(kernel, device, nodes=nodes)
+        plan = ChebPlan(kernel, device, nodes=nodes, channels=channels)
         _Cheb_plan_cache[key] = plan
     return plan
 
 
-def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, nodes, panels, plan=None, as_torch=True):
+def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, nodes, panels, plan=None, as_torch=True, channels=None):
     """the Chebyshev-quadrature route of edge_channels (plan from `plan` or the (kernel, device, nodes) cache, launched with `panels`)."""
     import torch
-    plan = plan if plan is not None else _cheb_plan_for(kernel, device, nodes)
+    plan = plan if plan is not None else _cheb_plan_for(kernel, device, nodes, channels)
     P = len(pair_q)
     cout = torch.zeros((max(P, 1), NCH), dtype=torch.float64, device=device)
     if P:
@@ -718,21 +738,21 @@ def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, ke
     return c if as_torch else c.cpu().numpy()
 
 
-def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, device="cuda:0", plan=None, as_torch=True, stable=None):
+def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, device="cuda:0", plan=None, as_torch=True, stable=None, channels=None):
     """edge-local channels c[P,9] (dimensionless, units of h) of every (query, edge) pair; edges [E,2] counter-clockwise around the solid (solid on the left).
     The total of a closed body is  sum_edges c + indicator * indicator_vector(kernel).  `stable` selects the route: a tuple (nodes, panels)
     -> the Chebyshev-quadrature plan at that resolution; False -> the monomial plan; None -> a passed ChebPlan / a STABLE_KERNELS entry, else the
-    monomial plan (the default, unchanged)."""
+    monomial plan (the default, unchanged).  `channels` (iterable of 0..8, default all): evaluate only the terms of these channels (the others stay 0; the kept ones are bit-identical)."""
     import torch
     if isinstance(stable, tuple):
-        return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, stable[0], stable[1], as_torch=as_torch)
+        return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, stable[0], stable[1], as_torch=as_torch, channels=channels)
     if stable is None:
         if plan is not None and isinstance(plan, ChebPlan):
             return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, plan.nodes, plan.panels, plan=plan, as_torch=as_torch)
         if plan is None and STABLE_KERNELS.get(kernel) is not None:
-            return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, *STABLE_KERNELS[kernel], as_torch=as_torch)
-    # monomial path (unchanged)
-    plan = plan or DevicePlan(kernel, device)
+            return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, *STABLE_KERNELS[kernel], as_torch=as_torch, channels=channels)
+    # monomial path
+    plan = plan or _device_plan(kernel, device, channels)
     P = len(pair_q)
     cout = torch.zeros((max(P, 1), NCH), dtype=torch.float64, device=device)
     if P:
