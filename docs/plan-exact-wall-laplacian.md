@@ -65,9 +65,44 @@ Take-away for no-slip: **replace the odd mirror by the analytic continuation of 
 
 **E3 — no-slip, non-polynomial fields, noise [P].** `paper_noslip_extensions.py` is noise-free. Repeat with jittered particle data (as E1) for `1 − exp(−s/δ)`, δ ∈ {0.5, 1}·h and `sin`. Question: does the fit order m = 2 or 3 minimise bias + noise? Add the wall shear estimate `∂_s p(0)` as a diagnostic against the exact.
 
-**E4 — operator consistency [P].** Derive the closed-form moments of the pairwise kernel (`W′/r³`, `y⊗y`) over the solid (angular-harmonic split `ŷ⊗ŷ = ½ I + traceless`; expect logarithms at `z → 0`). Verify against polar quadrature (`pairwise` form of the solver), then compare E1 with the pairwise-consistent wall term.
+**E4 — operator consistency [V, closed form; the experiment comparing it with the ∇²W form is still [P]].** The pairwise wall term for a continuum of solid with ghost field `dv(y) = v_ext(x_i + y) − v_i = Σ_α c_α y^α` is `a_k = Σ_α c_{α,l} T_{α+e_k+e_l}`, with the tensor moments `T_β = ∫_S g(r) y^β / r² dx′`, `g = −W′/r` (a polynomial for the Wendland kernels: `−W′/r` of `w2` is `20c(1−q)³/H⁴`), `|β| = d`. They are closed form: the field `Q = y^β y_m φ_d(r)` has `div Q = y^β[(d+2)φ + rφ′]`, so with the compactly supported choice
 
-**E5 — geometry [P].** Corners (two edges) and a curved wall (polygon approximation, then the curvature expansion of `paper/` §6 for the mirror). Check where per-edge mirror images fail.
+    φ_d(r) = − r^−(d+2) ∫_r^H s^(d−1) g(s) ds   (= −C_d r^−(d+2) + Σ_j g_j r^(j−2)/(d+j) for g = Σ g_j r^j,  C_d = ∫_0^H s^(d−1) g ds)
+
+the divergence theorem gives, since `y·n_out = z` is constant along an edge,
+
+    T_β = Σ_edges z ∫_chord y^β φ_d(r) ds  +  w(x_i) C_d ∮ ŷ^β dθ       (w = winding number of the solid around x_i; the second term is the full-disk value).
+
+Only the chord integrals `J(i,m) = ∫ s^i (s²+z²)^(m/2) ds` with `m ≥ −(d+2)` appear: rational / `atan` / `asinh` / `log` (the logarithm of §3.5 is the case `i = 1, m = −2`, the `g_0 r^−2` term against the `s` component of `y^β`; it is finite for `z ≠ 0`, and the edge term carries the factor `z`, so `z → 0` is harmless unless the chord contains the foot point, i.e. the particle on the boundary). No new primitive family: the paper's `S_{j,m}` machinery extended to negative `m` by the reduction `J(i,m) = J(i−2,m+2) − z² J(i−2,m)` and `J(0,m) = [(m+3)J(0,m+2) − s r^(m+2)]/((m+2)z²)`.
+**[V] `scripts/derivation_checks/paper_pairwise_wall_moments.py`** (mpmath primitives, each `J` checked to quadrature; ray quadrature reference with exact radial integrals `P_d(r) = ∫_0^r s^(d−1) g`): all tensor moments `d = 2, 3, 4` (constant, gradient and Hessian ghost fields) for kernels `w2`, `w4` on a triangle (x outside / inside), an L-shape (x near, an edge collinear with x), a slab edge at `z = 10⁻³`: `max |closed − ray| ≤ 2·10⁻¹⁴`; the full disk gives `T_xx = πC_2` and `T_xy = 0`; flat wall `z = 0.1, 0.4, 0.8` agrees to the printed 8 digits.
+Consequences: (i) the solver's `pairwise` wall form (polar quadrature of the solid, `surfaceSamples`) has an exact counterpart for the constant mirror (`d = 2`: 3 independent components `T_xx, T_xy, T_yy`, i.e. the `M2` of `deltasph2d.py`) and for every higher ghost order, at the cost of the same edge loop as `lap_lambda_scene` with different primitives; (ii) the isotropic/traceless split is not needed (the divergence field handles `ŷ⊗ŷ` directly), the apparent obstruction was the `1/r²` weight, which `φ_d` removes by integrating from the top of the support; (iii) the bulk and wall terms can now share the pairwise operator, so open question 2 below is a modelling choice, not a derivation gap. Still to do for E4: the free-slip hierarchy of §2 for the pairwise operator (ghost Taylor series in `y_m`, as in `paper_exact_wall_mirror.py`) and E1 with both operators.
+
+**E5 — geometry [V for a right-angle corner and a circular wall; general angles [D]].** `scripts/derivation_checks/paper_exact_wall_corner.py` (A: corner, B: circle; ~10 s). Metric: error of the total `∇²v` (A) or of the solid part (B) for the ghost `v_g(x+y) = R v(x + y_m)` Taylor-truncated at order p in the mirror displacement, as in §2; kernel `w4`, H = 1.
+
+*A. Fluid quadrant x, y > 0, free-slip symmetric cubic field* (`v_x = x f(x²,y²)`, `v_y = y g(x²,y²)`: odd/even about both walls). The solid is three regions: behind x = 0 (mirror in x), behind y = 0 (mirror in y), the corner quadrant (point reflection `R_A R_B = −I`). Estimators of the solid part: **images** (the three regions with their own mirror), **flat** (the whole solid mirrored as one flat wall, the plane of the nearest wall), **double** (each wall mirrors its whole half-plane: the corner quadrant counted twice, as a per-edge sum of half-plane images does). Errors of the total `∇²v` (rows: particle position, p):
+
+| particle | p | images | flat | double |
+|---|---:|---:|---:|---:|
+| (0.10, 0.10) | 2 | 4.9e-2 | 1.1e-1 | 9.2e-1 |
+| (0.25, 0.25) | 2 | 3.4e-2 | 2.8e-1 | 6.3e-1 |
+| (0.50, 0.50) | 2 | 2.9e-2 | 6.2e-1 | 4.3e-2 |
+| (0.15, 0.30) | 2 | 4.7e-2 | 6.0e-2 | 7.8e-1 |
+| any with the corner farther than H | 0, 2, 3 | = flat | = flat | = flat |
+| every position | 3 | ≤ 1e-13 | ≤ 1e-13 | 4e-3 – 0.93 (1e-13 beyond the corner zone) |
+
+Reading: (i) **p = 3 is exact for `images` and `flat` alike**, because the symmetric field is globally equivariant: any assignment of a mirror to a solid point returns the analytic continuation. What breaks the estimate is not the choice of mirror but the *partition*: every solid point must be counted exactly once (`double` fails by 0.4 – 0.9 inside the corner zone, `|x| < ~0.7`, and by 0 beyond it). (ii) For truncated ghosts (p = 2, what a quadratic reconstruction gives) the mirror matters: the one-wall model **ignoring the other wall errs 0.06 – 0.6** (up to 45 % of the solid part at the corner distance 0.7 H), the three-region images 0.03 – 0.05, the same truncation error as at a flat wall. (iii) **p = 0 (the solver's constant mirror) is insensitive to the double count at 90° only**: on the corner quadrant `(R_A − I)v + (R_B − I)v = (R_A + R_B − 2)v = −2v = (R_A R_B − I)v`, since `R_A + R_B = 0` for orthogonal walls; the table row p = 0 has `images = double` to all digits. For any other angle `R_A + R_B ≠ R_A R_B + I` and the per-edge sum is wrong already at p = 0. (iv) Exact images (a finite group generated by the wall reflections) exist only for wedge angles π/n (n = 2: three regions; n = 3: five, …) **[D]**; for a general corner no symmetric extension exists, the ghost is a model there, and the partition rule above (count each solid point once; the closest-point rule gives point reflection through a vertex in the corner sector) is the only guidance.
+Consequences for the implementation: the corner needs the solid partitioned by the nearest-feature rule (edge strips + vertex sectors), not a per-edge half-plane sum; with the closed-form edge integrals the partition costs nothing extra (the region boundaries are straight rays from the vertex: extra edges of a polygon clipped to the sector, with zero net contribution when the mirror maps agree on them, which they do when the field has the symmetry). The symmetry-constrained basis shrinks at a corner: both walls give `v_x ∈ x·{1, x², y², …}`, `v_y ∈ y·{1, x², y², …}`, so up to p = 2 only `{x}`, `{y}` (2 unknowns, `∇²` of the ghost vanishes) and up to p = 3 six unknowns (`x, x³, xy²` and `y, y³, x²y`): the corner needs the cubic order to carry curvature, the flat wall (§3.3: 6 unknowns up to p = 2) already carries it at p = 2.
+
+*B. Circular wall* (fluid inside r < Rc, particle at distance d = 0.3 from the wall). The field is symmetric in the wall-attached coordinates (`v_θ = F(θ, ρ²)`, `v_r = −ρ G(θ, ρ²)`, ρ = Rc − r; free-slip with zero shear to O(κ)); its continuation to ρ < 0 is the curvilinear mirror `r → 2Rc − r`, the exact ghost for this field. The flat tangent-line mirror at the closest wall point (the model of §2) against it, error of the solid part:
+
+| Rc / H | κH | p = 0 | p = 2 | p = 3 |
+|---:|---:|---:|---:|---:|
+| 32 | 0.031 | 0.188 | 7.7e-3 | 4.2e-3 |
+| 8 | 0.125 | 0.202 | 3.2e-2 | 1.8e-2 |
+| 4 | 0.25 | 0.244 | 8.6e-2 | 4.2e-2 |
+| 2 | 0.5 | 0.424 | 0.347 | 9.9e-2 |
+
+The error is **linear in κH** (it doubles as Rc halves, ratio 0.44 – 0.54 per halving at p = 2, 3): ≈ 0.14 κH at p = 3 and ≈ 0.25 κH at p = 2, while p = 0 keeps the flat-wall floor (≈ 0.19, the same constant-mirror error as §2). So the flat-tangent mirror is a first-order-in-curvature model: at Rc = 4H (a typical rounded tank corner, `ξ`-resolved) it is 17 % of the solid part at p = 3, at Rc = 32H below 3 %. The curvature expansion of `paper/` §6 gives the closest-point image of the quadratic region at the next order; using it for the mirror (`y_m` with the κ-correction) is the route to a second-order model **[P]**, and what the polygon walls of the solver already do in the λ, G integrals (exact for the polygon). Open: the same test with the polygon approximation of the circle (the solver's representation) to separate curvature error from facet error.
 
 **E6 — cost [P].** Per-particle: number of moments (p = 2 in 2D: 6 for ∇²W-moments up to degree 2 in the wall frame), edge-integral count per wall edge, FP32 behaviour with the stable (Chebyshev) plans (`docs/exactness-and-approximations.md`). Fused-evaluation kernel, no per-pair storage (`plan-wall-evaluation.md` §1).
 
@@ -78,4 +113,4 @@ Take-away for no-slip: **replace the odd mirror by the analytic continuation of 
 * Does the noise of a constrained p = 2 reconstruction at the first particle rows stay within the noise already present in the bulk Laplacian? (E1.)
 * Is the no-slip continuation worth it over the flux term when particles sit at `d ≈ 0.25 dx` (the `d_min` floor)? (E2.)
 * Which weights for the fit: the kernel `W_ij`, a wider window, or Shepard-normalised? (E1/E3.)
-* How should the free-slip wall term combine with the bulk pairwise operator near the wall: replace the pairwise wall form entirely, or only the `∇²` part? (E4.)
+* How should the free-slip wall term combine with the bulk pairwise operator near the wall: replace the pairwise wall form entirely, or only the `∇²` part? (E4: both are now closed form; what is left is to measure which is better, E1.)
