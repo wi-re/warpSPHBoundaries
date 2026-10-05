@@ -124,6 +124,17 @@ Consequences (all measured, `docs/work/refs/review5_adjacency_why_probe.py`, dev
 * Cost split of a build (ms): kernel-independent — pair list 0.37, indicator 0.50 (≈ 0.9 of 2.7 for `cone`); kernel-dependent — `edge_channels` 1.2 (`cone`), 1.7 (`lw2`), 2.3 (`w2`), **8.5 (`w2p5`, Chebyshev (16, 8))**. Sharing only the pair list across kernels would save ≈ 1 ms per extra kernel; the cost is the channel evaluation.
 * Where the phase-2 saving is: (i) **channel pruning** — every kernel evaluates all nine channels (21 terms: `m` 5, `g0` 4, `g1` 12 terms, identical for every kernel) although the consumers need a subset: tensile and cover need `g0` only (4 of 21 terms), the wall Laplacian needs `lam` and `g1` (13 of 21); (ii) fusing the kernels of one `rhs` call into one pass over the shared edge geometry (`z, s0, s1`, chord clip). Both are estimates from the term counts, not measurements.
 
+What WORK-008 added (2026-10-05, phase 2a — removes work, no result changes).  `Scene.buildAdjacency(..., channels=)`
+restricts `edge_channels` to the asked channels (the others exactly 0; the asked ones bit-identical — independent sums,
+no reduction) and skips the indicator pseudo-pairs when no lam/g1 channel is asked; a pruned adjacency
+(`SceneAdjacency.channels`) serves only the `Naive` `Gradient` of a constant scalar field — no `perQuery`, no `a1`, no
+reaction, `{3,4} ⊆ channels` — else `sceneOperation` raises `ValueError`.  The cover vector and tensile term now build a
+`(3,4)`-pruned adjacency (4 of 21 terms); the monomial `DevicePlan` arrays are cached per `(kernel, device, channels)`;
+and the wall adjacency of `no_penetration` is reused by the next step's first `rhs` (key: positions, body poses,
+supports, kinds; `lam`, `G` are density- and gravity-independent, `A` always recomputed).  Measured: pruned plan 4 vs
+21 terms; `buildAdjacency` 10 → 9, `sceneOperation` 12 → 10 calls/step; 58.079 → 36.479 ms/step (dam break, −37.2 %) and
+72.043 → 46.490 (sloshing, −35.5 %); cover / tensile bit-identical and the bit-level harness still PASSes (≤ 0.011).
+
 ## 7. What carries over to 3D
 
 The interface above is dimension-agnostic: `Pose` becomes a rotation matrix / quaternion, the OBB test and the cell lists gain a coordinate, `MomentPairs` keeps the same

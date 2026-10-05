@@ -215,6 +215,37 @@ Sloshing (SPHERIC 10, nx = 200, C4, T = 1.5 s, `wallViscosityForm = "noslip"`; `
 
 The default stays `"laplacian"`; `"noslip"` is an opt-in third form. Making it the default, partial slip, per-body slip, a per-element `∫W ds/d_n`, and the `1/γ` renormalisation are out of scope (WORK-007).
 
+## Speed after WORK-008
+
+WORK-008 (phase 2a, 2026-10-05) removes work without changing the result: the cover vector and the tensile term now build their wall adjacency restricted to the gradient channels (3, 4) — 4 of the 21 kernel terms, the indicator pseudo-pairs skipped — the monomial `DevicePlan` arrays are cached per `(kernel, device, channels)` (the Chebyshev plans already were), and the `no_penetration` wall adjacency is reused by the next step's first `rhs` (positions, body poses, supports and kinds unchanged; `lam` and `G` do not depend on the densities or the gravity, so `A` is always recomputed). A `sceneOperation` guard rejects a pruned adjacency for anything other than the `Naive` `Gradient` of a constant scalar field. No default changed, nothing re-tuned.
+
+**Physics (the WORK-002 limits, `check --physics --cases tank,dambreak`, `.tmp/w008_check.log`, 2026-10-05).** The default run matches the recorded baseline to the last digit: every bit-level line PASS, the largest margin over all lines is 0.011 (tank rmseBulk: value 0.00149929753837 vs baseline 0.00149929753835). **PHYSICS GATE: PASS.**
+
+| line | value | margin | gate |
+|---|---|---|---|
+| tank rmseBulk / rmseNear / keLast | 0.00149929753837 / 0.00181340794898 / 7.28437955168e-07 | 0.011 / 0.004 / 0.000 | PASS (≤ 1.25× / 1.25× / 5× baseline) |
+| tank rhoMin / rhoMax / steps | 1.00008342046 / 1.00246989449 / 3502 | 0.000 / 0.000 / 0.000 | PASS (≥ 0.99 / ≤ 1.01) |
+| dam break KE vs `dambreak_B_nx67` (max rel, 668 samples) | 3.5344e-04 | — | PASS (≤ 0.05) |
+| dam break P1 arrival | 2.4740 t\* (reference 2.49) | 0.0160 | PASS (≤ 0.05) |
+| dam break ke_tstar 1 / 2 / 2.5 | 0.357363651811 / 0.754228393303 / 0.922766940751 | 0.000 / 0.001 / 0.005 | PASS |
+| dam break maxVelocityMax / minDensityMin / maxDensityMax / steps | 6.59792039874 / 0.999428350557 / 1.00603117793 / 6683 | 0.001 / 0.000 / 0.000 / 0.000 | PASS (≥ 0.97 / ≤ 1.03) |
+| **PHYSICS GATE** | **PASS** | | |
+
+The 0.011 in rmseBulk is last-digit GPU run-to-run spread (the reviewer's run of the same code was ≤ 0.007, WORK-008.md §1), not a physical change; the stop threshold is a margin > 1.
+
+**Speed (same profiler as `deltasph-profile.md`, back to back with its "before" section):**
+
+| case | before (ms/step) | after (ms/step) | change |
+|---|---:|---:|---:|
+| dam break `marrone_dambreak(nx=67)` | 58.079 | **36.479** | **−37.2 %** |
+| sloshing `sloshing_tank(nx=200)` | 72.043 | **46.490** | **−35.5 %** |
+
+`buildAdjacency` is 10 → 9 calls/step (the `no_penetration` adjacency is reused by the next step's first `rhs`) and `sceneOperation` is 12 → 10 (the pruned cover / tensile adjacencies skip the indicator pseudo-pairs). Remaining cost split (dam break / sloshing, `% of step`): `buildAdjacency` is still the largest single cost at 21.076 / 27.857 ms (57.8 % / 59.9 %; at 9 calls, ≈ 0.56× the per-build cost of the full-channel builds), then `_detect_surface` 5.100 / 5.260 ms (22.2 % / 17.7 %), then the fluid pair sums 9.197 / 12.853 ms (25.2 % / 27.7 % — the same absolute work, a larger share because the step is shorter).
+
+**Sloshing (SPHERIC 10, T = 1.5 s, default config, `.tmp/slosh_default.py` unchanged from WORK-006):** 15001 steps, wall 896 s, KE max-relative vs `slosh_B_nx200` **2.8100e-05** (1500 samples, gate 5 %; WORK-006: 2.8102e-05), maxVelocity **0.5920**, densities **[0.99928, 1.00490]** — unchanged from WORK-006 (the 896 s wall vs 726 s is GPU load on the shared machine, not a gate).
+
+Out of scope (phase 2b, if pursued): fusing the kernels of one `rhs` call into one pass over the shared edge geometry; Verlet-style adjacency reuse across steps; CUDA-graph capture.
+
 ## 7. Next
 
 * sloshing (SPHERIC TC10): the rolling tank is a prescribed rotating body (`Body.angularVelocity`, `accelerationAt`, wall velocity in the free-slip mirror, the viscous wall term and the no-penetration law relative to the moving wall: the static-wall

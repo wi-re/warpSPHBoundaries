@@ -219,3 +219,77 @@ lap_lambda_scene w2                 3.72 ms/call  adjacency builds/call 1   call
 _wall_data (existing, per call)    15.88 ms/call  adjacency builds/call 1   calls/step 3  ->  47.64 ms/step
 sum of exact ops per step: 53.9 ms
 ```
+
+## After WORK-008 (gradient-channel pruning, plan cache, wall-adjacency reuse)
+
+Same profiler, re-run after WORK-008 (2026-10-05, same machine, the local LLM's ~69 GiB still
+resident), back to back with the "before" section above (58.079 / 72.043 ms/step).  WORK-008 removes
+work only: the cover vector and the tensile term now build their adjacency restricted to the gradient
+channels (3, 4) — 4 of the 21 kernel terms — the monomial `DevicePlan` arrays are cached per
+`(kernel, device, channels)` like the Chebyshev plans already were, and the wall adjacency of
+`no_penetration` is reused by the next step's first `rhs` (positions, poses, supports and kinds
+unchanged; `A` is always recomputed).  **No result changes** (the bit-level harness still PASSes,
+margins <= 0.011; the sloshing KE line is unchanged).  Step times are **information, not a gate**; the
+measured **36.479 / 46.490 ms/step** are a **37.2 % / 35.5 %** reduction against the "before" run (the
+reviewer's prototype: -35 % / -34 %).  Wall time on this machine varies with GPU load, so compare this
+section only with the "before" section as back-to-back measurements of the same profiler.
+
+### Dam break — `marrone_dambreak(nx=67)`, `shifting=True`, `noPen="impulse"`
+
+N particles = 3240, dx = 0.01493, H = 0.05970, 1 body. **36.479 ms/step** (timer; wall 36.484);
+before WORK-008: **58.079 ms/step** (−37.2 %).
+
+| name | calls/step | inclusive ms/step | self ms/step | % of step |
+|---|---:|---:|---:|---:|
+| `DeltaSPH2D.step` | 1.000 | 36.4794 | 0.5369 | 100.00 |
+| `DeltaSPH2D.rhs` | 2.000 | 19.0019 | 2.3319 | 52.09 |
+| `DeltaSPH2D.shift` | 1.000 | 12.0589 | 2.2346 | 33.06 |
+| `DeltaSPH2D.no_penetration` | 1.000 | 4.8818 | 0.1905 | 13.38 |
+| `DeltaSPH2D._wall_data` | 3.000 | 8.3703 | 0.5566 | 22.95 |
+| `DeltaSPH2D._surface_state` | 1.000 | 7.3399 | 0.3853 | 20.12 |
+| `DeltaSPH2D._detect_surface` | 3.000 | 8.0805 | 5.1004 | 22.15 |
+| `DeltaSPH2D._solid_samples` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `deltasph2d.neighbor_pairs` | 3.000 | 2.0708 | 2.0708 | 5.68 |
+| `deltasph2d.sceneOperation` | 10.000 | 1.2756 | 1.2756 | 3.50 |
+| `Scene.buildAdjacency` | 9.000 | 21.0764 | 21.0764 | 57.78 |
+| `Scene.inside` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `Scene.signed_distance` | 1.000 | 0.7204 | 0.7204 | 1.97 |
+
+**(a)** 9 `buildAdjacency` calls/step (was 10 — the next step's first `rhs` now reuses the
+`no_penetration` adjacency); 10 `sceneOperation` calls/step (was 12 — the pruned cover / tensile
+adjacencies skip the indicator pseudo-pairs). **(b)** 0 positions through `Scene.inside` per step;
+`Scene.inside` = 0.00 %. **(c)** Fluid pair sums = 9.1973 ms/step = 25.21 % of the step (was 10.6033 /
+18.26 % — a larger share now that the step is shorter, the same absolute work). **(d)** Stored
+dambreak series: 62.562 ms/step; profiled 36.479 ms/step; ratio profiled / series = 0.583 (before
+WORK-008: 58.079, ratio 0.928). **(e)** Three largest single costs (self ms/step): `Scene.buildAdjacency`
+= 21.0764 (57.78 %, was 42.0958 / 72.48 %), `DeltaSPH2D._detect_surface` = 5.1004,
+`DeltaSPH2D.rhs` = 2.3319 — `buildAdjacency` is still the largest single cost, now at 9 calls/step and
+about half the per-build cost of the full-channel builds.
+
+### Sloshing — `sloshing_tank(nx=200)`, `shifting=True`, `noPen="impulse"`
+
+N particles = 4200, dx = 0.00450, H = 0.01800, 1 body. **46.490 ms/step** (timer; wall 46.495);
+before WORK-008: **72.043 ms/step** (−35.5 %).
+
+| name | calls/step | inclusive ms/step | self ms/step | % of step |
+|---|---:|---:|---:|---:|
+| `DeltaSPH2D.step` | 1.000 | 46.4896 | 1.0500 | 100.00 |
+| `DeltaSPH2D.rhs` | 2.000 | 24.0903 | 2.6707 | 51.82 |
+| `DeltaSPH2D.shift` | 1.000 | 15.0706 | 2.6346 | 32.42 |
+| `DeltaSPH2D.no_penetration` | 1.000 | 6.2787 | 0.2028 | 13.51 |
+| `DeltaSPH2D._wall_data` | 3.000 | 11.0663 | 0.5800 | 23.80 |
+| `DeltaSPH2D._surface_state` | 1.000 | 9.3363 | 0.4465 | 20.08 |
+| `DeltaSPH2D._detect_surface` | 3.000 | 8.2412 | 5.2598 | 17.73 |
+| `DeltaSPH2D._solid_samples` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `deltasph2d.neighbor_pairs` | 3.000 | 3.7690 | 3.7690 | 8.11 |
+| `deltasph2d.sceneOperation` | 10.000 | 1.3024 | 1.3024 | 2.80 |
+| `Scene.buildAdjacency` | 9.000 | 27.8568 | 27.8568 | 59.92 |
+| `Scene.inside` | 0.000 | 0.0000 | 0.0000 | 0.00 |
+| `Scene.signed_distance` | 1.000 | 0.7170 | 0.7170 | 1.54 |
+
+**(a)** 9 `buildAdjacency` calls/step (was 10); 10 `sceneOperation` calls/step (was 12). **(b)** 0
+positions through `Scene.inside` per step; `Scene.inside` = 0.00 %. **(c)** Fluid pair sums = 12.8528
+ms/step = 27.65 % of the step. **(e)** Three largest single costs (self ms/step): `Scene.buildAdjacency`
+= 27.8568 (59.92 %, was 52.6934 / 73.14 %), `DeltaSPH2D._detect_surface` = 5.2598,
+`deltasph2d.neighbor_pairs` = 3.7690.
+
