@@ -1,12 +1,12 @@
-"""REVIEW-007 probes (throw-away, shares no code with tests/edge/test_deltasph_noslip.py):
+"""REVIEW-007 probes (throw-away, shares no code with tests/sim/test_deltasph_noslip.py):
 (1) rigid-rotation Galilean check: wall rotating about its centre, particle with v = omega x (x - c) -> no wall term; at rest -> non-zero
 (2) factor sensitivity of the Couette tolerance: scale the flux contribution by 0.5 / 1 / 2 / 4 (printed numbers of the test)
 (3) scale of nu_eff in the dam break (nx=67) against the physical viscosity and the boundary-layer thickness sqrt(nu t)"""
 import math, sys, os
 import torch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "python"))
-from edgebound import deltasph2d as D
-from edgebound.deltasph2d import DeltaSPHConfig, hydrostatic_tank
+from edgebound.sim import deltasph2d as D
+from edgebound.sim.deltasph2d import DeltaSPHConfig, hydrostatic_tank
 dev = "cuda:0" if torch.cuda.is_available() else "cpu"
 F64 = torch.float64
 sim, info = hydrostatic_tank(dp=0.04, domain="surface", device=dev, cfg=DeltaSPHConfig())

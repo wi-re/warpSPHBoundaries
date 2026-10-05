@@ -1,5 +1,5 @@
 """REVIEW-004 independent check: C4 tensile T = int_{y'<0} W^4 grad_x W dA' (flat floor y=0, H) on a plain-numpy polar-in-x'/midpoint grid,
-shares no code with edgebound.tensile.  Point (0.2, 0.45), H=1 and H=0.7 (scaling T ~ H^-9... checked directly)."""
+shares no code with edgebound.scene.tensile.  Point (0.2, 0.45), H=1 and H=0.7 (scaling T ~ H^-9... checked directly)."""
 import sys, numpy as np
 sys.path.insert(0, "python")
 def make(H):
@@ -23,8 +23,8 @@ def grid(H, x0, y0, n=3000):
     return np.array([np.sum(f * dx), np.sum(f * dy)]) * cell
 if __name__ == "__main__":
     import torch
-    from edgebound.scene import Scene, Body, SurfaceRep
-    from edgebound.tensile import tensile_vector_scene
+    from edgebound.scene.scene import Scene, Body, SurfaceRep
+    from edgebound.scene.tensile import tensile_vector_scene
     FLOOR = [(-5.0, -2.0), (5.0, -2.0), (5.0, 0.0), (-5.0, 0.0)]   # counter-clockwise, solid y < 0
     dev = "cuda:0"
     sc = Scene([Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])], dev)

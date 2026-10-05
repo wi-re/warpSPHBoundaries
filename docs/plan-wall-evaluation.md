@@ -106,5 +106,5 @@ After step 5 the scene path is a handful of launches per position set on a fixed
 ## 8. Facts and files
 
 * Probes: `docs/work/refs/review8_build_breakdown_probe.py` (per-build table), `docs/work/refs/review8_latency_probe.py` (pairs-vs-time curve), `review7_edge_cost_probe.py`, `review7_prune_probe.py`.
-* The `buildAdjacency` = 9/step pin: `tests/edge/test_wall_data_reuse.py::test_reuse_saves_one_adjacency_per_step`.
+* The `buildAdjacency` = 9/step pin: `tests/sim/test_wall_data_reuse.py::test_reuse_saves_one_adjacency_per_step`.
 * Review record and reviewer lessons: `docs/work/logs/REVIEW-008.md`, `docs/work/REVIEW.md`.

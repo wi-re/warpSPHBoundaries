@@ -43,7 +43,7 @@ called twice per step, the second time at the half step with the stage `dt/2` an
 
 ## 3. Constraints a port must respect (what actually limits the scene layer today)
 
-The numerical kernels of the scene layer are **already Warp float64** launched on torch-owned memory (`wp.from_torch` in `python/edgebound/warpbc.py`), the same memory model warpSPHCore uses at its API. Torch is not the
+The numerical kernels of the scene layer are **already Warp float64** launched on torch-owned memory (`wp.from_torch` in `src/edgebound/edge/warpbc.py`), the same memory model warpSPHCore uses at its API. Torch is not the
 obstacle. The obstacles are in the orchestration around the kernels:
 
 * **Data-dependent shapes.** The broadphase and adjacency build use `int(cnt.sum())`, `torch.nonzero` and `repeat_interleave` (`scene.py` `buildCellList`, `ParticleCells`, `buildAdjacency`): every call synchronises the host and

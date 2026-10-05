@@ -3,7 +3,7 @@
 **Status:** [V] for P0–P3 in 2D (stage 1 exact/mpmath, stage 2/3 numpy with conditioning remedies); checks 1–7 green; the validation problems of the 2025 paper (arXiv:2507.21686, Sec. 6.2) are reproduced (§9)
 **Tier(s):** 1 (nodal re-expansion); the moment machinery is shared by 2, 3, 4 · **Dimension:** 2D
 **Depends on:** `moments-recursion.md`, `edge-gradient-identity.md`
-**Implemented in:** `python/edgebound/fem.py` (stage 1), `python/edgebound/np_fem.py` (numpy, hybrid), `np2d.grad_moment`, `fem_fixtures.py`, `fem_study.py`
+**Implemented in:** `src/edgebound/edge/fem.py` (stage 1), `src/edgebound/edge/np_fem.py` (numpy, hybrid), `np2d.grad_moment`, `fem_fixtures.py`, `fem_study.py`
 **Verified by:** `tests/edge/test_fem.py` (checks 1–6, exact/mpmath), `tests/edge/test_fem_np.py` (golden fixtures, float32, conditioning), `tests/fixtures/edge2d_fem_golden.json`
 
 ## 1. Statement
@@ -61,7 +61,7 @@ disk integrals of polynomials.
 
 ## 6. Conditioning (check 7) — measured, and what removes it
 
-Relative error `max|Δw_i| / max|w_i|` against the exact reference for the same float inputs (`python -m edgebound.fem_study`):
+Relative error `max|Δw_i| / max|w_i|` against the exact reference for the same float inputs (`python scripts/studies/fem_study.py`):
 the **plain** edge-reduction + monomial re-expansion loses accuracy fast when `L_T ≪ h`, in two distinct ways, each with a
 **provably exact** remedy (no approximation of the identities):
 
@@ -88,7 +88,7 @@ the **plain** edge-reduction + monomial re-expansion loses accuracy fast when `L
    i.e. ≤ 1e-6 absolute) instead of `10^3 … 10^{22}`. Elements whose features are below float32 resolution at their distance remain unrepresentable
    (input limit, not arithmetic).
 
-Selected rows (p = 3, kernel w4; relative error of the nodal weights; full table in `python -m edgebound.fem_study`):
+Selected rows (p = 3, kernel w4; relative error of the nodal weights; full table in `python scripts/studies/fem_study.py`):
 
 | x | L_T/h | plain f64 | plain f32 | **hybrid f64** | **hybrid f32** |
 |---|---|---|---|---|---|

@@ -5,13 +5,14 @@ import sys, time, types
 sys.path.insert(0, "python"); sys.path.insert(0, "docs/work/refs")
 import numpy as np
 T, which = float(sys.argv[1]), sys.argv[2]
-from edgebound import deltasph2d, deltasph_validation as dv
+from edgebound.sim import deltasph2d
+from edgebound import deltasph_validation as dv
 from edgebound.deltasph_regress import _ke_relmax
 if which == "exact":
     import importlib
     ns = {}
     exec(open("docs/work/refs/tensile_c4_probe.py").read().split("# (0)")[0], ns)          # registers w4p5, patches warpbc.edge_channels, defines T_scene
-    src = open("python/edgebound/deltasph2d.py").read()
+    src = open("src/edgebound/sim/deltasph2d.py").read()
     src = src.replace('                    if cfg.kernel != KernelFunctions.Wendland2:  raise NotImplementedError("tensileExact: Wendland C2 only (C4 needs the Chebyshev plan)")\n', "")
     src = src.replace("T = tensile_vector_scene(self.scene, x[near], H)", "T = _TE(self.scene, x[near], H)")
     mod = types.ModuleType("edgebound.deltasph2d_probe"); mod.__package__ = "edgebound"; mod.__dict__["_TE"] = ns["T_scene"]

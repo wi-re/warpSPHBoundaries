@@ -1,6 +1,6 @@
 """Check 7 of fem-nodal-weights.md: conditioning of the nodal weights vs L_T/h and the order p.
 
-    python scripts/studies/fem_study.py
+    python -m edgebound.edge.fem_study
 
 Error metric: max_i |dw_i| / max_i |w_i|  (relative to the weights), where the reference is the exact (stage-1) result
 for the *exact rational value of the float inputs* (so input rounding is excluded: only arithmetic is measured).

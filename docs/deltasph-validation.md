@@ -1,6 +1,6 @@
 # δ⁺-SPH on analytic walls: still-water validation against warpSPH + mDBC (2D)
 
-**Status:** [V] tank, wedge (one open item, §3), Marrone 3.1 dam break (§5), SPHERIC sloshing (§6). Solver `python/edgebound/deltasph2d.py`, scoring `python -m edgebound.deltasph_validation tank|wedge`, tests `tests/edge/test_deltasph.py` (10).
+**Status:** [V] tank, wedge (one open item, §3), Marrone 3.1 dam break (§5), SPHERIC sloshing (§6). Solver `src/edgebound/sim/deltasph2d.py`, scoring `python scripts/deltasph_validation.py tank|wedge`, tests `tests/sim/test_deltasph.py` (10).
 Plan and order of the test cases: `deltasph-plan.md` (tank → English wedge → dam break → sloshing). Porting notes for warpSPH: `deltasph-porting-notes.md`.
 Reference: warpSPH `scripts/probe_englishWedge.py --dp 0.02 [--no-wedge] --tLimit 4` (scheme `deltaSPH`, isothermal EOS, Wendland C2, h/dp = 2, δ = 0.1, α = 0.01, fourtakas2019 DDT, Antuono pressure force,
 symplectic Euler, mDBC + free-slip walls, hydrostatic density initialisation, no shifting). English et al. 2022 §4.1: tank 2.4 × 1.2 m, water 0.5 m, wedge 0.24 m high on the bed.

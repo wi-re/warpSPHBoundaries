@@ -6,8 +6,8 @@ import sys, math
 sys.path.insert(0, "python")
 import numpy as np, mpmath as mp
 from fractions import Fraction as F
-from edgebound import kernels, np2d, geometry as G
-from edgebound.core import GUARD, block_grad
+from edgebound.edge import kernels, np2d, geometry as G
+from edgebound.edge.core import GUARD, block_grad
 from edgebound.q2_conditioning import terms, ref_coeffs, POLY
 
 # ---- (1)

@@ -1,10 +1,11 @@
 # why a single adjacency "breaks": (1) it stores kernel moments, the operation only contracts them; (2) cost split of buildAdjacency; (3) multi-kernel evaluation on one pair list
 import time, torch
-from edgebound.deltasph2d import marrone_dambreak
-from edgebound.viscosity import lap_lambda_scene
-from edgebound.tensile import tensile_vector_scene
-from edgebound import scene as S, warpbc
-from edgebound.scene import BodyField, sceneOperation, queryCellList, _segment_distance
+from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.scene.viscosity import lap_lambda_scene
+from edgebound.scene.tensile import tensile_vector_scene
+from edgebound.scene import scene as S
+from edgebound.edge import warpbc
+from edgebound.scene.scene import BodyField, sceneOperation, queryCellList, _segment_distance
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 sim,_ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()

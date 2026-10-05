@@ -8,8 +8,8 @@ L = f K_l with f = -20 c/(C_l H^2) (w2),  -(56/3) c/(C_l H^2) (w4).     Delta-la
 import sys; sys.path.insert(0, "/home/lu26029/dev/curvatureBoundaries/python"); sys.path.insert(0, "/home/lu26029/dev/curvatureBoundaries/docs/work/refs")
 from fractions import Fraction as F
 import numpy as np, torch
-from edgebound import kernels
-from edgebound.scene import Body, Scene, SurfaceRep, BodyField, sceneOperation
+from edgebound.edge import kernels
+from edgebound.scene.scene import Body, Scene, SurfaceRep, BodyField, sceneOperation
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 from lap_calib_probe import AB
 

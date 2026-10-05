@@ -28,12 +28,16 @@ maple/00_setup.mpl          kernel table, normalization, F(n,p,x) basis checks
 maple/01_planar.mpl         2-D + 3-D planar, all kernels
 maple/03_sphere.mpl         solid sphere (Wendland w2/w4/w6)
 maple/run_all.sh            regenerate results/symbolic/ (needs Maple 2026)
-python/curvbound/           kernel table, closed-form evaluators, oracles
-tests/                      pytest suite (49 tests)
+src/curvbound/              PLAN track: kernel table, closed-form evaluators, oracles (curvature-aware planar / sphere integrals)
+src/edgebound/edge/         HANDOFF track: exact 2D edge-reduction integrals (mpmath -> numpy -> torch -> Warp), FEM weights, tiers 3 / 4
+src/edgebound/scene/        bodies and representations, boundary operations, wall operators of the delta+-SPH solver
+src/edgebound/sim/          DFSPH2D and DeltaSPH2D solvers, cases, validation runners
+scripts/                    command-line runners (regression harness, profiler, validation, videos), scripts/studies, scripts/bench
+tests/                      pytest suite: tests/{edge,scene,sim,curvbound} (816 tests)
 notebooks/demo.ipynb        executed demo: geometry, curves, validation
 docs/derivation.md          full mathematical write-up
 PLAN.md                     project status & roadmap
-results/symbolic/           Maple exports (committed; consumed by python/)
+results/symbolic/           Maple exports (committed; consumed by src/curvbound)
 results/figures/            notebook figures (generated, git-ignored)
 ```
 
@@ -43,8 +47,9 @@ results/figures/            notebook figures (generated, git-ignored)
 # 1. (re)generate the symbolic results — needs Maple 2026
 maple/run_all.sh                       # MAPLE=/path/to/maple to override
 
-# 2. run the validation suite (any python with mpmath + pytest)
-python -m pytest tests/ -q
+# 2. install (editable) and run the validation suite; the solvers need warpSPH / warpSPHCore in the same env
+pip install -e . --no-deps          # or: pip install -e .[test]
+python -m pytest tests/ -q -n 4     # ~3 min with pytest-xdist; GPU tests use cuda:0
 
 # 3. run the demo notebook (jupyter + matplotlib)
 python -m jupyter nbconvert --to notebook --execute --inplace \
@@ -54,7 +59,6 @@ python -m jupyter nbconvert --to notebook --execute --inplace \
 Python API sketch:
 
 ```python
-import sys; sys.path.insert(0, "python")
 from fractions import Fraction
 from curvbound import planar2d, planar3d, sphere
 
@@ -67,7 +71,7 @@ sphere("w4", Fraction(4, 10), Fraction(1, 5))   # solid ball R=0.4, d=0.2
 
 Every closed form is validated three ways (details in `docs/derivation.md`
 §5): exact symbolic identities in Maple, 50-digit Maple quadrature, and
-independent 40-digit mpmath oracles in `python/curvbound/oracle.py`
+independent 40-digit mpmath oracles in `src/curvbound/oracle.py`
 (including a true 2-D Cartesian quadrature and the h-scaling identity).
 Worst observed error: ~1e-39.
 

@@ -1,6 +1,6 @@
 # Q2 conditioning: the tensile term `W^5/5` (WORK-002 T2.4)
 
-Status: [V] (numbers from `python -m edgebound.q2_conditioning`, log `docs/work/logs/LOG-002.md`).
+Status: [V] (numbers from `python scripts/studies/q2_conditioning.py`, log `docs/work/logs/LOG-002.md`).
 
 *Reviewer correction (REVIEW-002):* the model's T_y values (−6.8e-8 / −4.9e-8) used the factor (c2/c25)⁵/π⁴, which is wrong (c2⁵ / (π⁴ c25) is right); the sign statement was and is correct. Corrected values: −0.14101158 (w2) and −0.19782376 (w4), each confirmed by an independent midpoint-grid integral of W⁴ ∂W/∂y over the half disk (−0.14101146, −0.19782346; `docs/work/refs/q2_review_probe.py`). The "vertex finding" below is localised to within ~0.01 H of a vertex (same probe), i.e. it does not matter for particles that sit ≥ dx/√2 from a corner.
 

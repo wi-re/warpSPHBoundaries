@@ -196,7 +196,7 @@ Three independent layers:
 1. **Maple, exact arithmetic** (`maple/*.mpl`): every identity above is
    checked *symbolically* (`simplify(... - ...) = 0`), plus 50-digit
    quadrature of the defining integrals at sample points.
-2. **Python, 40-digit mpmath oracles** (`python/curvbound/oracle.py`):
+2. **Python, 40-digit mpmath oracles** (`src/curvbound/oracle.py`):
    re-integrate the defining integrals from scratch (no shared code with
    the closed-form evaluator `symbolic.py`).
 3. **Exact rational + true-2D checks** (`tests/`): boundary values and

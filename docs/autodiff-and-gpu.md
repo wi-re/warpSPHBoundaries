@@ -1,6 +1,6 @@
 # Stages 4 and 5: torch autodiff, explicit adjoints, Warp kernels (2D)
 
-**Status:** [V] — `python/edgebound/torch2d.py`, `warp2d.py`, `np2d.shape_gradient`; tests `tests/edge/test_torch2d.py`, `test_warp2d.py`, `test_shape_gradient.py`
+**Status:** [V] — `src/edgebound/edge/torch2d.py`, `warp2d.py`, `np2d.shape_gradient`; tests `tests/edge/test_torch2d.py`, `test_warp2d.py`, `test_shape_gradient.py`
 
 ## 1. The analytic derivatives (the primary implementation)
 
@@ -41,7 +41,7 @@ weights as exact rationals rounded once) from constant arrays; every thread = on
 * **Open question resolved:** the installed Warp (1.17) has reverse-mode `wp.Tape` and `wp.autograd.jacobian` (built from backward passes) / `jacobian_fd`; there is **no forward mode**
   (`jvp`) API. Together with the fact that Warp's reverse mode does not handle loop-carried accumulations in dynamic loops robustly, this confirms the design choice:
   explicit analytic adjoint kernels rather than taping the loops.
-* Throughput (RTX PRO 6000 Blackwell, float64, `python -m edgebound.warp_bench`; 1e6 triangle/point pairs, kernel time, data resident):
+* Throughput (RTX PRO 6000 Blackwell, float64, `python scripts/bench/warp_bench.py`; 1e6 triangle/point pairs, kernel time, data resident):
 
   | α | Warp CUDA | numpy (1 thread, extrapolated) | torch CUDA eager | Warp vs numpy |
   |---|---|---|---|---|

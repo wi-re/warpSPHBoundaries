@@ -1,8 +1,9 @@
 # reviewer probe for WORK-006: cost/accuracy of the Chebyshev edge plan resolution (nodes, panels) for the W^5 tensile kernels, dam-break state
 import time, torch
-from edgebound.deltasph2d import marrone_dambreak
-from edgebound.tensile import tensile_vector_scene
-from edgebound import warpbc, tensile as TN
+from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.scene.tensile import tensile_vector_scene
+from edgebound.edge import warpbc
+from edgebound.scene import tensile as TN
 sim,_ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()
 x, rho, H = sim.x, sim.rho, sim.H

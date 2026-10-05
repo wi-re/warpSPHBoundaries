@@ -1,12 +1,12 @@
 # Boundary operations with the warpSPH call shape (2D, tiers 1/2 on the GPU)
 
-**Status:** [V] — `python/edgebound/boundaryOps.py` (interface), `warpbc.py` (Warp pair engine), `implicitBodies.py` (tiers 3/4), tests `tests/edge/test_boundary_ops.py`, `test_warpbc.py`, `test_implicit_bodies.py`, `test_kernels_extra.py`
+**Status:** [V] — `src/edgebound/scene/boundaryOps.py` (interface), `warpbc.py` (Warp pair engine), `implicitBodies.py` (tiers 3/4), tests `tests/edge/test_boundary_ops.py`, `test_warpbc.py`, `test_implicit_bodies.py`, `test_kernels_extra.py`
 
 ## 1. Call shape
 
 ```python
 from warpSPHCore import OperationProperties, WarpOperation, GradientScheme, KernelFunctions, OperationDirection, ParticleState
-from edgebound.boundaryOps import BoundaryMesh, buildBoundaryAdjacency, boundaryOperation
+from edgebound.scene.boundaryOps import BoundaryMesh, buildBoundaryAdjacency, boundaryOperation
 
 mesh = BoundaryMesh(vertices[V,2], elements[E,3], bodyIds[E])                 # triangles (a polyline wall = a thin strip of triangles)
 props = OperationProperties(kernel=KernelFunctions.Wendland4, operation=WarpOperation.Gradient,
@@ -44,7 +44,7 @@ the exact compiled plans of `np2d` (compact-potential recursion, **inner potenti
 Accuracy (`tests/edge/test_warpbc.py`): all 19 golden FEM fixtures × 4 kernels (x inside / on an edge / at a vertex, `z → 0`, elements `1e-6 … 1 h`, far, half-plane, rim) on CPU and CUDA: **≤ 6e-9 relative to the weight scale (most ≤ 1e-12)**;
 random pairs for all supported kernels 2e-11 (weights), 2e-10 (gradient weights); every operation class and mode equals an independent per-pair numpy assembly to 1e-10; covering meshes reproduce the exact integrals (`Σ w = 1`, linear fields exactly) to 1e-12.
 
-Throughput (`python -m edgebound.boundary_bench`, RTX PRO 6000 Blackwell, 1 000 000 fluid particles in a tank, 804 wall triangles with edge `h/2`, `h = 3 dx`, Wendland C2):
+Throughput (`python scripts/bench/boundary_bench.py`, RTX PRO 6000 Blackwell, 1 000 000 fluid particles in a tank, 804 wall triangles with edge `h/2`, `h = 3 dx`, Wendland C2):
 
 | stage | time |
 |---|---|
@@ -57,8 +57,8 @@ i.e. the whole boundary treatment costs about as much as one particle operator p
 ## 3. Tiers 3 and 4 in this interface (implemented; hard switches, no blending)
 
 ```python
-from edgebound.boundaryOps import BoundaryDescription
-from edgebound.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy
+from edgebound.scene.boundaryOps import BoundaryDescription
+from edgebound.scene.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy
 desc = BoundaryDescription(mesh=wallMesh,                                   # optional explicit triangles (tiers 1/2)
                            bodies=[DiskBody(center, R), HalfPlaneBody(point, normalIntoFluid),
                                    DiskBody(c2, R2, solid="outside")],      # solid disk, planar wall, circular cavity wall

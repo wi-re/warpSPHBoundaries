@@ -23,7 +23,7 @@ Everything below is committed (HEAD `e58ac7b`) except this file and the one-line
 | **C. Solvers on the scene layer** | `DFSPH2D` (omniSPH-style, validated vs the compiled omniSPH: tank, dam break, rotating obstacle with exact momentum bookkeeping, wall-suction fix); **`DeltaSPH2D`** (δ⁺-SPH, warpSPH `sun2017DeltaSPH` as live reference: tank, English wedge, Marrone 3.1 dam break, SPHERIC TC10 sloshing) | `dfsph2d.py`, `deltasph2d.py` (650 lines), runners `deltasph_validation.py`, `dfsph_validation.py`, snapshots/videos `deltasph_snap.py`, `dfsph_video.py`, figures `deltasph_compare.py` | `dfsph-validation.md`, `deltasph-validation.md`, `deltasph-plan.md`, **`deltasph-porting-notes.md`** (term map warpSPH ↔ here, ported / not ported, change log), `deltasph-resume.md` | [V] 2D |
 
 Tests: `pytest tests/edge` (~2.5 min for the edge part); the three solver-related files `test_deltasph.py` (10) + `test_scene.py` (50) + `test_dfsph.py` (12) = 72, all passing at the last run (2026-10-02). I did not re-run them when writing this note.
-Environment: `cd python; PATH=/home/lu26029/miniconda3/envs/warp/bin:$PATH`; GPU RTX PRO 6000 Blackwell; scratch in `.tmp/` (ignored).
+Environment: `PATH=/home/lu26029/miniconda3/envs/warp/bin:$PATH` (the `warp` env, `pip install -e .` from the repo root); GPU RTX PRO 6000 Blackwell; scratch in `.tmp/` (ignored).
 
 ## A2. δ⁺-SPH on analytic walls: results to hold (the regression baselines)
 
@@ -116,7 +116,7 @@ Parallel track (does not block 1–5): the 3D derivations (face → edge chain, 
 * `PLAN.md` (tier 3 / oracle track, paused for review since 2026-10-01) still says "do not edit `HANDOFF.md`" — that was an instruction to the local model executing it at the time; this file was updated on the user's request.
 
 ## A7. Reading order for a new session
-`HANDOFF.md` Part A → `docs/deltasph-resume.md` (reproduce commands, artefacts) → `docs/deltasph-porting-notes.md` (term map, §4b status, change log) → `docs/deltasph-plan.md §3b` (3D / port strategy, quadrature argument) → `docs/scene-architecture.md` → `python/edgebound/deltasph2d.py` and `scene.py`. Theory only when deriving: Part B and `docs/derivations/`.
+`HANDOFF.md` Part A → `docs/deltasph-resume.md` (reproduce commands, artefacts) → `docs/deltasph-porting-notes.md` (term map, §4b status, change log) → `docs/deltasph-plan.md §3b` (3D / port strategy, quadrature argument) → `docs/scene-architecture.md` → `src/edgebound/sim/deltasph2d.py` and `scene.py`. Theory only when deriving: Part B and `docs/derivations/`.
 
 ---
 
@@ -379,7 +379,7 @@ Original (2026-10-01):
 - `monomial_edge_forms.py` — [D] closed-form primitives + §4/§6(b); brute-force reference timed out
   (discontinuity at $r=R$); swap in a polar reference (radial breakpoint at $R$) or Maple.
 
-Since: the package `python/edgebound/` (module map in Part A §A1 and `docs/README.md`), `maple/` (`run_edge.sh`), `tests/edge/`, `tests/fixtures/` (golden fixtures), `docs/` (index in `docs/README.md`), `notebooks/edge2d_demo.ipynb`, `results/deltasph/` (tracked δ⁺ series and figures), `results/tables/` (tier-3 Hermite tables), `results/symbolic/`.
+Since: the package `src/edgebound/` (module map in Part A §A1 and `docs/README.md`), `maple/` (`run_edge.sh`), `tests/edge/`, `tests/fixtures/` (golden fixtures), `docs/` (index in `docs/README.md`), `notebooks/edge2d_demo.ipynb`, `results/deltasph/` (tracked δ⁺ series and figures), `results/tables/` (tier-3 Hermite tables), `results/symbolic/`.
 
 ## 15. References
 

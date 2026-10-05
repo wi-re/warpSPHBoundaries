@@ -2,9 +2,9 @@
 
 **Status:** [V] (identity, conversion, limits, guards, solver switch — the tests below; the physics gates in `docs/deltasph-validation.md`, WORK-005 section)
 **Tier(s):** n/a (solver wall term, not an obstacle tier) · **Dimension:** 2D
-**Depends on:** the kernel table (`curvbound.kernels`), the scene operations of `python/edgebound/scene.py` (Density, Covariance of a registered ordinary kernel)
-**Implemented in:** `python/edgebound/viscosity.py::lap_lambda_scene` / `::lap_factor`; `python/edgebound/deltasph2d.py` (`cfg.viscosityExact`, the wall-viscosity block of `rhs`)
-**Verified by:** `tests/edge/test_viscosity_scene.py` (T5.1), `tests/edge/test_deltasph_viscosity.py` (T5.2)
+**Depends on:** the kernel table (`curvbound.kernels`), the scene operations of `src/edgebound/scene/scene.py` (Density, Covariance of a registered ordinary kernel)
+**Implemented in:** `src/edgebound/scene/viscosity.py::lap_lambda_scene` / `::lap_factor`; `src/edgebound/sim/deltasph2d.py` (`cfg.viscosityExact`, the wall-viscosity block of `rhs`)
+**Verified by:** `tests/scene/test_viscosity_scene.py` (T5.1), `tests/sim/test_deltasph_viscosity.py` (T5.2)
 
 Exact wall part of the naive-Laplacian artificial viscosity (Q1, the fourth and last wall quadrature of the program; the first three — λ, G, the cover — are in `deltasph2d.py`, and this is the fourth).  Default off (`cfg.viscosityExact`).
 
@@ -62,7 +62,7 @@ with u_n = (v − v_wall)·n, n the unit wall normal into the wall (the solver's
 | tangent (support touches the solid at a point) | 0 | (c) ≤ 1e-9 absolute |
 | scaling | Δλ(z;H) = Δλ(z/H;1)/H² | (d) exactly (0.0e+00 measured) — the H⁻² is carried by f and the registered kernel |
 
-## 5. Checks (T5.1, `tests/edge/test_viscosity_scene.py`)
+## 5. Checks (T5.1, `tests/scene/test_viscosity_scene.py`)
 
 | # | check | tolerance (stated before results) | measured | status |
 |---|---|---|---|---|
@@ -76,7 +76,7 @@ with u_n = (v − v_wall)·n, n the unit wall normal into the wall (the solver's
 | f | negative controls: 2fλ alone, −Δλ, pairwise A(0.1) vs B(0.1) | > 1e-1 / > 1.0 / > 0.3 · B | 5.757 / 2.000 / 2.557 (w2); 5.191 / 2.000 / 2.397 (w4) | pass |
 | g | moment identity ∫ r W′ dA = −2; pairwise bulk term for v = (y²,0) = fac/4 | atol/rtol 1e-10 | −2.000000000000; 0.250000000000 fac | pass |
 
-T5.2 (`tests/edge/test_deltasph_viscosity.py`, tank `dp = 0.04`, surface domain, both kernels):
+T5.2 (`tests/sim/test_deltasph_viscosity.py`, tank `dp = 0.04`, surface domain, both kernels):
 
 | # | check | tolerance (stated before results) | measured | status |
 |---|---|---|---|---|

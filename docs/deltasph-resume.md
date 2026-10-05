@@ -3,8 +3,8 @@
 Read first: `deltasph-plan.md` (strategy, §3b port + 3D), `deltasph-validation.md` (results), `deltasph-porting-notes.md` (term map warpSPH ↔ here, §4b ported / not ported, change log). This file is the short way back in.
 
 ## State
-All code and docs are committed (last code commit 30fae1e, docs after). Solver `python/edgebound/deltasph2d.py` (`DeltaSPH2D`; cases `hydrostatic_tank`, `english_wedge`, `marrone_dambreak`, `sloshing_tank`), scoring / runners
-`deltasph_validation.py`, snapshots `deltasph_snap.py`, videos `dfsph_video.py` (also used for DFSPH), comparison figure `deltasph_compare.py`, tests `tests/edge/test_deltasph.py` (10) + `test_scene.py` (50) + `test_dfsph.py` (12): all passing at the last run
+All code and docs are committed (last code commit 30fae1e, docs after). Solver `src/edgebound/sim/deltasph2d.py` (`DeltaSPH2D`; cases `hydrostatic_tank`, `english_wedge`, `marrone_dambreak`, `sloshing_tank`), scoring / runners
+`deltasph_validation.py`, snapshots `deltasph_snap.py`, videos `dfsph_video.py` (also used for DFSPH), comparison figure `deltasph_compare.py`, tests `tests/sim/test_deltasph.py` (10) + `test_scene.py` (50) + `test_dfsph.py` (12): all passing at the last run
 (72 on the three files). Scene additions: `Scene.inside`, `Scene.signed_distance`; shared fix in `dfsph2d.neighbor_pairs` (cell 1.01 H, dense path N ≤ 8000).
 
 | case | against | result |
@@ -16,12 +16,11 @@ All code and docs are committed (last code commit 30fae1e, docs after). Solver `
 
 ## Reproduce
 ```
-cd python; PATH=/home/lu26029/miniconda3/envs/warp/bin:$PATH
-python -m edgebound.deltasph_validation tank 0.02 4.0 surface            # ~5 min
-python -m edgebound.deltasph_validation wedge 0.02 4.0 surface           # ~8-13 min
-python -m edgebound.deltasph_validation dambreak 67 1.9 out.npz shifting=True noPen=impulse   # ~20 min, snapshots in out.npz
-python -m edgebound.deltasph_validation sloshing 200 7.0 out.npz shifting=True noPen=impulse  # ~90 min
-python -m edgebound.dfsph_video out.mp4 "label=out.npz" --vmax=5             # reads the snap_* keys of the runners directly
+python scripts/deltasph_validation.py tank 0.02 4.0 surface            # ~5 min
+python scripts/deltasph_validation.py wedge 0.02 4.0 surface           # ~8-13 min
+python scripts/deltasph_validation.py dambreak 67 1.9 out.npz shifting=True noPen=impulse   # ~20 min, snapshots in out.npz
+python scripts/deltasph_validation.py sloshing 200 7.0 out.npz shifting=True noPen=impulse  # ~90 min
+python scripts/dfsph_video.py out.mp4 "label=out.npz" --vmax=5             # reads the snap_* keys of the runners directly
 ```
 Reference runs (warpSPH, branch `dev`, never modified; its own rules: one GPU run at a time): `python scripts/probe_deltaSPHMarrone.py --nx 67 --c0Ratio 40 --out <dir>`;
 `python scripts/probe_englishWedge.py --dp 0.02 [--wedge|--no-wedge] --tLimit 4`; `python examples/sloshingTank/run_sloshingTank.py --scheme wcsph --tLimit 7 --no-video --out <dir>`.

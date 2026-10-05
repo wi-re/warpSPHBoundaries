@@ -1,10 +1,11 @@
 # NOTE: run on the tree WITH review7_work008_proto.diff applied (`git apply docs/work/refs/review7_work008_proto.diff`), from python/ with PYTHONPATH=.
 # reviewer probe for WORK-008: cover / tensile with the pruned adjacency (channels 3,4) vs the full adjacency: bit-identity and cost (dam-break state)
 import time, torch
-from edgebound.deltasph2d import marrone_dambreak
-from edgebound.cover import cover_vector_scene
-from edgebound.tensile import tensile_vector_scene
-from edgebound import scene as S, warpbc
+from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.scene.cover import cover_vector_scene
+from edgebound.scene.tensile import tensile_vector_scene
+from edgebound.scene import scene as S
+from edgebound.edge import warpbc
 sim, _ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()
 x, rho, H = sim.x, sim.rho, sim.H

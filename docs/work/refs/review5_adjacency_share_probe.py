@@ -1,10 +1,10 @@
 # reviewer probe for WORK-006: can ONE adjacency (built for all N, one kernel) serve the exact ops of other kernels?  cost of op vs adjacency.
 import time, math, torch
-from edgebound.deltasph2d import marrone_dambreak
-from edgebound.cover import cover_vector_scene
-from edgebound.tensile import tensile_vector_scene, tensile_factor
-from edgebound.viscosity import lap_lambda_scene
-from edgebound import scene as S
+from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.scene.cover import cover_vector_scene
+from edgebound.scene.tensile import tensile_vector_scene, tensile_factor
+from edgebound.scene.viscosity import lap_lambda_scene
+from edgebound.scene import scene as S
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 sim,_ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()
@@ -28,7 +28,7 @@ got = cover_vector_scene(sim.scene, x, H, adjacency=adj)[near]
 print("cover shared-vs-own max|diff| %.2e (scale %.3e)   time own %.2f ms, shared(all N) %.2f ms" % (float((ref-got).abs().max()), float(ref.abs().max()),
       t(lambda: cover_vector_scene(sim.scene, x[near], H)), t(lambda: cover_vector_scene(sim.scene, x, H, adjacency=adj))))
 # (2) can a `cone` adjacency be reused by another kernel's op?  (lw2 Density through sceneOperation with the cone adjacency)
-from edgebound.scene import BodyField, sceneOperation
+from edgebound.scene.scene import BodyField, sceneOperation
 for kern in ("lw2", "w2p5"):
     lap_lambda_scene(sim.scene, x[near][:2], H, "w2"); tensile_vector_scene(sim.scene, x[near][:2], H, "w2")       # registers kernels
     p2 = OperationProperties(kernel=kern, operation=WarpOperation.Density, gradientMode=GradientScheme.Naive, operationMode=OperationDirection.BoundaryToFluid)

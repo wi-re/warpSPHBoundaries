@@ -46,16 +46,16 @@ golden-fixture cases. Do not mark a file [V] until the check table is green.
 | what | where |
 |---|---|
 | Maple proofs/checks | `maple/10_edge_primitives.mpl`, `11_truncated_monomials.mpl`, `12_moments_recursion.mpl`, `13_halfplane.mpl` (`maple/run_edge.sh` runs all four) |
-| stage-1 reference implementation (mpmath) + polar oracle | `python/edgebound/` (`core`, `geometry`, `primitives`, `kernels`, `oracle`) |
+| stage-1 reference implementation (mpmath) + polar oracle | `src/edgebound/` (`core`, `geometry`, `primitives`, `kernels`, `oracle`) |
 | tests | `tests/edge/` (`pytest tests/edge`, ≈2.5 min) |
-| golden fixtures | `tests/fixtures/edge2d_golden.json` (92 cases; `python -m edgebound.fixtures` regenerates; schema in `python/edgebound/fixtures.py`) |
-| float64 behaviour of the guard-free algorithm | `python -m edgebound.precision_probe` (table in `backends-and-verification.md`) |
+| golden fixtures | `tests/fixtures/edge2d_golden.json` (92 cases; `python scripts/make_fixtures.py edge` regenerates; schema in `src/edgebound/edge/fixtures.py`) |
+| float64 behaviour of the guard-free algorithm | `python scripts/studies/precision_probe.py` (table in `backends-and-verification.md`) |
 
 ## Stage 2 (numpy, vectorised, branch-free)
 
-`python/edgebound/np2d.py` (batched convex polygons; exact `Fraction` kernel compilation; dtype and quadrature options),
+`src/edgebound/edge/np2d.py` (batched convex polygons; exact `Fraction` kernel compilation; dtype and quadrature options),
 `tests/edge/test_np2d.py` (all 82 convex-triangle fixtures in one vectorised call per kernel, covering meshes, stage-1
-agreement, tiny elements, longdouble/Gauss options, continuity across an edge), `python -m edgebound.np2d_study`
+agreement, tiny elements, longdouble/Gauss options, continuity across an edge), `python scripts/studies/np2d_study.py`
 (accuracy/cost tables in `exactness-and-approximations.md`).
 
 ## Stage 3 (float32)
@@ -66,7 +66,7 @@ tests `tests/edge/test_np2d_stable.py`.
 
 ## FEM nodal weights (2D)
 
-`python/edgebound/fem.py` (exact stage 1), `np_fem.py` (numpy: edge reduction near `x`, Gauss on far elements), `fem_fixtures.py` →
+`src/edgebound/edge/fem.py` (exact stage 1), `np_fem.py` (numpy: edge reduction near `x`, Gauss on far elements), `fem_fixtures.py` →
 `tests/fixtures/edge2d_fem_golden.json`, `fem_study.py` (conditioning table), tests `tests/edge/test_fem.py`, `test_fem_np.py`.
 
 External benchmark: `tests/edge/test_paper2025.py` (Winchenbach & Kolb 2025 validation problems; results in `derivations/fem-nodal-weights.md` §9).

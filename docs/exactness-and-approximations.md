@@ -1,6 +1,6 @@
 # Exact core, cheap approximations (stage 2 results)
 
-**Status:** [V] — `python/edgebound/np2d.py`, `tests/edge/test_np2d.py`, `python -m edgebound.np2d_study`
+**Status:** [V] — `src/edgebound/edge/np2d.py`, `tests/edge/test_np2d.py`, `python scripts/studies/np2d_study.py`
 **Audience:** the argument for the method: *what is exact, what is approximated, what the approximations cost.*
 
 ## The argument in four points
@@ -25,7 +25,7 @@
 
 ## Measured accuracy (reference: 40-digit golden fixtures; "hard" = all 82 convex-triangle fixtures)
 
-Max absolute error over the set (value: 1; gradient × h; moment_α / h^k). `python -m edgebound.np2d_study`.
+Max absolute error over the set (value: 1; gradient × h; moment_α / h^k). `python scripts/studies/np2d_study.py`.
 
 | variant | generic: value | grad | m₁₁ | m₂₂ | hard: value | grad | m₁₁ | m₂₂ |
 |---|---|---|---|---|---|---|---|---|
@@ -107,7 +107,7 @@ The edge integrals are then done by Gauss quadrature of the (smooth, now well-co
 closed form, the indicator/atan weights stay exact (`stable=(nodes, panels)` in `np2d`).
 
 float32 tolerance table (max abs error over the fixtures of each class, all four kernels; gradient scaled by `h`, moments by `h^k`;
-`python -m edgebound.np2d_study`):
+`python scripts/studies/np2d_study.py`):
 
 | class (cases) | method | value | grad | m₁₁ | m₂₂ |
 |---|---|---|---|---|---|

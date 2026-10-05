@@ -1,8 +1,8 @@
 # run: cd python && PYTHONPATH=. python ../docs/work/refs/review8_build_breakdown_probe.py  (GPU idle: the numbers depend on load)
 # reviewer probe (REVIEW-008): per-call cost of the 9 Scene.buildAdjacency calls/step, by caller, kernel, channels; dam break nx 67, step 300+
 import time, collections, sys, torch
-from edgebound.deltasph2d import marrone_dambreak
-from edgebound.scene import Scene
+from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.scene.scene import Scene
 sim, _ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()
 rows = []

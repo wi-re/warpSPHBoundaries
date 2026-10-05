@@ -3,7 +3,7 @@
 **Status:** [V] (F₀, F₁, F₂ derived in Maple, evaluated in closed form with the edge machinery, verified against the exact disk by two independent routes; convex and concave)
 **Tier(s):** 3 · **Dimension:** 2D (3D version: `PLAN.md` §8, §19; exact oracles in `docs/derivation.md`)
 **Depends on:** `../notation.md`, `docs/derivation.md` (2D planar closed forms), `moments-recursion.md`, `tier4-slender-series.md` (circle edge identity / exact disk)
-**Implemented in:** `python/edgebound/tier3.py`; exact references `tier4.arc_value`, `oracle.polar_disk_*`
+**Implemented in:** `src/edgebound/edge/tier3.py`; exact references `tier4.arc_value`, `oracle.polar_disk_*`
 **Verified by:** `maple/14_tier3_2d.mpl`, `tests/edge/test_tier3.py`
 
 ## 1. Statement

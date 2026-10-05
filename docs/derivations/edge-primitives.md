@@ -3,7 +3,7 @@
 **Status:** [V] Maple (symbolic, `maple/10_edge_primitives.mpl`) + mpmath (`tests/edge/test_primitives.py`)
 **Tier(s):** 1, 2, 4 · **Dimension:** 2D (3D adds a new family: `tet-face-edge-chain.md`)
 **Depends on:** `../notation.md`
-**Implemented in:** `python/edgebound/primitives.py` (mpmath stage 1); the unverified `monomial_edge_forms.py` is superseded
+**Implemented in:** `src/edgebound/edge/primitives.py` (mpmath stage 1); the unverified `monomial_edge_forms.py` is superseded
 **Verified by:** `maple/10_edge_primitives.mpl`, `tests/edge/test_primitives.py`
 
 ## 1. Statement
@@ -61,7 +61,7 @@ the base cases. No step is unchecked.
 
 - **Short chords.** `F(hi) − F(lo)` of a closed form cancels when `hi ≈ lo`. The angle term is
   fixed exactly by `atan2` (above). For the polynomial / `asinh` parts the 53-bit emulation
-  (`python -m edgebound.precision_probe`, table in `../backends-and-verification.md`) shows the
+  (`python scripts/studies/precision_probe.py`, table in `../backends-and-verification.md`) shows the
   *absolute* error stays at the 1e-14 level for chords down to 1e-13 (the integrand there is
   tiny, so the *absolute* error is what matters). The mpmath stage simply carries 20 guard digits.
 - **Downward recurrence** (`m < −2`, only for (b)) divides by `z²` at every step: at `z = 1e-9`,

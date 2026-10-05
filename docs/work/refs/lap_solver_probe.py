@@ -1,8 +1,8 @@
 import sys; sys.path.insert(0, "python")
 import numpy as np, torch
 from warpSPHCore import KernelFunctions
-from edgebound.deltasph2d import DeltaSPHConfig, hydrostatic_tank
-from edgebound.dfsph2d import F64
+from edgebound.sim.deltasph2d import DeltaSPHConfig, hydrostatic_tank
+from edgebound.sim.dfsph2d import F64
 dev = "cuda:0"
 def brute(fam, p, H, L=2.4, Ht=1.2, nr=600, nt=1200):
     # solid = outside the box; lap W polar midpoint grid

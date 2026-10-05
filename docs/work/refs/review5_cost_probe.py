@@ -1,11 +1,11 @@
 # reviewer probe for WORK-006: per-call cost of each exact wall operation on a developed dam-break state, and calls per step
 import time, math, torch
-from edgebound.deltasph2d import marrone_dambreak
-from edgebound.cover import cover_vector_scene
-from edgebound.cone_area import cone_area_scene
-from edgebound.tensile import tensile_vector_scene
-from edgebound.viscosity import lap_lambda_scene
-from edgebound import scene as S
+from edgebound.sim.deltasph2d import marrone_dambreak
+from edgebound.scene.cover import cover_vector_scene
+from edgebound.scene.cone_area import cone_area_scene
+from edgebound.scene.tensile import tensile_vector_scene
+from edgebound.scene.viscosity import lap_lambda_scene
+from edgebound.scene import scene as S
 sim,_ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()
 x, rho = sim.x, sim.rho

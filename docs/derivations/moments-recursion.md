@@ -3,7 +3,7 @@
 **Status:** (a) [V] for `k ≤ 4` (Maple symbolic half-plane + wedge, mpmath vs polar quadrature); (b) [V] but **only for `z ≠ 0`** on every edge with a non-empty chord
 **Tier(s):** 1, 2, 3, 4 · **Dimension:** any (2D written out)
 **Depends on:** `edge-value-identity.md`, `edge-primitives.md`, `truncated-monomials.md`
-**Implemented in:** (a) `python/edgebound/core.py::block_moment`; (b) `core.py::block_moment_b` (cross-check only)
+**Implemented in:** (a) `src/edgebound/edge/core.py::block_moment`; (b) `core.py::block_moment_b` (cross-check only)
 **Verified by:** `maple/12_moments_recursion.mpl`, `maple/13_halfplane.mpl`, `tests/edge/test_moments.py`, `tests/edge/test_degenerate.py`, `tests/edge/test_fixtures.py`
 
 ## 1. Statement

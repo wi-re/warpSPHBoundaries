@@ -3,7 +3,7 @@
 **Status:** [V] Maple (decomposition, normalisation, per-block value/gradient: `maple/11_truncated_monomials.mpl`) + mpmath vs polar oracle
 **Tier(s):** all · **Dimension:** 2D, 3D
 **Depends on:** `../notation.md`, `docs/derivation.md` §1 (kernel table), `edge-primitives.md`
-**Implemented in:** `python/edgebound/kernels.py` (exact blocks, built from `curvbound.kernels`), `python/edgebound/core.py::block_value/block_grad`
+**Implemented in:** `src/edgebound/edge/kernels.py` (exact blocks, built from `curvbound.kernels`), `src/edgebound/edge/core.py::block_value/block_grad`
 **Verified by:** `maple/11_truncated_monomials.mpl`, `tests/edge/test_kernels.py`, `tests/edge/test_value.py`
 
 ## 1. Statement
@@ -77,7 +77,7 @@ sector `θ R^{n+2}/(n+2)` when the opposite edge lies outside `R`.
   `R = ½` block, but `W = σ[2(1−q)³ − 8(½−q)³]`, so the coefficient must be `−8σ` (equivalently
   `−4 C2`). With `−4σ` the kernel at `q = 0` is `1.5σ` instead of `σ`. The script was never
   run to completion (its reference timed out), so this went unnoticed. The new
-  `python/edgebound/kernels.py` builds the blocks programmatically from the exact pieces.
+  `src/edgebound/edge/kernels.py` builds the blocks programmatically from the exact pieces.
 
 ## 7. Open questions
 

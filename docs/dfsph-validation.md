@@ -1,6 +1,6 @@
 # DFSPH on the scene boundary layer: validation against omniSPH (2D)
 
-**Status:** [V] — solver `python/edgebound/dfsph2d.py`, omniSPH reference `dfsph_ref.py`, tables `python -m edgebound.dfsph_validation`, tests `tests/edge/test_dfsph.py` (12).
+**Status:** [V] — solver `src/edgebound/sim/dfsph2d.py`, omniSPH reference `dfsph_ref.py`, tables `python scripts/dfsph_validation.py`, tests `tests/sim/test_dfsph.py` (12).
 Purpose: use the scene layer (`scene-architecture.md`) in a real solver, with a domain body instead of boundary particles, before 3D.
 
 ## 1. The solver
@@ -73,7 +73,7 @@ The same case with the domain (inner faces at the box) given as the representati
 * four half planes double count the corner region: λ of a particle `0.55 dx` from both walls is `0.4166` instead of `0.3738` (+11 %), and the trajectories deviate at once (7e-4 after 0.1 s). Hence the need for the SDF
   switch (probe test → fallback surface) or an exact corner primitive.
 
-## 5. Moving bodies and the force on them (`dfsph_cases.tank_with_obstacle`, `python -m edgebound.dfsph_validation obstacle`)
+## 5. Moving bodies and the force on them (`dfsph_cases.tank_with_obstacle`, `python scripts/dfsph_validation.py obstacle`)
 
 A hexagon (circumradius 0.06 m, `SurfaceRep` loop or six triangles as `VolumeRep`) rotating at a prescribed `omega` in the tank, carved out of the lattice with the same first-row distance as the flat walls.
 What a prescribed moving body adds to the solver (all through the scene layer, nothing special-cased):
@@ -127,7 +127,7 @@ geometry, and therefore the force distribution over the bodies); only its *magni
 first-order part of the wall term, `μ ∫ (a₁·y) ∇W` with the hydrostatic gradient, keeps the exact moments. Everything else is unchanged: symmetric pair forces, so the **momentum bookkeeping stays exact** (`1e-18`, asserted),
 the force on each body is still `−Σ m a_b`. The closure removes the static wall residual by a factor 90 (first row) / 5–9 (rows 2–3, left column); the interior (no wall contact) is bit-identical.
 
-**Dynamic effect** (submerged fixed hexagon, tank at rest, 0.6 s, statistics over t > 0.2; `python -m edgebound.dfsph_validation closure`; two repeats per row, GPU atomics make runs differ in the chaotic cases):
+**Dynamic effect** (submerged fixed hexagon, tank at rest, 0.6 s, statistics over t > 0.2; `python scripts/dfsph_validation.py closure`; two repeats per row, GPU atomics make runs differ in the chaotic cases):
 
 | solver | closure | mean `F_y`/buoyancy − 1 | std `F_y`/buoyancy | std (Σ forces / weight) | rms speed |
 |---|---|---|---|---|---|
@@ -148,7 +148,7 @@ the force on each body is still `−Σ m a_b`. The closure removes the static wa
 ## 7. Walls must not pull: sticking to ceilings and walls (`wallDivergenceClamp`, `clampWallPressure`)
 
 **Symptom.** In the dam break into the spinning hexagon (`dfsph_cases.tank_with_obstacle`, r = 0.006, 1425 particles) isolated particles stayed pinned on the ceiling and on both side walls after the splash
-(row of dots at y = 1.0, nearly zero velocity); the same dam break without the hexagon, and omniSPH, show nothing of the kind. Found with `python -m edgebound.dfsph_runcase` snapshots and `dfsph_video.ceiling_stats`
+(row of dots at y = 1.0, nearly zero velocity); the same dam break without the hexagon, and omniSPH, show nothing of the kind. Found with `python scripts/dfsph_runcase.py` snapshots and `dfsph_video.ceiling_stats`
 (particles within 1.5 h of the ceiling and the longest uninterrupted residence of each).
 
 **Two independent causes** (`hex` = the hexagon case; N = particles; "stuck" = residence at the ceiling > 0.3 s):
@@ -175,7 +175,7 @@ fluid stays apart and its volume grows by ~30 % (mean SPH density 0.69–0.74 an
 `test_divergence_pressure_keeps_its_sign_between_fluid_particles`: a stretching blob is damped exactly as in the wall-blind solve with the default, not with the global clamp.
 
 **Result, dam break (0.2 × 0.8 m column, 1.6 × 1.0 m box) against omniSPH**, final code, front x / mean y / v_max; ceiling = particles within 1.5 h of the top wall at t = 0.7 / 0.8 / 0.9 / 1.0 and the longest residence
-(`.tmp/omni`, `python -m edgebound.dfsph_runcase`; omniSPH 303 s (2k) and 1877 s (8k) on 20 cores, ours 30–60 s on the GPU):
+(`.tmp/omni`, `python scripts/dfsph_runcase.py`; omniSPH 303 s (2k) and 1877 s (8k) on 20 cores, ours 30–60 s on the GPU):
 
 | N | model | t = 0.4 | t = 0.8 | t = 1.0 | t = 1.4 | ceiling contact | longest |
 |---|---|---|---|---|---|---|---|
@@ -193,7 +193,7 @@ splash particles. Hexagon dam break, mean SPH density at t = 1.0 / ceiling resid
 
 **Remaining.** A few particles slide along a wall for 0.4–0.9 s above the pile (isolated, density 0.8–1): that is the wall friction of omniSPH (`boundaryFriction` is a per-step factor, so it damps more at higher N where dt is
 smaller), not a suction: they move at 20–30 % of g. omniSPH itself has such particles (6 over 0.3 s at N = 2k). `linear` wall pressure still diverges in a long dam break (positions overflow before t = 2 s).
-Videos of these runs (`python -m edgebound.dfsph_video`) are in `.tmp/omni/vids`, not tracked.
+Videos of these runs (`python scripts/dfsph_video.py`) are in `.tmp/omni/vids`, not tracked.
 
 ## 8. Not done / next
 

@@ -1,6 +1,6 @@
 # Profile of one Δ⁺-SPH step (`DeltaSPH2D.step`)
 
-Measured, not estimated (WORK-001 T0.2). `python/edgebound/deltasph_profile.py` monkey-patches the
+Measured, not estimated (WORK-001 T0.2). `scripts/deltasph_profile.py` monkey-patches the
 listed callables with a stack-based timer (`torch.cuda.synchronize()` before and after each call) so
 that **inclusive** and **self** times are both reported and nested calls are counted correctly (a
 parent's self time excludes its tracked children). The patched callables are restored afterwards; the
@@ -9,7 +9,7 @@ Plus a `torch.profiler` run of 20 dam-break steps.
 
 Command:
 ```
-cd python && python -m edgebound.deltasph_profile
+python scripts/deltasph_profile.py
 ```
 Run on 2026-10-03, RTX PRO 6000 (torch 2.13.0+cu130, warp 1.17.0), no other GPU job of ours running
 (~28 GiB of the 96 GiB free; the local LLM's ~69 GiB is untouched). Total wall 57 s.

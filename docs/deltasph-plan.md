@@ -60,7 +60,7 @@ exactly where the ceiling-sticking work in warpSPH (`CEILING_STICKING_PLAN.md`) 
 (`DeltaSPH2D._solid_samples`, 24 × 96, ≤ 1 % on a half plane). Still open: a Laplacian operation (`Δλ`, first moments of `∇²W`) for the viscous wall term, the exact `W⁵` weight, per-query vector fields for curved walls, volume representations in `signed_distance`.
 
 **P2 — solver, one term at a time: done through the dam break.** Order followed: tank (EOS, continuity, Antuono wall, DDT, viscosity, detector) → wedge (sloped faces and corners; staircase control, ramp reproducer) → dam break (viscous wall term, time-centred continuity,
-dilated mask, shifting, no-penetration, probes) → sloshing (C4 kernel, rotating gravity, fixed dt, sensor probes). Each stage has unit tests (`tests/edge/test_deltasph.py`, 10) and a validation table in `deltasph-validation.md`.
+dilated mask, shifting, no-penetration, probes) → sloshing (C4 kernel, rotating gravity, fixed dt, sensor probes). Each stage has unit tests (`tests/sim/test_deltasph.py`, 10) and a validation table in `deltasph-validation.md`.
 
 **P3 — validation and videos: tank, wedge, dam break, sloshing done; not done:** a wall-pressure sensor for analytic walls (the MLS probe is unusable at impacts), sloshing at nx = 100 / 400 and with Michel shifting, the dam break at H/dx = 80 and 320, tiers 1 and 3 on the dam break, the hexagon obstacle in δ⁺, a body-fitted packing for smooth sloped walls (wedge KE; deferred by the user as a general problem for airfoils / complex geometry).
 
