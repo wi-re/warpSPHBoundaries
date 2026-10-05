@@ -692,6 +692,147 @@ def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dty
         cout[tid, k] = inv_pi * ch[k]
 
 
+# ---- term-parallel evaluation (docs/plan-wall-evaluation.md step 1b): the sequential kernels above walk all ~21 terms of one pair in ONE thread and are latency-bound (the time is flat
+# from 484 to 4 840 pairs).  Here one thread evaluates one (pair, term) and writes its contribution to scratch; a second kernel sums the terms of every pair in the SAME order as the
+# sequential kernel (edge terms, then vertex terms, `(ch + a) - b` for the vertex ones), so the result is deterministic and equal to the sequential one up to the contraction of a*b + c
+# into an FMA by the compiler (a few ulp).  Inactive terms (support does not reach the edge line / the chord is empty) store 0.
+@wp.kernel
+def _edge_terms_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
+                            pos: wp.array(dtype=vec2_t), sup: wp.array(dtype=real),
+                            verts: wp.array(dtype=vec2_t), edges: wp.array(dtype=wp.vec2i),
+                            radii: wp.array(dtype=real),
+                            e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int),
+                            e_R: wp.array(dtype=int), e_var: wp.array(dtype=int), e_gate: wp.array(dtype=int),
+                            e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int), n_e: int,
+                            v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
+                            v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=real), n_v: int,
+                            cc: wp.array(dtype=real), gx: wp.array(dtype=real), gw: wp.array(dtype=real), nn: int, panels: int,
+                            ta: wp.array(dtype=real), tb: wp.array(dtype=real)):
+    tid = wp.tid()
+    nT = n_e + n_v
+    pr = tid / nT
+    t = tid - pr * nT
+    qi = pair_q[pr]
+    ed = edges[pair_e[pr]]
+    h = sup[qi]
+    xv = pos[qi]
+    p = (verts[ed[0]] - xv) / h
+    q = (verts[ed[1]] - xv) / h
+    d = q - p
+    ell = wp.sqrt(d[0] * d[0] + d[1] * d[1])
+    if ell == real(0.0):
+        return
+    t0 = d[0] / ell
+    t1 = d[1] / ell
+    n0 = t1
+    n1 = -t0
+    z = (p[0] * q[1] - p[1] * q[0]) / ell
+    s0 = (d[0] * p[0] + d[1] * p[1]) / ell
+    s1 = (d[0] * q[0] + d[1] * q[1]) / ell
+    az = wp.abs(z)
+    if t < n_e:
+        if (e_var[t] != 1) and (e_gate[t] != 2):
+            R = radii[e_R[t]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    ni = n0
+                    if e_i[t] == 1:
+                        ni = n1
+                    ta[tid] = ni * _cheb_integral(e_a[t], e_b[t], lo, hi, z, R, n0, n1, t0, t1, cc, e_c0[t], e_c1[t], gx, gw, nn, panels)
+    else:
+        u = t - n_e
+        if (v_var[u] != 1) and (v_gate[u] != 2):
+            R = radii[v_R[u]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    poly = _cheb_integral(0, 0, lo, hi, z, R, n0, n1, t0, t1, cc, v_c0[u], v_c1[u], gx, gw, nn, panels)
+                    ta[tid] = z * poly
+                    tb[tid] = v_mR[u] * _dangle(z, lo, hi)
+
+
+@wp.kernel
+def _edge_terms_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
+                       pos: wp.array(dtype=vec2_t), sup: wp.array(dtype=real),
+                       verts: wp.array(dtype=vec2_t), edges: wp.array(dtype=wp.vec2i),
+                       radii: wp.array(dtype=real),
+                       e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int),
+                       e_R: wp.array(dtype=int), e_var: wp.array(dtype=int), e_gate: wp.array(dtype=int),
+                       e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int), n_e: int,
+                       v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
+                       v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=real), n_v: int,
+                       cn: wp.array(dtype=int), cc: wp.array(dtype=real),
+                       ta: wp.array(dtype=real), tb: wp.array(dtype=real)):
+    """term-parallel twin of `_edge_channels_kernel` (the monomial plan): one thread per (pair, term), same arithmetic per term."""
+    tid = wp.tid()
+    nT = n_e + n_v
+    pr = tid / nT
+    t = tid - pr * nT
+    qi = pair_q[pr]
+    ed = edges[pair_e[pr]]
+    h = sup[qi]
+    xv = pos[qi]
+    p = (verts[ed[0]] - xv) / h
+    q = (verts[ed[1]] - xv) / h
+    d = q - p
+    ell = wp.sqrt(d[0] * d[0] + d[1] * d[1])
+    if ell == real(0.0):
+        return
+    t0 = d[0] / ell
+    t1 = d[1] / ell
+    n0 = t1
+    n1 = -t0
+    z = (p[0] * q[1] - p[1] * q[0]) / ell
+    s0 = (d[0] * p[0] + d[1] * p[1]) / ell
+    s1 = (d[0] * q[0] + d[1] * q[1]) / ell
+    az = wp.abs(z)
+    if t < n_e:
+        if (e_var[t] != 1) and (e_gate[t] != 2):
+            R = radii[e_R[t]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    ni = n0
+                    if e_i[t] == 1:
+                        ni = n1
+                    ta[tid] = ni * _edge_integral(e_a[t], e_b[t], 0, lo, hi, z, n0, n1, t0, t1, cn, cc, e_c0[t], e_c1[t])
+    else:
+        u = t - n_e
+        if (v_var[u] != 1) and (v_gate[u] != 2):
+            R = radii[v_R[u]]
+            if az < R:
+                L = _isqrt((R - az) * (R + az))
+                lo = wp.max(s0, -L)
+                hi = wp.min(s1, L)
+                if lo < hi:
+                    poly = real(0.0)
+                    for k in range(v_c0[u], v_c1[u]):
+                        poly += cc[k] / real(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z)
+                    ta[tid] = z * poly
+                    tb[tid] = v_mR[u] * _dangle(z, lo, hi)
+
+
+@wp.kernel
+def _reduce_terms_kernel(ta: wp.array(dtype=real), tb: wp.array(dtype=real), e_ch: wp.array(dtype=int), n_e: int,
+                         v_ch: wp.array(dtype=int), n_v: int, inv_pi: real, cout: wp.array2d(dtype=real)):
+    pr = wp.tid()
+    nT = n_e + n_v
+    ch = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))
+    for t in range(n_e):
+        ch[e_ch[t]] = ch[e_ch[t]] + ta[pr * nT + t]
+    for u in range(n_v):
+        ch[v_ch[u]] = ch[v_ch[u]] + ta[pr * nT + n_e + u] - tb[pr * nT + n_e + u]
+    for k in range(9):
+        cout[pr, k] = inv_pi * ch[k]
+
+
 def indicator_vector(kernel):
     """u[9]: channel value of a body that contains the whole support (indicator 1) -- (1,0,0, 0,0, 1,0, 0,1): lambda = 1, g_(1,0)_x = g_(0,1)_y = lambda."""
     pb, _ = build_plan(kernel)
@@ -717,6 +858,16 @@ def _cheb_plan_for(kernel, device, nodes, channels=None):
     return plan
 
 
+TERM_PARALLEL = "auto"          # "auto" | True | False: one thread per (pair, term) + a fixed-order reduction (below) instead of one thread per pair
+TERM_PARALLEL_MAX_PAIRS = 20000   # "auto": below this many pairs the per-pair kernel does not fill the GPU (latency-bound), above it the saturated per-pair kernel wins (measured crossing 5e3 - 5e4 on a 188-SM RTX PRO 6000, 21 terms)
+
+
+def _use_term_parallel(P, nT):
+    if TERM_PARALLEL == "auto":
+        return nT > 1 and P <= TERM_PARALLEL_MAX_PAIRS
+    return bool(TERM_PARALLEL) and nT > 1
+
+
 def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, nodes, panels, plan=None, as_torch=True, channels=None):
     """the Chebyshev-quadrature route of edge_channels (plan from `plan` or the (kernel, device, nodes) cache, launched with `panels`)."""
     import torch
@@ -731,10 +882,23 @@ def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, ke
         wsup, a = _wp_from(supports, real, device, torch_real); keep.append(a)
         wv, a = _wp_from(vertices, vec2_t, device, torch_real); keep.append(a)
         wed, a = _wp_from(edges, wp.vec2i, device, torch.int32); keep.append(a)
-        wp.launch(_edge_channels_cheb_kernel, dim=P, device=device, inputs=[
-            wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
-            *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV,
-            plan.cc, plan.gx, plan.gw, nodes, panels, wp.from_torch(cout, dtype=real)])
+        nT = plan.nE + plan.nV
+        if _use_term_parallel(P, nT):
+            ta = torch.zeros(P * nT, dtype=torch_real, device=device)
+            tb = torch.zeros(P * nT, dtype=torch_real, device=device)
+            wp.launch(_edge_terms_cheb_kernel, dim=P * nT, device=device, inputs=[
+                wq, we, wpos, wsup, wv, wed, plan.radii,
+                plan.e[1], plan.e[2], plan.e[3], plan.e[4], plan.e[5], plan.e[6], plan.e[7], plan.e[8], plan.nE,
+                plan.v[1], plan.v[2], plan.v[3], plan.v[4], plan.v[5], plan.v_mR, plan.nV,
+                plan.cc, plan.gx, plan.gw, nodes, panels, wp.from_torch(ta, dtype=real), wp.from_torch(tb, dtype=real)])
+            wp.launch(_reduce_terms_kernel, dim=P, device=device, inputs=[
+                wp.from_torch(ta, dtype=real), wp.from_torch(tb, dtype=real), plan.e[0], plan.nE, plan.v[0], plan.nV, real(1 / np.pi), wp.from_torch(cout, dtype=real)])
+            keep.extend([ta, tb])
+        else:
+            wp.launch(_edge_channels_cheb_kernel, dim=P, device=device, inputs=[
+                wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
+                *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV,
+                plan.cc, plan.gx, plan.gw, nodes, panels, wp.from_torch(cout, dtype=real)])
         wp.synchronize_device(device)
     c = cout[:P].to(torch.float64)                                   # the kernel computed in `real`; the tensors handed on are float64
     return c if as_torch else c.cpu().numpy()
@@ -767,9 +931,22 @@ def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, 
         wsup, a = _wp_from(supports, real, device, torch_real); keep.append(a)
         wv, a = _wp_from(vertices, vec2_t, device, torch_real); keep.append(a)
         wed, a = _wp_from(edges, wp.vec2i, device, torch.int32); keep.append(a)
-        wp.launch(_edge_channels_kernel, dim=P, device=device, inputs=[
-            wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
-            *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc, wp.from_torch(cout, dtype=real)])
+        nT = plan.nE + plan.nV
+        if _use_term_parallel(P, nT):
+            ta = torch.zeros(P * nT, dtype=torch_real, device=device)
+            tb = torch.zeros(P * nT, dtype=torch_real, device=device)
+            wp.launch(_edge_terms_kernel, dim=P * nT, device=device, inputs=[
+                wq, we, wpos, wsup, wv, wed, plan.radii,
+                plan.e[1], plan.e[2], plan.e[3], plan.e[4], plan.e[5], plan.e[6], plan.e[7], plan.e[8], plan.nE,
+                plan.v[1], plan.v[2], plan.v[3], plan.v[4], plan.v[5], plan.v_mR, plan.nV, plan.cn, plan.cc,
+                wp.from_torch(ta, dtype=real), wp.from_torch(tb, dtype=real)])
+            wp.launch(_reduce_terms_kernel, dim=P, device=device, inputs=[
+                wp.from_torch(ta, dtype=real), wp.from_torch(tb, dtype=real), plan.e[0], plan.nE, plan.v[0], plan.nV, real(1 / np.pi), wp.from_torch(cout, dtype=real)])
+            keep.extend([ta, tb])
+        else:
+            wp.launch(_edge_channels_kernel, dim=P, device=device, inputs=[
+                wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
+                *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc, wp.from_torch(cout, dtype=real)])
         wp.synchronize_device(device)
     c = cout[:P].to(torch.float64)                                   # the kernel computed in `real`; the tensors handed on are float64
     return c if as_torch else c.cpu().numpy()
