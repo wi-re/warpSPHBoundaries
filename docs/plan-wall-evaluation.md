@@ -2,7 +2,7 @@
 
 Status 2026-10-05, `main` = `local-model` = `0ccfcf4` (not pushed). Supersedes HANDOFF Part A4 "Phase 2" (the candidate list there is folded in below); phases 3–5 of A4 stand. Written for continuing without the local-model protocol: steps are sized for one sitting each, with a verification route and a stop rule, not as work documents.
 
-> **Prerequisite (user, 2026-10-05):** `docs/work-item-repo-layout.md` — move to `src/edgebound` + `scripts/`, pyproject, cleanup pass — comes first, so the file moves and the renames of step 2 are separate commits.
+> **Prerequisite (done 2026-10-05, branch `repo-layout`):** `docs/work-item-repo-layout.md` — `src/edgebound/{edge,scene,sim}` + `scripts/`, pyproject; the cleanup pass listed there (§7, §9) is still open.
 
 ## 1. The terminology decision (user, 2026-10-05)
 
@@ -57,7 +57,7 @@ fields     = scene.evaluate(adjacency, particles, spec) # one fused pass: all ke
 * The old path (`PairMoments` + `sceneOperation`) stays as the **reference implementation** while the fused path is built: the new kernels are tested against it, and volume / implicit representations keep it until they get their own fused path. DFSPH moves to fused evaluation too (§4 step 6); whether the old path then survives as a public precompute API is decided by that benchmark.
 * The kernel guard and the channels guard disappear from the adjacency (an adjacency has no kernel); the channel check moves to `PairMoments`, where the data is.
 
-## 4. Steps (each ends green: `pytest tests/edge` = 767 + new tests, harness `check --physics --cases tank,dambreak`)
+## 4. Steps (each ends green: `pytest tests` = 816 + new tests, harness `check --physics --cases tank,dambreak`)
 
 **Step 1 — f32 stable-plan edge kernel, then term-parallel (isolated, no API change).** First an f32 kernel on the Chebyshev plans and the pairs-vs-time curve in f32 and f64 (`review8_latency_probe.py` extended). Only if the f32 curve is also latency-bound, prototype: a thread per (pair, term group) writing to a scratch `[P, groups, 9]`, fixed-order reduction (keep it deterministic: atomics would add run-to-run spread to a harness that is bit-level). Measure at 484 / 4 840 / 48 400 pairs for `w2`, `w2p5`, `cone`. Expected (to be measured): `w2` 1.8 → well under 0.5 ms at 484 pairs. If the speed-up is < 2× the latency hypothesis is wrong: stop, re-read the profile before step 3. Acceptance: pruned and full results equal the old kernel to a stated tolerance (the sums change order if terms are reduced differently; with a fixed per-channel term order they stay bit-identical — prefer that), `test_channel_pruning.py` unchanged.
 
