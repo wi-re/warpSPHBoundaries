@@ -211,6 +211,8 @@ Sloshing (SPHERIC 10, nx = 200, C4, T = 1.5 s, `wallViscosityForm = "noslip"`; `
 
 **Stability** (T7.2(3), `.tmp/stability_noslip.py`: the no-slip explicit damping rate `k = 2 ν_eff |G_b|/(ρ d_eff)`, `d_eff = max(d, 0.25 dx)`, for the near particles after 300 steps, default config otherwise): dam break max k = **16.5835 s⁻¹**, dt = 9.727e-05 s, **k·dt = 0.0016**; sloshing max k = **20.4154 s⁻¹**, dt = 1.000e-04 s, **k·dt = 0.0020**. Both `k·dt ≪ 1` (the reviewer's estimate k ~ 5 s⁻¹ at d = dx/2 is exceeded only because the nearest particles sit at d ~ 0.25 dx, where 1/d is larger) — the term is stable at the solver's acoustic time step.
 
+**Reading of the numbers (REVIEW-007).** The dam-break damping is the no-slip wall at the scheme's *artificial* viscosity `ν_eff = α c0 H/(8ξ)` (≈ 3000 × water's, diffusion length ≈ 1 dp after 0.5 s; `docs/work/refs/review7_noslip_probe.py`), not a physical wall friction; and `nan` for the P1 arrival means the arrival is later than the T = 0.65 s window (≈ 2.63 t*, default arrival 2.474 t*). Neither the 31.7 % KE difference nor the 43 % lower peak velocity says anything about real boundary layers.
+
 The default stays `"laplacian"`; `"noslip"` is an opt-in third form. Making it the default, partial slip, per-body slip, a per-element `∫W ds/d_n`, and the `1/γ` renormalisation are out of scope (WORK-007).
 
 ## 7. Next
