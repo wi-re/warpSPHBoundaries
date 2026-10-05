@@ -19,6 +19,7 @@ import torch
 import edgebound.deltasph2d as d2d
 from edgebound.deltasph2d import DeltaSPH2D, marrone_dambreak, sloshing_tank
 from edgebound.scene import Scene
+from edgebound import paths
 
 # --------------------------------------------------------------------------- stack-based timer
 _STATS = {"calls": {}, "inclusive": {}, "self": {}}
@@ -205,7 +206,7 @@ def main():
     db = _run_case("dam break  (marrone_dambreak nx=67, shifting=True, noPen=impulse)",
                    lambda: marrone_dambreak(nx=67, shifting=True, noPen="impulse"), warm=300, timed=200)
     # (d) compare ms/step with the stored series wall/steps
-    series = np.load("../results/deltasph/dambreak_B_nx67_series.npz")
+    series = np.load(paths.results_dir() / "deltasph" / "dambreak_B_nx67_series.npz")
     s_wall, s_steps = float(series["wall"]), int(series["steps"])
     s_ms = 1000.0 * s_wall / s_steps
     print("\n(d) stored dambreak_B_nx67 series: wall = %.2f s, steps = %d  ->  %.3f ms/step" % (s_wall, s_steps, s_ms))

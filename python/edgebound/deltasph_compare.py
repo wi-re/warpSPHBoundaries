@@ -3,7 +3,8 @@
 import sys, numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-ref = np.load(".tmp/delta/ref/sun2017DeltaSPH_nx67_c40.npz", allow_pickle=True)
+from edgebound import paths
+ref = np.load(paths.tmp_dir() / "delta" / "ref" / "sun2017DeltaSPH_nx67_c40.npz", allow_pickle=True)
 runs = [(a.split("=")[0], np.load(a.split("=")[1])) for a in sys.argv[2:]]
 fig, ax = plt.subplots(3, 2, figsize=(13, 10))
 tr = ref["tStar"]

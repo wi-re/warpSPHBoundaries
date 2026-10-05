@@ -45,8 +45,10 @@ import torch
 
 from .deltasph_validation import run_dambreak, run_sloshing, run_tank
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RESULTS_DIR = os.path.join(REPO_ROOT, "results", "deltasph")
+from . import paths
+
+REPO_ROOT = str(paths.REPO_ROOT)
+RESULTS_DIR = str(paths.results_dir() / "deltasph")
 DEFAULT_BASELINE = os.path.join(RESULTS_DIR, "regress_baseline.json")
 
 

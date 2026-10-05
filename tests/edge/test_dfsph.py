@@ -11,6 +11,7 @@ import warp as wp
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation, DomainDescription
 import warpSPHCore as core
 from edgebound import dfsph2d as D
+from edgebound import paths
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
@@ -92,16 +93,16 @@ def test_dynamics_independent_of_the_representation(device):
 
 
 def test_agrees_with_omnisph_reference():
-    sys.path.insert(0, os.path.expanduser("~/dev/omniSPH/omnySPH/src"))
+    sys.path.insert(0, str(paths.OMNISPH_HOME / "omnySPH" / "src"))
     try:
         import omnySPH  # noqa: F401
     except Exception:
         pytest.skip("omnySPH not importable")
-    scratch = os.path.join(os.path.dirname(__file__), "..", "..", ".tmp", "omni")
+    scratch = str(paths.tmp_dir() / "omni")
     os.makedirs(scratch, exist_ok=True)
     link = os.path.join(scratch, "cfg")
     if not os.path.exists(link):
-        os.symlink(os.path.expanduser("~/dev/omniSPH/cfg"), link)
+        os.symlink(str(paths.OMNISPH_HOME / "cfg"), link)
     old = os.getcwd()
     os.chdir(scratch)
     try:

@@ -30,6 +30,7 @@ from pathlib import Path
 import mpmath as mp
 
 from . import core, geometry
+from . import paths
 from .kernels import KERNELS, disk_moment
 from .mpq import mpq
 
@@ -39,8 +40,7 @@ KERNEL_NAMES = ["cubic", "w2", "w4", "w6"]
 MOMENTS = [(a, k - a) for k in range(1, 5) for a in range(k + 1)]          # k = 1..4
 MOMENT_GRADS = [(0, 0)] + [(a, k - a) for k in range(1, 3) for a in range(k + 1)]   # k = 0..2
 
-REPO = Path(__file__).resolve().parents[2]
-DEFAULT_PATH = REPO / "tests" / "fixtures" / "edge2d_golden.json"
+DEFAULT_PATH = paths.fixtures_dir() / "edge2d_golden.json"
 
 
 def fs(f: F) -> str:

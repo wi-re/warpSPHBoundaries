@@ -8,7 +8,9 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.expanduser("~/dev/omniSPH/omnySPH/src"))
+from . import paths
+
+sys.path.insert(0, str(paths.OMNISPH_HOME / "omnySPH" / "src"))
 PACKING = 0.399200743165053487
 
 

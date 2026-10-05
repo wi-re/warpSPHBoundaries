@@ -13,6 +13,7 @@ import numpy as np
 import torch
 
 from . import dfsph_ref as R
+from . import paths
 from .dfsph2d import DFSPH2D, DFSPHConfig, domain_scene, lattice_calibration
 
 
@@ -185,4 +186,4 @@ if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "closure":
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "obstacle":
     import os
-    obstacle(out_png=os.path.join(os.path.dirname(__file__), "..", "..", "results", "dfsph", "dam_hexagon.png"))
+    obstacle(out_png=str(paths.results_dir() / "dfsph" / "dam_hexagon.png"))

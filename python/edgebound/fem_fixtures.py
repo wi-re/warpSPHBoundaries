@@ -16,11 +16,11 @@ from pathlib import Path
 import mpmath as mp
 
 from . import core, fem
+from . import paths
 from .fixtures import DPS, DIGITS, fs, ns, on_edge, off_edge, tiling, pt, poly_json
 from .kernels import disk_moment, kernel as get_kernel
 
-REPO = Path(__file__).resolve().parents[2]
-PATH = REPO / "tests" / "fixtures" / "edge2d_fem_golden.json"
+PATH = paths.fixtures_dir() / "edge2d_fem_golden.json"
 KERNELS = ["cubic", "w2", "w4", "w6"]
 A3 = {(0, 0): F(1), (1, 0): F(2), (0, 1): F(-3), (1, 1): F(1), (2, 0): F(1, 2), (0, 2): F(-1, 4), (0, 3): F(-1), (2, 1): F(1), (3, 0): F(1, 3), (1, 2): F(-2)}
 T0 = [(F(-3, 10), F(-1, 5)), (F(3, 5), F(-1, 10)), (F(1, 10), F(7, 10))]

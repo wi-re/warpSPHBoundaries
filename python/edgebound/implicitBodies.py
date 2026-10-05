@@ -23,8 +23,9 @@ import sympy as sp
 import torch
 
 from .kernels import kernel as get_kernel
+from . import paths
 
-TABLE_DIR = Path(__file__).resolve().parents[2] / "results" / "tables"
+TABLE_DIR = paths.tables_dir()
 NGRID = 512
 QMIN = 1e-6
 
