@@ -214,3 +214,32 @@ def disk_moment(kern: EdgeKernel, alpha) -> Fraction:
         P = pint(pmul([Fraction(0)] * (k + 1) + [Fraction(1)], c))
         rad += peval(P, hi) - peval(P, lo)
     return ang * rad            # (oint w^a)/pi * int r^(k+1) (pi W) dr
+
+
+# ---- powers W^k of the Wendland families as truncated-power terms (the shifting tensile control T = (1/5) grad int W^5) ----
+# (base coeffs in the u = 1-q basis, p0, degree per k): w2 shape (1-q)^4 (1+4q), w4 shape (1-q)^6 (1+6q+35/3 q^2)
+POWER_FAMILIES = {"w2": ([_F(5), _F(-4)], 4, 5), "w4": ([_F(56, 3), _F(-88, 3), _F(35, 3)], 6, 8)}
+
+
+def power_terms(k, fam):
+    """[(coef, knot=1, power)] of W^k in the truncated-power basis (1-q)^power (the reviewer probe's construction)."""
+    base, p0, _ = POWER_FAMILIES[fam]
+    pol = [_F(1)]
+    for _ in range(k):
+        new = [_F(0)] * (len(pol) + len(base) - 1)
+        for i, a in enumerate(pol):
+            for j, b in enumerate(base):
+                new[i + j] += a * b
+        pol = new
+    return [(c, _F(1), p0 * k + m) for m, c in enumerate(pol)]
+
+
+def power_monomials(k, fam):
+    """exact Fractions a_j with  shape^k = sum_j a_j q^j   (the u-powers (1-q)^p expanded into monomials q^j)."""
+    from math import comb
+    amax = max(p for _, _, p in power_terms(k, fam))
+    a = [_F(0)] * (amax + 1)
+    for c, _, p in power_terms(k, fam):
+        for j in range(p + 1):
+            a[j] += c * comb(p, j) * (-1) ** j
+    return a

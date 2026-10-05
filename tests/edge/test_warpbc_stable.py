@@ -41,7 +41,7 @@ import warp as wp
 from edgebound import geometry as G
 from edgebound import kernels, np2d, warpbc
 from edgebound.core import GUARD, block_grad
-from edgebound.q2_conditioning import ref_coeffs, terms
+from edgebound.kernels import power_monomials as ref_coeffs, power_terms as terms
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64

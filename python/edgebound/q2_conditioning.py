@@ -31,33 +31,10 @@ from .core import GUARD, block_grad
 POLY = [(0, 0), (1, 0), (1, 1), (0, 1)]
 PTS6 = [(0.3, 0.4), (1.02, 0.5), (0.5, -0.3), (0.97, 0.03), (1.3, 0.5), (0.5, -0.9)]
 # (base coeffs in the u = 1-q basis, p0, degree per k)
-FAM = {"w2": ([F(5), F(-4)], 4, 5), "w4": ([F(56, 3), F(-88, 3), F(35, 3)], 6, 8)}
+from .kernels import POWER_FAMILIES as FAM, power_monomials as ref_coeffs, power_terms as terms      # library code (tensile.py needs it)
 KS = (1, 2, 3, 4, 5)
 DEGMAX = 40                                     # w4 k = 5
 ROUTES = [("A warp", None), ("B np plain", None), ("C np stable(8,6)", (8, 6)), ("D np stable(16,8)", (16, 8))]
-
-
-def terms(k, fam):
-    """[(coef, knot=1, power)] of W^k in the truncated-power basis (1-q)^power (the reviewer probe's construction)."""
-    base, p0, _ = FAM[fam]
-    pol = [F(1)]
-    for _ in range(k):
-        new = [F(0)] * (len(pol) + len(base) - 1)
-        for i, a in enumerate(pol):
-            for j, b in enumerate(base):
-                new[i + j] += a * b
-        pol = new
-    return [(c, F(1), p0 * k + m) for m, c in enumerate(pol)]
-
-
-def ref_coeffs(k, fam):
-    """exact Fractions a_j with  shape^k = sum_j a_j q^j   (the u-powers (1-q)^p expanded into monomials q^j)."""
-    amax = max(p for _, _, p in terms(k, fam))
-    a = [F(0)] * (amax + 1)
-    for c, _, p in terms(k, fam):
-        for j in range(p + 1):
-            a[j] += c * comb(p, j) * (-1) ** j
-    return a
 
 
 def main():

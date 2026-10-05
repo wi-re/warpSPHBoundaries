@@ -40,8 +40,7 @@ def _register(family):
     from . import kernels, warpbc
     name = family + "p5"
     if name not in kernels.KERNELS:
-        from .q2_conditioning import terms
-        kernels.KERNELS[name] = kernels._from_terms(name, terms(5, family))
+        kernels.KERNELS[name] = kernels._from_terms(name, kernels.power_terms(5, family))
     warpbc.STABLE_KERNELS[name] = (16, 8)
 
 
