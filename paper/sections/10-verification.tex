@@ -1,0 +1,44 @@
+\section{Verification ledger}\label{sec:verification}
+
+\Cref{tab:ledger} lists each result with the strongest evidence behind it.
+\begin{table}[h]
+\centering\small
+\begin{tabular}{p{4.2cm}p{1.3cm}p{6.4cm}}
+\toprule
+result & tag & evidence\\
+\midrule
+Kernel constants, block weights & M & \texttt{20\_paper\_audit.mpl}\\
+Planar 3D closed forms & M & same (cubic both branches, degrees $8,11,14$)\\
+Planar 2D by-parts, $\mathcal J_m$ recursion, w2 explicit form, cubic join & M & same, 40 digits where numeric\\
+Sphere cap area, planar limit & M & same\\
+Edge primitives & M & \texttt{10\_edge\_primitives.mpl}\\
+Blocks, value/gradient, half plane & M,N & \texttt{11,13}, \texttt{tests/edge/test\_value.py}, \texttt{test\_gradient.py}\\
+Moment recursion $k\le4$ (symbolic), $k\le6$ (numeric) & M,N & \texttt{12\_moments\_recursion.mpl}; \path{paper_edge_identities_k6.py}\\
+FEM weights $p\le3$ & N & \texttt{tests/edge/test\_fem*.py}\\
+Polygon-to-disk orders & A,N & argument in \cref{prop:ngon}; \texttt{test\_tier2.py}; \path{paper_ngon_orders.py} ($N=12$--$96$, $\to0.377\,a^4$)\\
+Curvature expansion & M,N & \texttt{14\_tier3\_2d.mpl}, \texttt{20\_paper\_audit.mpl}; table reproduced by \path{paper_curvature_table.py}\\
+Disk/strip series (2D) & M,N & \texttt{20\_paper\_audit.mpl}, \texttt{test\_tier4.py}, \path{paper_curvature_variable.py}\\
+Variable curvature (even in $\kappa'$; tangential gradient) & N & \path{paper_curvature_variable.py}\\
+Wall Laplacian Green form & M,N & identities in \texttt{20\_paper\_audit.mpl}; \texttt{tests/scene/test\_viscosity\_scene.py}\\
+$\nu_{\rm eff}$ from the pairwise term & M, N, A & \cref{prop:nueff}: moments in \texttt{20\_paper\_audit.mpl}, lattice in \path{paper_viscosity_limits.py}; the pairwise form \cref{eq:pairwise} is quoted from the code\\
+Free-slip wall term & A & \cref{eq:freeslip}: ghost-value argument, model\\
+No-slip coefficient & A & modelling choice\\
+3D face identity & M (div.) & divergence step only\\
+3D evaluation, curved centre line & P & open\\
+\bottomrule
+\end{tabular}
+\caption{Verification ledger.}\label{tab:ledger}
+\end{table}
+
+Reproduce (all Maple lines must read PASS):
+\begin{itemize}
+\item \texttt{make -C paper} builds the paper;
+\item \texttt{maple -q maple/20\_paper\_audit.mpl}: symbolic and 40-digit checks of this paper (110 PASS lines);
+\item \texttt{bash maple/run\_edge.sh}: the project's edge-calculus checks (61 lines at the time of writing);
+\item numerical checks in \texttt{scripts/derivation\_checks/} (compare with the quoted numbers):
+\begin{itemize}
+\item \texttt{paper\_ngon\_orders.py}, \texttt{paper\_curvature\_table.py} (seconds);
+\item \texttt{paper\_curvature\_variable.py}, \texttt{paper\_viscosity\_limits.py} (seconds);
+\item \texttt{paper\_edge\_identities\_k6.py} (about 4~minutes).
+\end{itemize}
+\end{itemize}

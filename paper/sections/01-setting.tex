@@ -1,0 +1,103 @@
+\section{Setting and conventions}\label{sec:setting}
+
+\subsection{Kernels}
+Throughout, $n\in\{2,3\}$ is the spatial dimension and $h$ the \emph{support radius}. A kernel is
+\begin{equation}\label{eq:kernel}
+  W(r;h)=\frac{C_n}{h^n}\,\what\!\left(\frac rh\right),\qquad \what\in C([0,1]),\quad \what(q)=0\ (q\ge1),
+\end{equation}
+with $C_n$ fixed by $\int_{\R^n}W=1$, i.e.\ $2\pi C_2\int_0^1\what\,q\,\dd q=1$ and
+$4\pi C_3\int_0^1\what\,q^2\dd q=1$. We work at $h=1$ and restore $h$ by scaling (\cref{lem:scaling}).
+The kernels used are listed in \cref{tab:kernels}; all are piecewise polynomial in $q$.
+\begin{table}[h]
+\centering
+\begin{tabular}{llll}
+\toprule
+kernel & $\what(q)$ & $C_2$ & $C_3$\\
+\midrule
+cubic & $(1-q)^3-4(\tfrac12-q)_+^3$ & $\frac{80}{7\pi}$ & $\frac{16}{\pi}$\\[2pt]
+Wendland C2 (w2) & $(1-q)^4(1+4q)$ & $\frac7\pi$ & $\frac{21}{2\pi}$\\[2pt]
+Wendland C4 (w4) & $(1-q)^6(1+6q+\frac{35}{3}q^2)$ & $\frac9\pi$ & $\frac{495}{32\pi}$\\[2pt]
+Wendland C6 (w6) & $(1-q)^8(1+8q+25q^2+32q^3)$ & $\frac{78}{7\pi}$ & $\frac{1365}{64\pi}$\\
+\bottomrule
+\end{tabular}
+\caption{Kernels at $h=1$ (Wendland~\cite{wendland1995}). On $[0,\frac12]$ the cubic equals
+$\frac12-3q^2+3q^3$, so $\what(0)=\frac12$.}\label{tab:kernels}
+\end{table}
+
+\begin{lemma}[Normalisation]\label{lem:norm}
+The constants in \cref{tab:kernels} satisfy $\int_{\R^n}W=1$ for $n=2,3$.
+\end{lemma}
+\begin{proof}
+Direct integration of polynomials; checked symbolically (Maple, \texttt{20\_paper\_audit.mpl}).
+\end{proof}
+
+\subsection{The boundary integrals}
+Let $S\subset\R^n$ be the solid and $\xx$ the evaluation point (a fluid particle). With
+$\yy=\xx'-\xx$ and $r=|\yy|$ we study
+\begin{align}
+  \lambda(\xx)&=\int_S W(|\xx-\xx'|)\,\dd\xx', \label{eq:lambda}\\
+  m_{\alpha}(\xx)&=\int_S \yy^\alpha\,W(r)\,\dd\xx',\qquad |\alpha|=k, \label{eq:moments}\\
+  g_{\alpha}(\xx)&=\int_S \yy^\alpha\,\nabla_{\xx}W(|\xx-\xx'|)\,\dd\xx'. \label{eq:galpha}
+\end{align}
+The value $\lambda$ is the volume of solid seen by the particle; $m_\alpha$ and $g_\alpha$ are needed
+for fields extended into the solid (\cref{sec:fem}). The distance from $\xx$ to $\partial S$ is $d\ge0$
+for a fluid-side particle ($d<0$ inside the solid, $\lambda(-d)=1-\lambda(d)$ for a flat wall).
+
+\begin{lemma}[Scaling]\label{lem:scaling}
+$\lambda(d;h)=\lambda(d/h;1)$ and $m_\alpha(d;h)=h^{|\alpha|}\,m_\alpha(d/h;1)$, where $d$ stands for the whole
+geometry measured in the same unit as $h$. Consequently $\nabla_{\xx}\lambda$ carries a factor $h^{-1}$ and
+$\partial_{\xx}m_\alpha$ a factor $h^{|\alpha|-1}$.
+\end{lemma}
+\begin{proof}
+Substitute $\xx'=\xx+h\yy_1$ in \cref{eq:lambda,eq:moments}: $\dd\xx'=h^n\dd\yy_1$ cancels the $h^{-n}$ in
+\cref{eq:kernel}, and $\yy^\alpha=h^{|\alpha|}\yy_1^\alpha$.
+\end{proof}
+
+\subsection{The idea in one page}\label{sec:idea}
+Everything below is one trick used three times: \emph{write the integrand as a divergence, so the area (volume)
+integral over the solid becomes a boundary integral, and only the part of the boundary inside the support radius
+contributes.}
+\begin{center}\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.3cm}>{\raggedright\arraybackslash}p{6.2cm}>{\raggedright\arraybackslash}p{3cm}}
+\toprule
+quantity & vector field whose divergence (or gradient) is the integrand & result\\
+\midrule
+value $\int_T g$ & $\bm G=\yy\,M_g(r)/r^{2}$ with $\nabla\!\cdot\bm G=g$ & \cref{thm:value}\\
+gradient $\nabla_{\xx}\!\int_Tg$ & translate the domain: $\partial_\delta\!\int_{T-\delta\ee}g=-\oint n\,g$ & \cref{thm:grad}\\
+moments $\int_T\yy^\alpha f$ & $\yy^\beta\,\Phi[f]$ with $\nabla\Phi=\yy f$ & \cref{thm:recursion}\\
+\bottomrule
+\end{tabular}
+\end{center}
+For a polygon the boundary is a union of edges; on each edge the integrand is an explicit function of the single
+variable $s$ (position along the edge), and for piecewise-polynomial kernels these one-dimensional integrals are
+elementary (\cref{prop:primitives}).  Sections~\ref{sec:planar}--\ref{sec:edge} give the exact oracle and the edge calculus;
+\cref{sec:fem,sec:closed} use them for fields on elements and for closed boundaries; \cref{sec:curv,sec:slender}
+treat smooth or thin bodies asymptotically instead of adding edges; \cref{sec:threed,sec:wall} extend and use the
+results.
+
+\subsection{Notation}\label{sec:notation}
+\begin{center}\small
+\begin{tabular}{lp{11.4cm}}
+\toprule
+symbol & meaning\\
+\midrule
+$\xx$, $\xx'$, $\yy$, $r$ & evaluation point, integration point, $\yy=\xx'-\xx$, $r=|\yy|$\\
+$h$, $q=r/h$ & support radius of the kernel, scaled distance ($h=1$ in all derivations)\\
+$d$, $z_e$ & distance of $\xx$ to a wall (\cref{sec:planar}); signed distance of $\xx$ to the line of edge $e$ (\cref{sec:edge}), $z_e=\nn_e\cdot(p_e-\xx)$\\
+$r_c$ & \emph{cut radius} of a radial profile $g$ ($g=0$ for $r>r_c$); $r_c=1$ for a full kernel, $r_c=\frac12$ for the inner cubic block\\
+$R$, $\kappa=1/R$ & radius and curvature of a disk or ball (\cref{sec:sphere,sec:closed,sec:curv}); never a cut radius\\
+$M_g(r)$ & $\int_0^rt\,g(t)\,\dd t$ (2D) or $\int_0^rt^2g(t)\,\dd t$ (3D), the \emph{radial mass} of $g$\\
+$\Phi[f]$, $\varphi(\sigma)$ & compact potential of a radial profile $f$ (\cref{thm:recursion}); the kernel as a function of $\sigma=r^2$ (\cref{sec:curv})\\
+$I_m(s)$ & $\int_0^sr^m\dd s$ along an edge line (\cref{prop:primitives}); not to be confused with the
+planar family $\mathcal J_m(d)$ of \cref{lem:J}\\
+$\lambda_\Delta$ & $\int_S\nabla^2_{\xx}W$, the wall Laplacian (\cref{sec:wall}); a number, not a difference\\
+$\ind[\cdot]$ & indicator\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Verification tags}
+Each result carries a tag: \textsf{[M]}~checked symbolically in Maple (exact arithmetic, or 40--50 digit
+quadrature where stated); \textsf{[N]}~checked numerically against an independent quadrature
+(\texttt{tests/}); \textsf{[A]}~argued here but not independently checked; \textsf{[P]}~plan, not proved.
+The scripts are \texttt{maple/10--14} (project) and \texttt{maple/20\_paper\_audit.mpl} (this paper).

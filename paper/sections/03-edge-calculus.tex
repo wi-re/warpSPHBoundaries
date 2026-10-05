@@ -1,0 +1,188 @@
+\section{Edge calculus in two dimensions}\label{sec:edge}
+
+This is the core of the construction. For a polygon $T$ we reduce $\int_T W$, its gradient and all
+moments to one-dimensional integrals along the edges. For piecewise-polynomial $W$ these are elementary.
+The plan is the table of \cref{sec:idea}: a value identity (\cref{thm:value}), a gradient identity (\cref{thm:grad})
+and a recursion for moments (\cref{thm:recursion}); \cref{prop:primitives} supplies the one-dimensional integrals they need.
+
+\subsection{Geometry}
+Let $T$ be a simple polygon, counter-clockwise. For the evaluation point $\xx$ and an edge $e=(p_e,q_e)$ let
+$\tv_e$ be the unit tangent, $\nn_e$ the \emph{outward} normal, and
+\begin{gather}
+ z_e=\nn_e\!\cdot(p_e-\xx),\qquad s_0=\tv_e\!\cdot(p_e-\xx),\qquad s_1=\tv_e\!\cdot(q_e-\xx),\notag\\
+ \yy=z_e\nn_e+s\,\tv_e,\qquad r=\sqrt{s^2+z_e^2}\quad\text{on the edge line.}
+\end{gather}
+So $s$ is the position along the edge measured from the foot of the perpendicular from $\xx$, and $z_e$ is the distance to the edge line:
+$z_e>0$ iff $\xx$ lies on the inner side of the edge line. For a profile with cut radius $r_c$, the
+edge meets the support in the \emph{chord} $s\in[\max(s_0,-\ell),\min(s_1,\ell)]$, $\ell=\sqrt{r_c^2-z_e^2}$, empty if
+$|z_e|\ge r_c$ or the interval is empty.
+
+\subsection{Elementary primitives}
+With $r=\sqrt{s^2+z^2}$ define $I_m(s)=\int_0^s r^m\,\dd s$ and $S_{j,m}=\int s^jr^m\dd s$.
+
+\begin{proposition}[Primitives]\label{prop:primitives}
+(a) $(m+1)I_m=s\,r^m+m z^2I_{m-2}$ with $I_0=s$, $I_{-1}=\asinh(s/|z|)$, $zI_{-2}=\arctan(s/z)$.
+Hence for even $m=2k\ge0$, $I_m=\sum_i\binom ki z^{2k-2i}\frac{s^{2i+1}}{2i+1}$ (a polynomial), and for odd $m\ge1$,
+$I_m=\frac{m!!}{(m+1)!!}z^{m+1}\asinh(s/|z|)+s\,r\,\mathrm{poly}(r^2,z^2)$.\\
+(b) $\int s\,r^m\dd s=r^{m+2}/(m+2)$ for $m\neq-2$, and $\ln r$ for $m=-2$.\\
+(c) Powers of $s$ are reduced with $s^2=r^2-z^2$. For $j=2p$ even,
+$S_{j,m}=\sum_{i=0}^{p}\binom pi(-z^2)^{p-i}I_{m+2i}$; for $j=2p+1$ odd,
+$S_{j,m}=\sum_{i=0}^{p}\binom pi(-z^2)^{p-i}\,\dfrac{r^{m+2i+2}}{m+2i+2}$ (with $\ln r$ if $m+2i+2=0$). Note that $p=\lfloor j/2\rfloor$ in both cases.\\
+(d) For a chord $[lo,hi]$ and either sign of $z$:
+$\arctan(hi/z)-\arctan(lo/z)=\atan\!\big(z(hi-lo),\,z^2+hi\cdot lo\big)$. \status{M, maple/10}
+\end{proposition}
+\begin{proof}
+(a) Differentiating $s\,r^m$ gives $r^m+m s^2r^{m-2}=(m+1)r^m-mz^2r^{m-2}$, which is the recurrence; the closed forms follow by
+induction from $I_0$ and $I_{1}=\frac12\big(s\,r+z^2\asinh(s/|z|)\big)$. (b) is the chain rule. (c) For $j=2p$ expand
+$s^{2p}r^m=(r^2-z^2)^pr^m$ binomially and integrate term by term; for $j=2p+1$ write $s^{2p+1}r^m=s\,(r^2-z^2)^p r^m$ and use (b).
+(d) is the tangent subtraction formula $\tan(a-b)=\frac{\tan a-\tan b}{1+\tan a\tan b}$ with the denominator and numerator multiplied
+by $z^2>0$; the $\atan$ form selects the correct branch since the difference lies in $(-\pi,\pi)$ and has the sign of $z(hi-lo)$.
+All derivative identities were verified symbolically for $|m|\le12$, $j\le7$.
+\end{proof}
+\begin{remark}
+$I_m$ is odd in $s$, but $\int s\,r^m\dd s$ is \emph{even}; a chord spanning $s=0$ therefore adds $I_m$ contributions but
+subtracts equal contributions of the second kind. For $m<-2$ the downward recurrence divides by $z^2$ each step and is numerically
+unusable at small $z$; only $m\ge0$ is needed by the production path.
+\end{remark}
+
+\subsection{Truncated monomials}
+Any piecewise-polynomial radial kernel is a finite combination of \emph{blocks} $f_{n,r_c}(r)=r^n\ind[r\le r_c]$:
+$W=\sum_jq_j(r)\ind[r\le r_j]$ with $q_{\rm last}$ the outer piece and $q_j=\text{piece}_j-\text{piece}_{j+1}$.
+\begin{itemize}
+\item Wendland: one block family with $r_c=1$.
+\item Cubic: $W=C_2[(1-q)^3-4(\tfrac12-q)^3\ind[q\le\frac12]]$, blocks at $r_c=1$ and $r_c=\tfrac12$.
+\end{itemize}
+\status{M}
+
+\subsection{Value identity}
+For a radial $g$ supported on $r\le r_c$ set $M_g(r)=\int_0^r t\,g(t)\,\dd t$ (so $M_g(r)=M_g(r_c)$ for $r\ge r_c$).
+\begin{theorem}[Value identity]\label{thm:value}
+Let $\xx\notin\partial T$. Then
+\begin{equation}\label{eq:value}
+ \int_T g(|\xx'-\xx|)\,\dd\xx'=\ind[\xx\in T]\,2\pi M_g(r_c)+\sum_{e\in\partial T}z_e\int_{\chord_e}\frac{M_g(r)-M_g(r_c)}{r^2}\,\dd s.
+\end{equation}
+For a normalised kernel $2\pi M_W(1)=1$, so the first term is $\ind[\xx\in T]$.
+\end{theorem}
+\begin{proof}
+\emph{Step 1: $g$ is a divergence.} Put $\bm G(\yy)=\yy\,M_g(r)/r^2$. Away from $\yy=0$,
+$\nabla\!\cdot\bm G=\dfrac{2M_g}{r^2}+r\,\dfrac{\dd}{\dd r}\dfrac{M_g}{r^2}=\dfrac{2M_g}{r^2}+\dfrac{M_g'}{r}-\dfrac{2M_g}{r^2}=\dfrac{M_g'}r=g$, since $M_g'=r\,g$.\\
+\emph{Step 2: divergence theorem.} If $\xx\notin T$, $\bm G$ is smooth on $T$ and $\int_Tg=\oint_{\partial T}\bm G\cdot\nn\,\dd s$.
+If $\xx\in T$, apply it on $T\setminus B_\varepsilon(\xx)$; the flux through the small circle (normal pointing towards $\xx$) is
+$-\frac{M_g(\varepsilon)}{\varepsilon}\cdot2\pi\varepsilon=-2\pi M_g(\varepsilon)\to0$ since $M_g(\varepsilon)=O(\varepsilon^2)$.
+On an edge $\nn_e\!\cdot\!\yy=z_e$, so in both cases
+\begin{equation}\label{eq:value-full}
+ \int_Tg=\sum_e z_e\int_e\frac{M_g(r)}{r^2}\,\dd s\quad(\text{whole edges}).
+\end{equation}
+\emph{Step 3: localise.} Write $M_g=\big(M_g-M_g(r_c)\big)+M_g(r_c)$. The first part vanishes for $r\ge r_c$, so only the chord contributes.
+For the constant part, $z_e\!\int\!\dd s/r^2=\arctan(s/z_e)\big|_{s_0}^{s_1}$ is the angle under which edge $e$ is seen from $\xx$, and
+$\sum_e$ of these is the total angle subtended by the closed curve $\partial T$, namely $2\pi$ if $\xx\in T$ and $0$ otherwise.
+\end{proof}
+This is the identity behind all edge-based boundary methods; the 3D analogue replaces $2\pi$ by $4\pi$ and
+the angle by the solid angle (\cref{sec:threed}). In words: only the edges near $\xx$ matter, plus a topological term that
+counts whether $\xx$ is inside.
+
+\paragraph{Block form.} For $g=r^n\ind[r\le r_c]$ one has $M_g=\min(r,r_c)^{n+2}/(n+2)$ and
+$(M_g-M_g(r_c))/r^2=(r^n-r_c^{n+2}r^{-2})/(n+2)$ on the chord, so by $z\!\int\!\dd s/r^2=\arctan(s/z)$,
+\begin{equation}\label{eq:block}
+ \int_T r^n\ind[r\le r_c]=\ind[\xx\in T]\frac{2\pi r_c^{n+2}}{n+2}+\sum_e\frac{1}{n+2}\Big[z_e\big(I_n\big|_{lo}^{hi}\big)-r_c^{n+2}\,\Delta\!\arctan\Big].
+\end{equation}
+For a multi-block kernel apply \cref{eq:block} to each block and sum. Collecting the blocks of cut radius $r_j$ into one
+group with radial mass $M_j(r_j)$, the group contributes the indicator weight $w_j=2\pi M_j(r_j)$ and the term
+$-\frac{w_j}{2\pi}\Delta\!\arctan_j$ (the angle taken on the chord of radius $r_j$). For the cubic spline $w_j=\frac87$ ($r_j=1$) and $-\frac17$
+($r_j=\frac12$); the \emph{negative} weight is correct and $\sum_jw_j=1$. \status{M}
+
+\subsection{Degenerate placements}\label{sec:degenerate}
+$\lambda_T(\xx)=\int_TW$ is continuous in $\xx$ ($W$ is bounded), but the two parts of \eqref{eq:value} are not.
+Take $\xx$ crossing the line of an edge $e$ at a point projecting into the edge interior, from outside to inside, so $z_e$ changes sign from $-$ to $+$.
+The indicator jumps by $+2\pi M_W(1)=+1$. In the chord term of $e$ the integrand $z_e\,(M_W(r)-M_W(1))/r^2$ concentrates at $s=0$ as $|z_e|\to0$,
+where $M_W(0)=0$: it tends to $-M_W(1)\,\pi\,\sgn z_e$, i.e.\ it jumps by $-2\pi M_W(1)=-1$. The two jumps cancel; all other edges are continuous.
+Therefore the value \emph{on} the boundary, obtained by continuity, uses the average of the two one-sided limits of each part:
+\emph{$\xx$ in the open interior of an edge: indicator $\frac12$, that edge contributes $0$ to the chord terms (and to every arctan of \cref{eq:block});
+$\xx$ at a vertex: indicator = interior angle$/2\pi$; an edge with $z_e=0$ contributes $0$.}
+(At a vertex, the two incident edges each contribute $-M_W(1)\,(\pi-\frac\alpha2)$ in the limit from the bisector, for a total $-M_W(1)(2\pi-\alpha)$,
+and $2\pi M_W(1)-M_W(1)(2\pi-\alpha)=M_W(1)\,\alpha$ is exactly the indicator $\alpha/2\pi$ times $2\pi M_W(1)$.)
+These conventions must use the \emph{same} orientation predicate for the sign of $z_e$ and for the indicator. \status{N}
+
+\paragraph{Worked check: a flat wall.} For a half-plane solid at distance $d$ (single edge, $z=-d$, indicator $0$), \cref{eq:value} gives
+$\lambda(d)=-d\int_{-\ell}^{\ell}\frac{M_W(r)-M_W(1)}{r^2}\dd s$. As $d\to0$ the factor $d$ kills the $M_W(r)\sim r^2$ part
+(the integrand is bounded) and what remains is $+d\,M_W(1)\int_{-\ell}^{\ell}\dd s/r^2=2M_W(1)\arctan(\ell/d)\to\pi M_W(1)=\frac12$,
+the known value $\lambda(0)=\frac12$ of \cref{prop:byparts}.
+
+\subsection{Gradient identity}
+\begin{theorem}[Gradient identity]\label{thm:grad}
+For $g$ bounded, piecewise continuous with jumps on circles about $\xx$ that meet $\partial T$ transversally,
+\[
+ \partial_{x_j}\int_Tg(|\xx'-\xx|)\,\dd\xx'=-\sum_e n_{e,j}\int_{\chord_e}g(r)\,\dd s.
+\]
+In particular, $\nabla_{\xx}\lambda=-\sum_e\nn_e\int_{\chord_e}W\,\dd s$ \emph{without any indicator term}, and the identity holds
+block by block.
+\end{theorem}
+\begin{proof}
+$\int_Tg(\xx'-\xx)\dd\xx'=\int_{T-\xx}g(\yy)\dd\yy$, so moving $\xx$ by $\delta\ee_j$ translates the domain by $-\delta\ee_j$.
+A domain translated by $\bm v$ gains $\oint(\bm v\!\cdot\!\nn)\,g\,\dd s+o(|\bm v|)$ (Reynolds transport; $g$ is continuous across
+$\partial T-\xx$ a.e.), here $-\delta\oint n_jg\,\dd s$. Only the chords carry $g\neq0$.
+\end{proof}
+Sign check: moving $\xx$ towards the solid, i.e.\ against $\nn_e$ (which points out of the solid), increases $\lambda$; the formula gives $\nabla\lambda\parallel-\nn_e$.
+\begin{corollary}[First moment]\label{cor:firstmoment}
+With $\Psi(r)=\int_r^1tW\dd t$ (so $\yy W=-\nabla\Psi$),
+\[
+ \int_T\yy W\dd\xx'=-\sum_e\nn_e\int_{\chord_e}\Psi\,\dd s. \qquad\status{N}
+\]
+This is the case $|\alpha|=1$ of \cref{thm:recursion} with $\Psi=-\Phi[W]$.
+\end{corollary}
+\begin{corollary}\label{cor:fullspace}
+Gradients of moments are edge-local:
+$\partial_{x_j}m_\alpha=-\sum_en_{e,j}\int_{\chord_e}\yy^\alpha W\dd s$. (The proof of \cref{thm:grad} translates the domain $T-\xx$
+and so differentiates \emph{both} $\yy^\alpha$ and $W$.) If $T$ covers the support the sum
+vanishes, as it must.
+\end{corollary}
+
+\subsection{Compact-potential recursion for moments}
+Let $f$ be radial and supported on $r\le r_c$ and $\Phi[f](r)=-\int_r^{r_c}t\,f(t)\,\dd t=M_f(r)-M_f(r_c)$. Then $\Phi$ is compactly
+supported, continuous, and $\partial_i\Phi=y_if$ (since $\Phi'(r)=rf$ and $\partial_i r=y_i/r$).
+\begin{theorem}[Recursion]\label{thm:recursion}
+For $\alpha=\beta+\ee_i$,
+\begin{equation}\label{eq:recursion}
+ \int_T\yy^{\alpha}f\,\dd\xx'=\sum_en_{e,i}\int_{\chord_e}\yy^{\beta}\Phi\,\dd s-\beta_i\int_T\yy^{\beta-\ee_i}\Phi\,\dd\xx'.
+\end{equation}
+\end{theorem}
+\begin{proof}
+$\partial_i(\yy^\beta\Phi)=\beta_i\yy^{\beta-\ee_i}\Phi+\yy^{\beta}y_if$; integrate over $T$ and use the divergence theorem on the left.
+$\Phi$ is Lipschitz, so no jump term arises even if $f$ jumps at $r_c$. \status{M, $k\le4$}
+\end{proof}
+The degree drops by $2$ per step. For odd $k$ the recursion ends in pure edge integrals. For even $k$ it ends in a
+value-type integral of an iterated potential, evaluated by \cref{thm:value} with $M_g$ of that potential --- which is why \cref{thm:value}
+is stated for general $g$ with $2\pi M_g(r_c)\neq1$. For a block $f=r^n\ind[r\le r_c]$, $\Phi=\frac{r^{n+2}-r_c^{n+2}}{n+2}\ind[r\le r_c]$ again lies in the
+block family, so only $I_m$ and $\int s\,r^m\dd s$ with $m\ge0$ occur.
+
+\emph{Numerical confirmation.} For a non-convex hexagon, all four kernels, particle inside, outside and near an edge, all $28$ multi-indices with $|\alpha|\le6$
+agree with an independent ray quadrature of the area integral to relative $3\cdot10^{-11}$ (\path{scripts/derivation_checks/paper_edge_identities_k6.py}); this covers the range $k\le6$ needed by \cref{sec:curv}
+beyond the symbolic check. The edge form of $\partial_{\xx}m_\alpha$ (\cref{cor:fullspace}) agrees with central differences to the finite-difference error ($\le10^{-5}$) and
+$g_\alpha=\partial_{\xx}m_\alpha+\sum_j\alpha_j\ee_jm_{\alpha-\ee_j}$ (\cref{prop:fem}) with a direct ray quadrature of $\yy^\alpha\nabla_{\xx}W$ to $4\cdot10^{-12}$. \status{N}
+
+\emph{Example ($k=2$).} For $\alpha=2\ee_1$ take $\beta=\ee_1$, $i=1$:
+$\int_Ty_1^2f=\sum_en_{e,1}\int_{\chord_e}y_1\Phi\,\dd s-\int_T\Phi$, where on the chord $y_1=z_en_{e,1}+s\,t_{e,1}$ is linear in $s$, and
+$\int_T\Phi$ is a value integral with $M_\Phi(r_c)\ne\frac1{2\pi}$ in general.
+
+\begin{remark}[Direct form (b) fails on an edge line]
+An alternative with $\ind[\xx\in T]\oint\omega^\alpha r_c^{n+2+k}/(n+2+k)+\sum_e\frac{z_e}{n+2+k}\int(\dots)r^{-(2+k)}$
+is correct for $z_e\neq0$ but $0\cdot\infty$ at $z_e=0$, with a direction-dependent limit: the average convention
+of the previous subsection is \emph{wrong} for it when $k\ge1$ ($\int_{\rm half\ circle}\sin\theta\neq\frac12\oint\sin\theta$).
+The recursion \eqref{eq:recursion} has no such problem. \status{N}
+\end{remark}
+
+\subsection{Half plane and the planar closed form}
+\begin{proposition}[Consistency with \cref{sec:planar2}]\label{prop:halfplane}
+For $T$ a half plane (a single infinite edge, $z=-d$, indicator $0$, chord $[-\ell,\ell]$, $\ell=\sqrt{1-d^2}$),
+\cref{eq:value} equals $\lambda_2(d)$ for every kernel.
+\end{proposition}
+\begin{proof}
+Both sides vanish at $d=1$, so it suffices to compare derivatives in $d$. For the edge side, \cref{thm:grad}
+(moving $\xx$ away from the wall by $\dd d$ is a displacement along $\nn$) gives
+$\partial_d\lambda=-\int_{-\ell}^{\ell}W(\sqrt{s^2+d^2})\,\dd s=-2\int_d^1W(q)\,q\,(q^2-d^2)^{-1/2}\dd q$ (substituting $q=\sqrt{s^2+d^2}$, $\dd s=q\,\dd q/s$),
+which is $\lambda_2'(d)$ by \cref{prop:byparts}.
+\end{proof}
+The two derivations are independent: the shell calculus integrates arcs, the edge calculus uses the divergence theorem. Note what is and is not
+tested: the proof compares the \emph{gradient} identity with the arc form; the value identity itself enters through the single infinite edge
+(whose total angle $-\pi$ is closed by the arc at infinity, flux $+\pi M_W(1)$) and is confirmed by the check at $d\to0$ above and
+numerically for all four kernels at $d\in\{0,10^{-12},\dots,1-10^{-12}\}$ and symbolically \status{M, N}.

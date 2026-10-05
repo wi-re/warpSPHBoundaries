@@ -1,0 +1,130 @@
+\section{Planar and spherical boundaries}\label{sec:planar}
+
+Set $h=1$. Place the particle at the origin and let the boundary be the plane (line) at distance
+$d\in[0,1]$, the solid being the far side. $\lambda$ then depends on $d$ alone.
+
+\subsection{Three dimensions}
+\begin{proposition}[Shell form]\label{prop:planar3}
+$\displaystyle \lambda_3(d)=\int_d^1 C_3\what(q)\,2\pi q(q-d)\,\dd q.$ \status{M}
+\end{proposition}
+\begin{proof}
+The sphere of radius $q$ about the particle meets the half space $z\ge d$ in a cap of height $q-d$
+(for $q\ge d$) and area $2\pi q(q-d)$ (Archimedes); integrate shell by shell.
+\end{proof}
+
+\paragraph{Wendland kernels.} With $\what=(1-q)^m P(q)$, $P=\sum_p c_pq^p$, put
+$F(m,p,x)=\int_0^x t^p(1-t)^m\dd t=\sum_{j=0}^m(-1)^j\binom mj\frac{x^{p+j+1}}{p+j+1}$. Then
+\begin{equation}\label{eq:lam3-wend}
+ \lambda_3(d)=2\pi C_3\sum_p c_p\Big[F(m,p{+}2,1)-F(m,p{+}2,d)-d\big(F(m,p{+}1,1)-F(m,p{+}1,d)\big)\Big],
+\end{equation}
+a single polynomial in $d$ of degree $m+\deg P+3$, i.e.\ $8,11,14$ for w2, w4, w6, with $\lambda_3(0)=\frac12$,
+$\lambda_3(1)=0$. \status{M}
+
+\paragraph{Cubic spline.} The knot at $q=\frac12$ splits the integral (inner correction $-4(\frac12-q)^3$
+only for $q\le\frac12$):
+\begin{align}
+ d\in[0,\tfrac12]:&\quad \lambda_3=\tfrac1{60}\,(192d^6-288d^5+160d^3-84d+30),\\
+ d\in[\tfrac12,1]:&\quad \lambda_3=-\tfrac{8}{15}\,(2d^6-9d^5+15d^4-10d^3+3d-1),
+\end{align}
+which agree at $d=\frac12$ (value $\frac1{30}$). \status{M} (Winchenbach et al.~\cite{winchenbach2020} give the cubic case.)
+
+\subsection{Two dimensions}\label{sec:planar2}
+\begin{proposition}[Arc form]\label{prop:planar2}
+$\displaystyle\lambda_2(d)=\int_d^1 C_2\what(q)\,2q\arccos\!\big(\tfrac dq\big)\,\dd q.$ \status{M}
+\end{proposition}
+\begin{proof}
+The circle of radius $q\ge d$ about the particle meets the half plane $y\ge d$ where $q\cos\phi\ge d$, i.e.\ in the arc
+$|\phi|\le\arccos(d/q)$ of length $2q\arccos(d/q)$. Integrate shell by shell. (Compare 3D: there the shell area is
+$2\pi q\,(q-d)$, polynomial in $q$; here the inverse cosine makes the integrand non-polynomial.)
+\end{proof}
+
+\begin{proposition}[By-parts reduction]\label{prop:byparts}
+Let $v_0(q)=\int_0^q t\,\what(t)\,\dd t$, so that $2\pi C_2v_0(1)=1$. Then
+\begin{equation}\label{eq:lam2-byparts}
+ \lambda_2(d)=2C_2\Big[v_0(1)\arccos d-d\int_d^1\frac{v_0(q)}{q\sqrt{q^2-d^2}}\,\dd q\Big].
+\end{equation}
+In particular $\lambda_2(0)=\frac12$, $\lambda_2(1)=0$ and
+$\lambda_2'(d)=-2C_2\int_d^1 \what(q)\,q\,(q^2-d^2)^{-1/2}\dd q$. \status{M}
+\end{proposition}
+\begin{proof}
+Integrate \cref{prop:planar2} by parts with $u=\arccos(d/q)$ and $\dd v=2C_2q\,\what(q)\,\dd q$, i.e.\ $v=2C_2v_0$.
+Since $\frac{\dd}{\dd q}\arccos(d/q)=d/(q\sqrt{q^2-d^2})$, $u(d)=\arccos1=0$ and $u(1)=\arccos d$,
+\[
+ \lambda_2=\big[u\,v\big]_d^1-\int_d^1v\,u'\,\dd q
+ =2C_2v_0(1)\arccos d-2C_2\,d\int_d^1\frac{v_0(q)}{q\sqrt{q^2-d^2}}\dd q .
+\]
+At $d=0$ the second term vanishes and $\lambda_2(0)=2C_2v_0(1)\cdot\frac\pi2=\frac12$. For the derivative
+differentiate the arc form directly: the boundary term at $q=d$ vanishes because $\arccos1=0$, and
+$\partial_d\arccos(d/q)=-(q^2-d^2)^{-1/2}$.
+\end{proof}
+
+\begin{lemma}[The family $\mathcal J_m$]\label{lem:J}
+Let $\mathcal J_m(d)=\int_d^1 q^m(q^2-d^2)^{-1/2}\dd q$. Then
+$\mathcal J_0=\ln\frac{1+\sqrt{1-d^2}}{d}$, $\mathcal J_1=\sqrt{1-d^2}$ and
+\begin{equation}\label{eq:Jrec}
+ m\,\mathcal J_m=\sqrt{1-d^2}+(m-1)\,d^2\mathcal J_{m-2}\qquad(m\ge2).
+\end{equation}
+Consequently, for odd $m$, $\mathcal J_m=\sqrt{1-d^2}\,\mathrm{poly}(d^2)$; for even $m$,
+$\mathcal J_m=\sqrt{1-d^2}\,\mathrm{poly}(d^2)+\mathrm{poly}(d^2)\,\mathcal J_0$, where $\mathcal J_0$ contains
+$\ln d$ and $\ln(1+\sqrt{1-d^2})$. \status{M}
+\end{lemma}
+\begin{proof}
+$\mathcal J_0=\operatorname{arcosh}(1/d)$ and $\mathcal J_1$ are direct. For $m\ge2$, using
+$\sqrt{q^2-d^2}=(q^2-d^2)/\sqrt{q^2-d^2}$,
+\[
+ \frac{\dd}{\dd q}\Big(q^{m-1}\sqrt{q^2-d^2}\Big)
+ =(m-1)q^{m-2}\sqrt{q^2-d^2}+\frac{q^m}{\sqrt{q^2-d^2}}
+ =\frac{m\,q^m-(m-1)d^2q^{m-2}}{\sqrt{q^2-d^2}} .
+\]
+Integrate over $[d,1]$: the left side gives $\sqrt{1-d^2}$ (the term at $q=d$ vanishes). The parity statements follow
+by induction from $\mathcal J_1$ and $\mathcal J_0$. For example $\mathcal J_3=\frac13(1+2d^2)\sqrt{1-d^2}$ and
+$\mathcal J_2=\frac12(\sqrt{1-d^2}+d^2\mathcal J_0)$.
+\end{proof}
+\begin{remark}
+The project notes state that odd $\mathcal J_m$ lie in $\mathrm{poly}(d^2)\{1,\sqrt{1-d^2}\}$; \cref{eq:Jrec}
+shows the constant is never present (\cref{app:audit}).
+\end{remark}
+
+\paragraph{Wendland.} Because $\what(q)=1+O(q^2)$, $v_0=O(q^2)$ is a polynomial and $v_0(q)/q=\sum_{m\ge1}a_mq^m$. Then
+\eqref{eq:lam2-byparts} reads
+\begin{equation}\label{eq:lam2-wend}
+ \lambda_2(d)=2C_2\Big[v_0(1)\arccos d-d\sum_{m\ge1}a_m\mathcal J_m(d)\Big],
+\end{equation}
+that is $\arccos d$ plus $d\,[\mathrm{poly}\sqrt{1-d^2}+\mathrm{poly}\ln d+\mathrm{poly}\ln(1+\sqrt{1-d^2})]$.
+\emph{Example (w2).} $\what=1-10q^2+20q^3-15q^4+4q^5$ gives
+$v_0=\frac{q^2}2-\frac{5q^4}2+4q^5-\frac{5q^6}2+\frac{4q^7}7$, $v_0(1)=\frac1{14}$ (so $2C_2v_0(1)=\frac1\pi$ with $C_2=\frac7\pi$), and
+\[
+ \lambda_2^{\rm w2}(d)=\frac{14}\pi\Big[\frac{\arccos d}{14}-d\Big(\tfrac12\mathcal J_1-\tfrac52\mathcal J_3+4\mathcal J_4-\tfrac52\mathcal J_5+\tfrac47\mathcal J_6\Big)\Big]
+ \qquad\text{[M, 40 digits at }d=\tfrac3{10}].
+\]
+\paragraph{Cubic.} The knot splits the range. For $d\ge\frac12$ only the outer piece $\what=(1-q)^3$ is present and the
+Wendland recipe applies. For $d<\frac12$ the inner correction $-4(\frac12-q)^3$ is a second block with upper limit
+$\frac12$; its integrals end at $q=\frac12$ instead of $1$, which adds terms in $\arccos2d$, $\sqrt{1-4d^2}$ and
+$\ln(1+\sqrt{1-4d^2})$. At $d=\frac12$ only the outer piece contributes, and
+\[
+ \lambda_2(\tfrac12)=\frac{64\pi-294\sqrt3+249\ln(2+\sqrt3)}{168\pi}\approx0.03744 \quad\text{[M, 40 digits]}.
+\]
+
+\subsection{Solid ball in 3D}\label{sec:sphere}
+Solid ball of radius $R$, particle outside at distance $d$ from the surface, hence $D=R+d$ from the centre.
+\begin{proposition}[Cap area]\label{prop:sphere}
+The part of the sphere $|\yy|=q$ (centre at the particle) that lies inside the ball has area
+$A(q)=\dfrac{\pi q}{D}\,(R^2-D^2+2Dq-q^2)$ for $q\in(D-R,D+R)$, and $0$ otherwise.
+Hence $\lambda_{\rm sph}(R,d)=\int_d^{\min(1,\,2R+d)}C_3\what(q)A(q)\,\dd q$. \status{M}
+\end{proposition}
+\begin{proof}
+A point of the sphere at polar angle $\theta$ from the direction to the ball centre has squared distance
+$q^2+D^2-2Dq\cos\theta$ to that centre, so it lies in the ball iff $\cos\theta\ge(q^2+D^2-R^2)/(2Dq)$. This is a spherical
+cap of height $h_c=q(1-\cos\theta_0)=q-(q^2+D^2-R^2)/(2D)$ and area $2\pi q\,h_c$ (Archimedes), which is the stated
+$A$. It vanishes at $q=D\mp R$ [M], where the sphere touches the ball from outside or from inside. Beyond $q=D+R$ the
+sphere encloses the ball, so $A=0$.
+\end{proof}
+Two branches arise: $2R+d\ge1$ (the support truncates, upper limit $1$) and $2R+d<1$ (the ball lies entirely inside the support,
+upper limit $2R+d$). For Wendland kernels $A$ is quadratic in $q$, so the $F$-basis of \cref{eq:lam3-wend} closes both
+branches (with one more power of $q$) and $\lambda_{\rm sph}=N(R,d)/(R+d)$ with $N$ a polynomial; on branch~1, $N$ is linear in $R$ because
+$R^2-D^2=-(2Rd+d^2)$ is. Since $\lim_{R\to\infty}A=2\pi q(q-d)$ \status{M}, branch~1 recovers
+\cref{eq:lam3-wend}.
+
+\subsection{Consistency of the two routes}
+Planar closed forms are the exact oracles against which every later construction is compared. Their
+independence from the edge calculus of \cref{sec:edge} is established in \cref{prop:halfplane}.

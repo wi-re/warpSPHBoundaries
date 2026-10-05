@@ -1,0 +1,49 @@
+\section{Audit}\label{app:audit}
+\subsection{The existing derivation notes}
+
+The mathematical content of \texttt{docs/derivation.md} and \texttt{docs/derivations/*.md} was re-derived and re-checked
+(Maple, exact arithmetic or 40 digits). \textbf{No error was found in any final formula.} The following are
+presentation or scope issues, in decreasing importance.
+\begin{enumerate}
+\item \textbf{Sign convention in \texttt{laplacian-wall.md} \S3.} Step~1 defines $\yy=\xx-\xx'$, Step~2 then writes $\operatorname{tr}\mathrm{Cov}=\int rL'$ but the header and
+the conclusion need $\operatorname{tr}\mathrm{Cov}=-\int rL'$ (true for $\yy=\xx'-\xx$). The final identity \cref{eq:lapscene} is correct with $\yy=\xx'-\xx$; the intermediate line is not.
+\item \textbf{Tier-3 gradient scope} (\texttt{tier3-curvature-2d.md} \S1): ``$\nabla_{\xx}\lambda=\partial_d\lambda\,\hat\nn$'' holds only for constant curvature; for general curves
+a tangential term $\kappa'F_1$ appears at second order (\cref{rem:varcurv}). The value expansion needs no $\kappa'$ term.
+\item \textbf{$J_m$ structure} (\texttt{derivation.md} \S3.2): odd $m$ are $\mathrm{poly}(d^2)\sqrt{1-d^2}$ (no constant), by \cref{eq:Jrec}.
+\item \textbf{Edge value identity, \texttt{tet-face-edge-chain.md}}: status \textsf{[P]} is accurate; the divergence step is nonetheless a theorem (\cref{thm:face}) and could be tagged as such.
+\item \textbf{$\nu_{\rm eff}$ and the no-slip factor $2$} (\texttt{laplacian-wall.md} \S3.5, \texttt{noslip-wall.md} \S3.3) are tagged \textsf{[V]} in the notes because the \emph{implementation}
+matches the stated formula; as mathematics, the first depends on the pairwise term (not re-derived) and the second is a modelling choice.
+\item \textbf{Block identity wording.} \texttt{truncated-monomials.md} correctly notes that block-by-block gradients need no cancellation between blocks; this is \cref{thm:grad}.
+The known bug in \texttt{scripts/derivation\_checks/monomial\_edge\_forms.py} (cubic correction $-4\sigma$ instead of $-8\sigma$) remains in the unused script.
+\end{enumerate}
+Not independently audited here: the solver-side statements in \path{docs/deltasph-*.md} and \path{docs/dfsph-validation.md}, which are validation reports rather than derivations.
+
+\subsection{The first draft of this paper}
+Each derivation of the first draft was re-done independently by hand, the symbolic script re-run, and the numerical claims recomputed (the curvature table and
+the cubic value at $d=\frac12$ with quadrature, the polygon orders with a ray integration against the disk shell formula). Again no final formula was wrong, but the draft contained the
+following errors or gaps, now corrected in the text, in decreasing importance:
+\begin{enumerate}
+\item \textbf{Remainder in \cref{thm:curv}.} The draft said that $\varphi$ is $C^2$ with $\varphi''$ Lipschitz for all four kernels and argued with a jump set of measure $O(\kappa)$.
+$\varphi''$ is in fact singular at $\sigma=0$ ($15/r$ for w2, $\frac94/r$ for the cubic). The result is unaffected because $\sigma\ge d_0^2-O(\kappa)>0$, and where $\varphi''$ is Lipschitz the remainder
+bound is immediate, so the measure argument was unnecessary. The profile list ``powers of $r$ down to $r^{-1}$ for Wendland'' was likewise true only for w2.
+\item \textbf{Block weights.} The draft called $\frac87$ and $-\frac17$ both the indicator weight and the arctan coefficient; they are the indicator weights $2\pi M_j(r_j)$, and the arctan coefficient is $M_j(r_j)=w_j/2\pi$.
+\item \textbf{Edge crossing (\cref{sec:degenerate}).} The draft wrote that the arctan term jumps by $+1$ ``in the sense that cancels'' the indicator jump; in \cref{eq:value} the chord term jumps by $-1$ (the arctan appears with a minus sign in \cref{eq:block}),
+which is what cancels. The vertex convention is now justified by an explicit limit.
+\item \textbf{Primitives for odd $j$.} ``The same with $J$'' hid that the binomial runs over $p=\lfloor j/2\rfloor$ and the exponent is $m+2i+2$; written out in \cref{prop:primitives}(c).
+\item \textbf{Cubic value at $d=\frac12$.} Closed form correct, decimal wrong: $0.03744$, not $0.03748$.
+\item \textbf{\Cref{prop:halfplane}.} The draft called the half-plane check a proof of the edge calculus against the shell calculus; the proof tests the gradient identity, and the value identity enters only through the closing at infinity. Reworded.
+\item \textbf{$\nu_{\rm eff}$.} Marked ``not re-derived''; it is now derived from the solver's pairwise form (\cref{prop:nueff}). The form itself is still taken from the code. The factor $2$ of the no-slip term is traced to the Morris normalisation instead of ``by analogy'', with the caveat that Chiron's Eq.~92 is quoted from the project notes.
+\item \textbf{Scaling lemma.} $m_\alpha(h)=h^{|\alpha|}m_\alpha(1)$ ``after scaling all lengths'' was ambiguous; now $m_\alpha(d;h)=h^{|\alpha|}m_\alpha(d/h;1)$.
+\item \textbf{Variable-curvature gradient.} ``First-order accurate'' replaced by the actual statement: an $O(\kappa^2)$ tangential error unless $\kappa'F_1$ is added.
+\item \textbf{Polygon orders (\cref{prop:ngon}).} The ``hence proportional to the mean deviation'' step is now an argument (ring integral, two integrations by parts) with the exact hypothesis ($W\in C^2$).
+\item \textbf{Variable-curvature gradient (\cref{rem:varcurv}).} The leading tangential term $\kappa'F_1$ is right, but the draft stopped there; measured numerically, the next term is $\kappa\kappa'(2F_2-dF_1)$, with the $-dF_1$ from $\partial_x\kappa=\kappa'/(1+\kappa d)$.
+\end{enumerate}
+Presentation only: the symbols $R$ (cut radius versus body radius), $\lambda_i$ (barycentric versus kernel integral), $J_m$ (planar family versus edge primitive), $\Phi$ (compact potential versus
+kernel profile), $\Delta\lambda$ (read as a difference) and $H$ versus $h$ each had two meanings; see \cref{sec:notation}. $\lambda_\Delta$, $P$, $c$ and $C_\ell$ were also undefined where used.
+
+\subsection{Independent numerical verification of the 2D claims}
+The 2D claims that were tagged \textsf{A} or checked only inside the project were re-verified with code that does not use the project library
+(\path{scripts/derivation_checks/paper_*.py}): moment recursion for all $|\alpha|\le6$ and gradient, $g_\alpha$ and Green-form identities against ray quadrature
+(\cref{sec:edge,sec:wall}); the pairwise-viscosity limit and the two Laplacian estimators (\cref{sec:wall}); the variable-curvature statements and the disk-series orders
+(\cref{sec:curv,sec:slender}); the polygon orders over $N=12,\dots,96$ (\cref{sec:closed}). The Chiron et al.\ Eq.~(92) was read in the original. Not covered: everything in
+\cref{sec:threed} and the 3D strand, curved centre line and sphere statements; the pairwise form \cref{eq:pairwise} itself, which is quoted from the solver; and the free-slip and no-slip wall terms as models.

@@ -1,0 +1,39 @@
+\section{Closed boundaries (data on the boundary only)}\label{sec:closed}
+
+A solid bounded by a closed polyline is a simple polygon $S$. \Cref{thm:value,thm:grad,thm:recursion} hold
+for $S$ unchanged, using only $\partial S$ and the indicator $\ind[\xx\in S]$ (the crossing number, computed from the same
+$z_e$ as the edge terms). For a triangulation of $S$ the interior edges cancel pairwise (each appears twice with opposite
+$\nn_e$). A field known only on $\partial S$ enters through a polynomial extension of degree $q$ (moments $k\le q$).
+
+\subsection{Polygonal approximation of a curved boundary}
+Let $S$ be an inscribed (or circumscribed) regular $N$-gon of a disk of radius $R$, $a=\pi/N$.
+In a polar angle $\varphi\in[-a,a]$ about an edge normal (centre of the disk at the origin), the edge sits at radius $\rho_S(\varphi)=R\cos a/\cos\varphi$ (inscribed)
+or $R/\cos\varphi$ (circumscribed), so the radial deviation from the circle is
+\[
+ \delta_{\rm in}(\varphi)=R\Big(\frac{\cos a}{\cos\varphi}-1\Big)=\frac R2(\varphi^2-a^2)+O(Ra^4),\qquad
+ \delta_{\rm circ}(\varphi)=R\Big(\frac1{\cos\varphi}-1\Big)=\frac R2\varphi^2+O(Ra^4),
+\]
+with means over $[-a,a]$ of $-Ra^2/3$ and $+Ra^2/6$ (ratio $-2:1$). The same ratio holds for the area deficit and excess:
+$\frac12NR^2\sin2a=\pi R^2(1-\frac23a^2+\dots)$ and $NR^2\tan a=\pi R^2(1+\frac13a^2+\dots)$.
+\begin{proposition}\label{prop:ngon}
+Let $\epsilon=\frac{Ra^2}{6}\int_0^{2\pi}w\,\dd\phi$ with $w(\phi)=R\,W(|\xx'(R,\phi)-\xx|)$ (the kernel on the circle). If $W\in C^2$ then
+$\lambda_{\rm in}-\lambda=-2\epsilon+O(N^{-4})$ and $\lambda_{\rm circ}-\lambda=+\epsilon+O(N^{-4})$, so
+$\tfrac13\lambda_{\rm in}+\tfrac23\lambda_{\rm circ}$ is accurate to $O(N^{-4})$. \status{A, N}
+\end{proposition}
+\begin{proof}[Argument]
+In polar coordinates $(\rho,\phi)$ about the disk centre, $S$ and the disk differ in the thin signed ring between $\rho=R$ and $\rho=R+\delta(\phi)$:
+\[
+ \lambda_S-\lambda=\int_0^{2\pi}\!\!\int_R^{R+\delta}W\rho\,\dd\rho\,\dd\phi=\int_0^{2\pi}w(\phi)\,\delta(\phi)\,\dd\phi+O(R^2a^4).
+\]
+The deviation $\delta$ is $2a$-periodic with mean $\bar\delta$. Split $\delta=\bar\delta+(\delta-\bar\delta)$. The oscillating part has zero mean on every period, so
+two integrations by parts against the $2\pi$-periodic weight $w$ (with $w''$ integrable, which needs $W\in C^2$) give $O(a\cdot a\cdot Ra^2)=O(a^4)$.
+Hence $\lambda_S-\lambda=\bar\delta\int w\,\dd\phi+O(a^4)$ with $\bar\delta_{\rm in}=-Ra^2/3+O(a^4)$, $\bar\delta_{\rm circ}=Ra^2/6+O(a^4)$.
+\end{proof}
+Numerically (w4, $R=\frac32$, $d=0.3$, particle on an edge normal; \path{scripts/derivation_checks/paper_ngon_orders.py}) the errors of both polygons fall by $4$ per
+doubling of $N$ and their ratio tends to $-2$. The combination divided by $a^4$ is $0.352,\,0.374,\,0.377,\,0.377,\,0.377$ for $N=24,32,48,64,96$, i.e.\ a clean $O(N^{-4})$ with
+coefficient $\approx0.377$ ($1$M and $4$M rays agree to all digits shown). At small $N$ the next term matters: the combination changes sign between $N=12$ ($-0.35\,a^4$) and
+$N=24$, passing through zero near $N=16$, which is why a measurement of the order from $N=8,16,32$ alone looked erratic (the earlier project value was $\ge3.3$). \status{N}
+
+\subsection{Limits}
+Self-intersecting or overlapping solids double-count (the indicator is a crossing number per solid) and are not covered.
+The polygon error $O(N^{-2})$ is exactly the regime where the curvature expansion of \cref{sec:curv} is cheaper than adding edges.

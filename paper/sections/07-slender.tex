@@ -1,0 +1,44 @@
+\section{Slender and thin obstacles}\label{sec:slender}
+
+When a body is thin compared to $h$ (fibres, strands) its volume integral reduces to a line integral with a short correction series.
+
+\begin{lemma}[Pizzetti mean-value series]\label{lem:pizzetti}
+For $f$ real-analytic on $\overline{B_a(c)}\subset\R^2$,
+\[
+ \frac1{\pi a^2}\int_{B_a(c)}f=\sum_{k\ge0}\frac{(a^2/4)^k}{k!\,(k+1)!}\,\Lap^kf(c).
+\]
+\end{lemma}
+\begin{proof}
+Let $u(\rho)=\frac1{2\pi}\oint f(c+\rho\bm\omega)\,\dd\bm\omega$ be the circle mean. Averaging commutes with $\Lap$, and for a radial
+function the 2D Laplacian is $u''+u'/\rho$, so $u''+u'/\rho=\overline{\Lap f}(\rho)$, the circle mean of $\Lap f$ (Darboux).
+Insert $u=\sum_ku_k\rho^{2k}$ with $u_0=f(c)$: $(2k)^2u_k=\big[\rho^{2k-2}\big]\overline{\Lap f}=u_{k-1}[\Lap f]$, so by induction $u_k=\Lap^kf(c)/(4^k(k!)^2)$
+(this is Pizzetti's formula~\cite{pizzetti1909}). Average over $\rho\in[0,a]$ with weight $2\rho/a^2$: $\int_0^a2\rho^{2k+1}\dd\rho/a^2=a^{2k}/(k+1)$, which turns $\frac{1}{4^k(k!)^2}$ into $\frac{1}{4^kk!(k+1)!}$.
+\end{proof}
+
+\begin{proposition}[Disk in 2D, strand in 3D]\label{prop:slender}
+(a) A disk of radius $a$ at distance $D$ from the particle, with $W$ smooth on $[D-a,D+a]$:
+$\int_{B_a}W=\pi a^2\sum_{k\le K}\frac{(a^2/4)^k}{k!(k+1)!}\Lap^kW(D)+O(a^{2K+4})$.\\
+(b) Straight 3D strand of radius $a$ along a segment: with $\Lap_\perp$ the Laplacian in the cross-section,
+\[
+ \int_{\rm strand}W\simeq\pi a^2\int_{\rm axis}\Big[W+\frac{a^2}{8}\Lap_\perp W+\frac{a^4}{192}\Lap_\perp^2W+\dots\Big]\dd s,
+\]
+the coefficients $\frac1{4\cdot1!\,2!}$ and $\frac1{16\cdot2!\,3!}$ of \cref{lem:pizzetti}.\\
+(c) 2D strip of half width $a$: $\int_{-a}^a f(z+u)\dd u=\sum_k\frac{2a^{2k+1}}{(2k+1)!}f^{(2k)}(z)$.
+\end{proposition}
+\begin{proof}
+(a),(b) apply \cref{lem:pizzetti} (in the cross-section for (b)); the first neglected term is $\pi a^2\cdot a^{2K+2}$. (c) is the Taylor series integrated
+over $u$. The leading term of (b) is the line integral of $W$ along the axis chord, $\pi a^2\int_{\rm chord}W\,\dd s$ with $z$ the distance of the particle to the axis. \status{M for the coefficients and for (c);
+N for the orders $4,6,8$ of (a), the 2D case: error ratios $15.7$, $63.6$, $256.1$ per halving of $a$ for $K=0,1,2$ (w4, $D=0.5$, \path{paper_curvature_variable.py})}
+\end{proof}
+
+\begin{remark}[Regularity]
+Wendland kernels have no linear term, so $\Lap_\perp W$ is regular on the axis; but $C^2$ Wendland has an $r^3$ term, hence $\Lap_\perp^2W\sim1/r$
+is singular where the axis passes through the particle, and the series is asymptotic and breaks at kernel knots or the support rim. Where it fails the
+polygon of \cref{sec:closed} is the fallback; no gap exists in 2D since the strip is exactly $\lambda_2(d-a)-\lambda_2(d+a)$.
+\end{remark}
+
+\paragraph{Ball in 3D.} For a ball of radius $\rho$ at centre distance $D$ the \emph{shell theorem} reads
+$\int_{S^2}f(|\xx-\bm c-\rho\bm\omega|)\,\dd\bm\omega=\frac{2\pi}{D\rho}\int_{|D-\rho|}^{D+\rho}r\,f(r)\,\dd r$ \status{M}, consistent with \cref{prop:sphere}.
+
+\paragraph{Curved centre line.} A first-order correction $\propto\kappa_ca^2$ is expected (the tube volume is independent of $\kappa_c$ but the kernel weighting is not
+symmetric); not derived. \status{P}

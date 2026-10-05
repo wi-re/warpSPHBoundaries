@@ -1,0 +1,22 @@
+\section{Extension to three dimensions}\label{sec:threed}
+
+\begin{theorem}[Face identity for a polyhedron $T$]\label{thm:face}
+For $g$ radial with support $R$ and $M_3(r)=\int_0^rt^2g\,\dd t$,
+\[
+ \int_Tg=\ind[\xx\in T]\,4\pi M_3(R)+\sum_{f\in\partial T}z_f\int_f\frac{M_3(r)-M_3(R)}{r^3}\,\dd A,
+\]
+$z_f=\nn_f\cdot(p_f-\xx)$. For a normalised kernel $4\pi M_3(1)=1$.
+\end{theorem}
+\begin{proof}
+$\nabla\!\cdot(\yy M_3/r^3)=3M_3/r^3+r(M_3'/r^3-3M_3/r^4)=M_3'/r^2=g$ [M]. Apply the divergence theorem on $T\setminus B_\varepsilon(\xx)$
+(small-sphere flux $-4\pi M_3(\varepsilon)\to0$). For the constant part, $\sum_fz_f\int_f\dd A/r^3$ is the total solid angle subtended by $\partial T$
+($=4\pi$ inside, $0$ outside).
+\end{proof}
+The integrand on each face is compact: it is a 2D value-type integral in the face plane with profile $z_f(M_3(r)-M_3(R))/r^3$,
+$r^2=\rho^2+z_f^2$, to which \cref{thm:value} (in the plane, with the foot of $\xx$) applies, leaving edge integrals of the form
+$\int r^m/(s^2+w_e^2)\,\dd s$ with $r^2=s^2+w_e^2+z_f^2$, which are elementary (solid-angle-type $\arctan(sz/(wr))$,
+cf.\ Van Oosterom--Strackee~\cite{vanoosterom1983}).
+
+\paragraph{Status.} The identity above is proved; the \emph{evaluation} (edge primitives in 3D, moment recursion in the face plane, comparison with the
+planar $\lambda_3$ and the sphere closed form, polyhedral potentials) is a plan. \status{P}
+The divergence step is verified symbolically; nothing else in this section has been numerically checked.

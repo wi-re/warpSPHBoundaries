@@ -1,0 +1,32 @@
+\section{Fields on elements: FEM nodal weights}\label{sec:fem}
+
+Fluid--solid interactions weight a field $A$ living on the solid. On a triangle $T$ let
+$A(\xx')=\sum_iA_iN_i(\xx')$ with Lagrange basis $N_i$ of degree $p$.
+
+\begin{proposition}[Nodal weights]\label{prop:fem}
+Expand $N_i(\xx+\yy)=\sum_{|\alpha|\le p}B_{\alpha i}(\xx)\,\yy^\alpha$, $B_{\alpha i}=\partial^\alpha N_i(\xx)/\alpha!$ (exact, finite). Then
+\begin{align}
+ \int_TA\,W\,\dd\xx'&=\sum_iA_iw_i,&& w_i=\sum_\alpha B_{\alpha i}\,m_\alpha,\\
+ \int_TA\,\nabla_{\xx} W\,\dd\xx'&=\sum_iA_iG_i,&& G_i=\sum_\alpha B_{\alpha i}\,g_\alpha,
+\end{align}
+with $g_{\alpha}=\partial_{\xx} m_\alpha+\sum_j\alpha_j\ee_j\,m_{\alpha-\ee_j}$ (the sum runs over the components $j$; $m_{\alpha-\ee_j}=0$ if $\alpha_j=0$), where $\partial_{\xx} m_\alpha$ is
+given by \cref{cor:fullspace}.
+\end{proposition}
+\begin{proof}
+The first two are linearity. For $g_\alpha$: $m_\alpha=\int_T\yy^\alpha W(|\yy|)$ with $\yy=\xx'-\xx$, so
+$\partial_{x_j}m_\alpha=-\alpha_jm_{\alpha-\ee_j}+g_{\alpha,j}$, because $\partial_{x_j}$ acts on both $\yy^\alpha$ and on $W$,
+whereas $g_\alpha$ differentiates $W$ only.
+\end{proof}
+Hence the weights need exactly the moments $m_\alpha$, $|\alpha|\le p$ ($p\le3$ gives $k\le3$ for $w_i$, and $k\le3$ edge
+integrals for $G_i$), computed by \cref{thm:recursion}. \status{N}
+
+\paragraph{Special cases.} $p=0$: $w=m_0$. $p=1$: $N_i$ is the barycentric coordinate, $N_i(\xx+\yy)=N_i(\xx)+\nabla N_i\cdot\yy$, so $w_i=N_i(\xx)\,m_0+\nabla N_i\cdot m_1$.
+Partition of unity $\sum_iw_i=\int_TW$ follows from $\sum_iN_i\equiv1$. If $T$ covers the support, the
+weights reproduce polynomial fields of degree $\le p$ exactly ($\int A\,W$ and $\int A\nabla_{\xx} W=\int\nabla A\,W$). \status{N}
+
+\paragraph{Conditioning.} The formulas are exact; their floating-point behaviour is not. Three exact
+reformulations remove the loss: (1)~for polygons inside the support one may use the potential
+$\tilde\Phi=\int_0^rtf$ in \eqref{eq:recursion}, because it differs from $\Phi$ by the constant $C=M_f(r_c)$ (\cref{thm:value}), whose total contribution
+$C\big(\oint n_i\yy^\beta\dd s-\beta_i\int_T\yy^{\beta-\ee_i}\big)$ vanishes by the divergence theorem; (2)~the same for $g_\alpha$, which can be written $g_{\alpha,j}=-\int_T\yy^{\alpha+\ee_j}L$ with $L=W'/r$
+(because $\partial_{x_j}W=-L\,y_j$); the potential of $L$ is $\Phi[L]=W$, and the shifted potential $\tilde\Phi=W-W(0)$ plays the role of $\tilde\Phi$ in (1); (3)~for far elements the integrand $N_iW$ is smooth and Gauss quadrature converges
+spectrally. The practical error tables are in the project notes and tests and are not reproduced here. \status{N}

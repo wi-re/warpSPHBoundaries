@@ -1,0 +1,91 @@
+\section{Curvature expansion of the value integral}\label{sec:curv}
+
+For smooth boundaries with radius of curvature large compared to $h$ we expand $\lambda$ in $\kappa$, the
+curvature at the closest boundary point, instead of adding edges. Set $h=1$ and take $\kappa>0$ for a locally convex solid
+(a disk of radius $R$ has $\kappa=1/R$) and $\kappa<0$ for a concave one (the solid is the complement of a disk).
+$\varphi(\sigma)=W(\sqrt\sigma)$, $\sigma=|\yy|^2$, extended by $0$ for $\sigma>1$. The idea: in the coordinates
+(arclength $t$ of the closest boundary point, depth $s$) the curved solid is a flat strip with the weight $1-\kappa s$,
+and the squared distance to the particle differs from the flat one by a power series in $\kappa$; Taylor-expand $\varphi$ in it.
+
+\subsection{Statement}
+\begin{theorem}[Second-order closest-point expansion]\label{thm:curv}
+For a disk (more generally, a boundary whose curvature is constant over the support) and a particle at distance $d>0$ outside,
+\begin{equation}\label{eq:curv}
+ \lambda(d,\kappa)=F_0(d)+\kappa F_1(d)+\kappa^2F_2(d)+O(\kappa^3),
+\end{equation}
+where, with $y_1=t$, $y_2=d+s$ and integrals over the half plane $\{y_2\ge d\}$,
+\begin{align}
+ F_0&=\int\varphi,\qquad F_1=\int\Big[\varphi'\,y_1^2\,(2d-y_2)-(y_2-d)\,\varphi\Big],\\
+ F_2&=\int\Big[\varphi'\big(-d(y_2-d)y_1^2-\tfrac{y_1^4}{12}\big)+\tfrac12\varphi''y_1^4(2d-y_2)^2-(y_2-d)\varphi'y_1^2(2d-y_2)\Big].
+\end{align}
+$F_0=\lambda_2$ of \cref{sec:planar2}. The gradient is $\nabla_{\xx}\lambda=\partial_d\lambda\,\hat\nn$ (outward normal) in the constant-curvature case.
+\end{theorem}
+\begin{proof}
+\emph{Step 1 (coordinates).} Write a solid point as $\xx'=c(t)-s\,\nn(t)$, $s$ the depth into the solid and $t$ arclength of the closest
+boundary point. For the disk the polar area element $\rho'\dd\rho'\dd\theta$ with $\rho'=R-s$, $\theta=\kappa t$ gives
+$\dd\xx'=(1-\kappa s)\,\dd t\,\dd s$. The same holds for $\kappa<0$ ($\rho'=|R|+s$).\\
+\emph{Step 2 (distance).} The particle is at distance $R+d$ from the centre, so by the law of cosines
+\begin{align*}
+ |\yy|^2&=(d+s)^2+(1+\kappa d)(1-\kappa s)\,\frac{2(1-\cos\kappa t)}{\kappa^2}\\
+ &=\underbrace{(d+s)^2+t^2}_{\sigma_0}+\kappa\,t^2(d-s)+\kappa^2\Big(-d\,s\,t^2-\frac{t^4}{12}\Big)+O(\kappa^3),
+\end{align*}
+using $2(1-\cos\kappa t)/\kappa^2=t^2-\kappa^2t^4/12+O(\kappa^4)$ and $(1+\kappa d)(1-\kappa s)=1+\kappa(d-s)-\kappa^2ds$.
+\emph{Step 3 (Taylor).} With $\delta_1=t^2(d-s)$ and $\delta_2=-dst^2-t^4/12$, expand
+$(1-\kappa s)\,\varphi(\sigma_0+\kappa\delta_1+\kappa^2\delta_2)$ to $O(\kappa^2)$:
+\[
+ \kappa^1:\ \varphi'\delta_1-s\,\varphi,\qquad
+ \kappa^2:\ \varphi'\delta_2+\tfrac12\varphi''\delta_1^2-s\,\varphi'\delta_1 .
+\]
+These are exactly the integrands of $F_1$ and $F_2$ (with $d-s=2d-y_2$ and $s=y_2-d$).\\
+\emph{Step 4 (remainder).} Step~3 is the Taylor expansion of $\varphi$ about $\sigma_0$ with increment
+$\delta\sigma=\kappa\delta_1+\kappa^2\delta_2+O(\kappa^3)=O(\kappa)$ on the (bounded) support. For $d\ge d_0>0$ one has $\sigma_0\ge d_0^2$, so $\sigma\ge d_0^2-O(\kappa)$ stays away from
+$\sigma=0$, where $\varphi''$ is singular for some kernels ($\varphi''\sim15/r$ for w2 and $\frac94/r$ for the cubic; it is bounded for w4 and w6). Away from $0$, $\varphi''$ is
+continuous and piecewise $C^1$, hence Lipschitz, for all four kernels: the cubic has $W'''$ jumping at $q=1$ and $q=\frac12$, but $\varphi''$ involves
+only $W$, $W'$ and $W''$, which are continuous. The Taylor remainder after the quadratic term is therefore bounded by $\frac16\mathrm{Lip}(\varphi'')\,|\delta\sigma|^3=O(\kappa^3)$,
+uniformly on $d\ge d_0$. (The constant degrades as $d_0\to0$ because of the singularity; this is why the limit $d\to0$ needs separate treatment.)
+\end{proof}
+Steps 1--3 are verified symbolically \status{M, maple/14 and maple/20}.
+
+\subsection{Evaluation}
+Each integral is a sum of half-plane \emph{moments} $m_{ij}[f]=\int_{y_2\ge d}y_1^iy_2^jf(r)$ of the exact piecewise polynomial profiles $W$,
+$\varphi'=W'/(2r)$ and $\varphi''=(W'/r)'/(4r)$. As polynomials in $r$ these reach down to $r^{-1}$ for w2 (where $\varphi''=15/r+\dots$), to $r^{0}$ for w4 and w6,
+and for the cubic to $r^{-3}$ in each block (the singular parts of the two blocks cancel to a net $\frac94/r$). Each moment is a single edge
+instance of \cref{thm:recursion} (here $i+j\le6$; the recursion is general, its symbolic check in the project covers $k\le4$): no new quadrature. In practice $F_k(d)$ are tabulated once as one-dimensional functions.
+
+\subsection{Accuracy}
+The measured errors (Wendland C4, $d=0.3h$) follow the predicted orders:
+\begin{center}
+\begin{tabular}{rrrrr}
+\toprule
+$\kappa h$ & exact $\lambda$ & planar $F_0$ & $+\kappa F_1$ & $+\kappa^2F_2$\\
+\midrule
+1/2 & 0.09017 & $9.0\!\cdot\!10^{-3}$ & $9.9\!\cdot\!10^{-4}$ & $1.4\!\cdot\!10^{-4}$\\
+1/4 & 0.09444 & $4.7\!\cdot\!10^{-3}$ & $2.6\!\cdot\!10^{-4}$ & $1.8\!\cdot\!10^{-5}$\\
+1/8 & 0.09674 & $2.4\!\cdot\!10^{-3}$ & $6.8\!\cdot\!10^{-5}$ & $2.3\!\cdot\!10^{-6}$\\
+1/16& 0.09794 & $1.2\!\cdot\!10^{-3}$ & $1.7\!\cdot\!10^{-5}$ & $3.0\!\cdot\!10^{-7}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+(errors against the exact disk, \status{N}; recomputed independently with a shell quadrature of the exact disk and the half-plane integrals $F_0,F_1,F_2=0.09917,\,-0.01999,\,0.004497$, all entries reproduced);
+successive halving of $\kappa$ divides the three error columns by $\approx2,4,8$.
+
+\subsection{General curves}
+\begin{remark}[Variable curvature]\label{rem:varcurv}
+Let the boundary have $\kappa(t)=\kappa+\kappa't+\tfrac12\kappa''t^2+\dots$ about the closest point of the particle. Count orders by dimension:
+$\kappa\sim h^{-1}$, $\kappa'\sim h^{-2}$, $\kappa''\sim h^{-3}$. Thus $\kappa'$ could enter \cref{eq:curv} at order $2$, next to $\kappa^2$.
+It does not: the particle lies on the normal through the closest point, so the reflection $t\mapsto-t$ maps the particle to itself, sends $\kappa'\mapsto-\kappa'$ and
+leaves $\lambda$ unchanged. Hence $\lambda$ is even in $\kappa'$ and has no term linear in $\kappa'$; the first correction beyond \cref{eq:curv} is $\kappa''$ (and
+$\kappa'^2$ at order $4$), both of order $\ge3$. \status{N}
+The \emph{gradient} is different. With $\kappa(\xx)$ the curvature at the closest boundary point, $\nabla\lambda=\partial_d\lambda\,\hat\nn+F_1\nabla\kappa+\dots$
+($\kappa$ is constant along normals), so there is a tangential part $\kappa'F_1\,\hat{\bm t}$ of order $2$. The gradient formula of \cref{thm:curv}
+therefore has an $O(\kappa^2)$ tangential error unless $\kappa'F_1$ is added; for constant curvature it is exact to the order of the value expansion. At the next order the
+tangential component is $\kappa'\big[F_1+\kappa(2F_2-dF_1)\big]$: the factor $2F_2$ is $\partial_\kappa(\kappa^2F_2)$, and $-dF_1$ comes from $\partial_x\kappa=\kappa'/(1+\kappa d)$ (a tangential
+displacement $\varepsilon$ of the particle moves the closest point by $\varepsilon/(1+\kappa d)$). \status{N}
+Numerically (w4, $d=0.3$, boundary $y=-\frac\kappa2x^2-\frac{\kappa'}6x^3$, \path{scripts/derivation_checks/paper_curvature_variable.py}): $\lambda(\kappa,\kappa')-\lambda(\kappa,0)$ falls by $4$ when $\kappa'$ is halved (even in $\kappa'$);
+the parabola with $\kappa'=\kappa^2$ is reproduced by $F_0+\kappa F_1+\kappa^2F_2$ with error falling by $8.0$ per halving of $\kappa$; the tangential gradient at $(\kappa,\kappa')=(\frac18,\frac1{64})$ is
+$-2.840\cdot10^{-4}$ against $-3.123\cdot10^{-4}$ for $\kappa'F_1$ alone and $-2.830\cdot10^{-4}$ with the correction.
+\end{remark}
+\begin{remark}[Validity]
+The expansion is asymptotic in $\kappa h$ (usable for $\kappa h\lesssim\frac14$ at $10^{-5}$), requires reach $\ge h$ on the solid side, a single
+boundary sheet in the support, and $R>h-d$ so the support does not engulf the disk; the limit $d\to0$ needs the limit form of the negative-power primitives.
+\end{remark}

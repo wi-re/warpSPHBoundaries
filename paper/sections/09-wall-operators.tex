@@ -1,0 +1,95 @@
+\section{Wall operators built on the edge calculus}\label{sec:wall}
+
+The same edge integrals provide terms of the SPH momentum equation. Here $\yy=\xx'-\xx$ and $\xx$ is a fluid particle,
+the solid half plane being locally the wall. Quantities are 2D. The solid is modelled as a continuum of mass $m_{\rm wall}$ per unit area, measured in units of
+the reference density $\rho_0$, so a sum $\sum_jV_j(\cdot)$ over solid particles of volume $V_j=m_j/\rho_j$ becomes $\frac{m_{\rm wall}}{\rho_i}\int_S(\cdot)\,\dd\xx'$ with $\rho_i$ the density
+of the fluid particle (also in units of $\rho_0$).
+
+\subsection{The wall Laplacian}
+\begin{proposition}[Green form]\label{prop:lapwall}
+For the solid polygon $S$ define $\lambda_\Delta(\xx):=\int_S\nabla^2_{\xx}W(|\xx-\xx'|)\,\dd\xx'$. Then
+\begin{equation}\label{eq:lapwall}
+ \lambda_\Delta=\sum_ez_e\int_{\chord_e}\frac{W'(r)}{r}\,\dd s.
+\end{equation}
+For a fluid-side particle $z_e<0$ and $W'<0$, so $\lambda_\Delta>0$; $\lambda_\Delta=0$ when the support lies inside $S$ or is disjoint from it.
+\end{proposition}
+\begin{proof}
+$\nabla_{\xx}^2W(|\xx-\xx'|)=\nabla_{\xx'}^2W$, so Green's theorem gives $\oint_{\partial S}\partial_nW\,\dd s$ with $\nabla_{\xx'}W=W'(r)\yy/r$ and $\nn_e\!\cdot\!\yy=z_e$.
+If $\xx\in S$ excise a small disk: its boundary flux is $2\pi\varepsilon\,W'(\varepsilon)\to0$ since $W'(r)=O(r)$ at the centre, so there is no angle term;
+the outer support circle contributes nothing because $W'(1)=0$. If the support lies inside $S$ the boundary is outside the support, so the sum is empty; if disjoint, the chords are empty.
+\end{proof}
+Numerically, \cref{eq:lapwall} agrees with a ray quadrature of $\int_S\nabla^2W$ over a non-convex polygon to $\le8\cdot10^{-11}$ for all four kernels, for a particle inside, outside and near an edge
+(\path{paper_edge_identities_k6.py}). \status{N}
+
+\paragraph{Evaluation with the existing operators.} Let $L=W'/r$. Then $W'=rL$, $W''=L+rL'$ and $\nabla^2W=W''+W'/r=2L+rL'$ in 2D [M]. With the density $\lambda[L]=\int_SL$ and
+the covariance $\mathrm{Cov}[L]=\int_S\yy\otimes\nabla_{\xx} L$ (where $\nabla_{\xx} L=-L'\yy/r$ for $\yy=\xx'-\xx$, hence $\operatorname{tr}\mathrm{Cov}[L]=-\int_SrL'$),
+\begin{equation}\label{eq:lapscene}
+ \lambda_\Delta=2\lambda[L]-\operatorname{tr}\mathrm{Cov}[L].
+\end{equation}
+Registering $L$ rather than $\nabla^2W$ as the kernel is essential: inside a body the indicator contribution is $2\cdot1-\operatorname{tr}(\mathbb 1)=0$ and cancels
+(over all of $\R^2$, $\mathrm{Cov}=\mathbb 1\int L$ by parts, so $2\int L-2\int L=0$, as $\int\nabla^2W=0$ demands),
+whereas a directly registered $\nabla^2W$ would give a spurious constant: the scene assumes $\int K=1$ for a registered kernel, but $\int\nabla^2W=0$.
+
+\paragraph{Wendland kernels: $L$ is a multiple of an ordinary kernel.} With $W=C_2h^{-2}\what(q)$ one finds $W'/r=C_2h^{-4}\,\what'(q)/q$ and
+\[
+ \what_{\rm w2}'/q=-20(1-q)^3,\qquad \what_{\rm w4}'/q=-\tfrac{56}3\,(1+5q)(1-q)^5=-\tfrac{56}3\,\big(6(1-q)^5-5(1-q)^6\big)\quad\text{[M]}.
+\]
+Normalise the shapes $(1-q)^3$ and $6(1-q)^5-5(1-q)^6$ as 2D kernels $K_\ell=C_\ell\,\mathrm{shape}(q)/h^2$ with $2\pi C_\ell\int_0^1q\,\mathrm{shape}\,\dd q=1$:
+since $\int_0^1q(1-q)^3\dd q=\frac1{20}$ and $\int_0^1q(1+5q)(1-q)^5\dd q=\frac3{56}$, $C_\ell=\frac{10}\pi$ (w2) and $\frac{28}{3\pi}$ (w4). Then $L=f\,K_\ell$ with
+\[
+ f=\frac{P\,C_2}{C_\ell\,h^2}=-\frac{14}{h^2}\ \text{(w2: }P=-20,\ C_2=\tfrac7\pi),\qquad f=-\frac{18}{h^2}\ \text{(w4: }P=-\tfrac{56}3,\ C_2=\tfrac9\pi),
+\]
+where $P$ is the constant in front of the shape in the display above. \status{M}
+
+\subsection{The viscosity coefficient}
+\begin{lemma}\label{lem:nu}
+For every normalised radial kernel in $n$ dimensions, $\int_{\R^n}r\,W'(r)\,\dd\xx=-n$; for $n=2$, $-2$.
+\end{lemma}
+\begin{proof}
+In 2D, $2\pi\int_0^1r^2W'\dd r=2\pi\big([r^2W]_0^1-2\int_0^1rW\dd r\big)=-2$, since $2\pi\int rW\,\dd r=1$ is the normalisation. (Likewise in $n$ dimensions by one integration by parts.) \status{M}
+\end{proof}
+
+The solver's artificial viscosity is, for fluid pairs, the pairwise sum (with $\mathrm{fac}=\alpha c_0h/\xi$ the combination of the scheme's constants)
+\begin{equation}\label{eq:pairwise}
+ \bm a_i=\mathrm{fac}\sum_j\frac{m_j}{\bar\rho_{ij}}\,\frac{(\bm v_i-\bm v_j)\cdot(\xx_i-\xx_j)}{|\xx_i-\xx_j|^2}\,\nabla_iW_{ij},
+\end{equation}
+which we take from the code (\texttt{deltasph2d.py}) as given. Its continuum limit fixes the coefficient $\nu_{\rm eff}$:
+
+\begin{proposition}[Pairwise bulk term]\label{prop:nueff}
+For a smooth velocity field the sum \cref{eq:pairwise} converges to $\bm a=\dfrac{\mathrm{fac}}{2(n+2)}\big(\nabla^2\bm v+2\nabla\nabla\!\cdot\bm v\big)$; in 2D $\nu_{\rm eff}=\mathrm{fac}/8=\alpha c_0h/(8\xi)$ is the coefficient of $\nabla^2\bm v$. \status{M (moments), N (lattice), A (form \cref{eq:pairwise})}
+\end{proposition}
+\begin{proof}
+Replace $\sum_jm_j/\bar\rho_{ij}$ by $\int\dd\xx'$, put $\yy=\xx'-\xx$, $\delta\bm v=\bm v(\xx')-\bm v(\xx)$. Then $\bm v_i-\bm v_j=-\delta\bm v$, $\xx_i-\xx_j=-\yy$ and $\nabla_iW_{ij}=-W'\yy/r$, so
+$a_i=-\mathrm{fac}\int\frac{W'}{r^3}\,y_i\,y_k\,\delta v_k\,\dd\xx'$. Taylor-expand $\delta v_k=y_l\partial_lv_k+\frac12y_ly_m\partial_l\partial_mv_k+\dots$.
+Odd moments vanish by symmetry. For the quadratic term the isotropic fourth moment
+\[
+ \int y_iy_ky_ly_m\,F(r)\,\dd\xx=\frac{\delta_{ik}\delta_{lm}+\delta_{il}\delta_{km}+\delta_{im}\delta_{kl}}{n(n+2)}\int r^4F\,\dd\xx
+\]
+(check by contracting $i=k$, $l=m$) with $F=W'/r^3$ gives $\int r^4F=\int rW'=-n$ by \cref{lem:nu}. Hence
+$a_i=-\mathrm{fac}\cdot\frac12\cdot\frac{-n}{n(n+2)}\big(\partial_l\partial_lv_i+2\partial_i\partial_kv_k\big)$, which is the claim.
+\end{proof}
+Numerically, for generic quadratic velocity fields and all four kernels the continuum integral reproduces $\frac18(\nabla^2\bm v+2\nabla\nabla\!\cdot\bm v)$ to $10^{-13}$ (cubic $2\cdot10^{-9}$, quadrature of the knot) and the lattice sum \cref{eq:pairwise} with $h/\Delta x=16$ to $\le1.2\cdot10^{-5}$ (\path{scripts/derivation_checks/paper_viscosity_limits.py}). The only moment of the kernel that survives is $\int rW'$, which is fixed by the normalisation: the coefficient does not depend on the kernel family.
+Note that the bulk term contains the extra part $2\nabla\nabla\!\cdot\bm v$; the wall terms below carry only the $\nabla^2$ part, so wall and bulk share the Laplacian coefficient but are not one operator.
+
+\subsection{Free-slip wall term}
+A Laplacian estimate of the smoothed field, exact for the convolved field, is $\nabla^2\bm v(\xx)\simeq\int(\bm v(\xx')-\bm v(\xx))\,\nabla^2W(|\xx-\xx'|)\,\dd\xx'$ (because $\int\nabla^2W=0$).
+(Equivalently, by $\int rW'=-n$, $\nabla^2\bm v=-2\int(\bm v'-\bm v)\,W'/r$, the Morris form; both estimators converge as $O(h^2)$, error ratios $4.0$ per halving of $h$ for w2, w4 and the cubic.) The solid part of the integral needs ghost values. With the free-slip mirror, constant normal $\nn$ per particle (pointing \emph{into} the wall) and
+$u_n=(\bm v-\bm v_w)\cdot\nn$, the ghost velocity is the mirror image, $\bm v_{\rm ghost}-\bm v=-2u_n\nn$, constant over the solid. Then
+\begin{equation}\label{eq:freeslip}
+ \bm a_{\rm wall}=\nu_{\rm eff}\,\frac{m_{\rm wall}}{\rho_i}\int_S(\bm v_{\rm ghost}-\bm v)\,\nabla^2W\,\dd\xx'=-2\nu_{\rm eff}\,\frac{m_{\rm wall}}{\rho_i}\,u_n\,\lambda_\Delta\,\nn .
+\end{equation}
+Only the normal relative velocity is damped, and it is damped when moving into the wall ($u_n>0$, $\lambda_\Delta>0$). This differs from the pairwise free-slip form near the wall: $\lambda_\Delta\to0$
+linearly as the particle reaches the wall (the support loses half its disk and the odd mirror field vanishes), while the pairwise coefficient does not, by design. \status{A}
+
+\subsection{No-slip flux term}
+Following Chiron et al.~\cite{chiron2019}, $\int_{\chord}W\,\dd s$ over the cut face is the per-edge channel of $\nabla\lambda$ (\cref{thm:grad}). Define
+$|G|=m_{\rm wall}\int_{\chord}W\,\dd s$ and
+\begin{equation}
+ \bm a_{\rm wall}=-2\nu_{\rm eff}\,(\bm v_i-\bm v_w)\,|G|\,/\,(\rho_i\,d_b),\qquad d_b=\max(d,d_{\min}).
+\end{equation}
+This is a \emph{modelling} step: it replaces the normal derivative at the wall by the one-sided difference $(\bm v-\bm v_w)/d$ (neglecting the tangential gradient, Chiron et al.\ Eq.~89--90) and uses the viscous coefficient $\nu_{\rm eff}$
+of the scheme (an artificial coefficient, about $3000$ times the kinematic viscosity of water in the tested tank). The factor $2$ is the same $2$ as in the Morris form above ($\nabla^2\bm v=2\int(\bm v-\bm v')W'/r$, a consequence of $\int rW'=-n$), which in Chiron's operator multiplies the fluid sum and the wall surface term alike: their Eq.~(92) is
+$\frac2{\gamma_i}\big[\sum_j\omega_j(u_i-u_j)\frac{\xx_i-\xx_j}{|\xx_i-\xx_j|^2}\!\cdot\!\nabla_iW_{ij}+\sum_s s_s\frac{u_i-u_s}{d_n}W_{is}\big]$, and in their derivation (Eq.~(84)--(91)) the $2$ in front of the
+surface term comes from $\nabla f(\xx)\!\cdot\!\nn\approx\nabla f(\yy)\!\cdot\!\nn$ in the boundary flux $\int_{\partial\Omega}(\nabla f(\xx)\!\cdot\!\nn+\nabla f(\yy)\!\cdot\!\nn)W\,\dd S$. (With $\nn$ outward from the fluid their
+$d_n$ is signed so that the wall term opposes $u_i-u_s$, as in the formula above.) None of
+this follows from the preceding calculus, so only the identity $|G|=m_{\rm wall}\int W\,\dd s$ is a theorem here. \status{A}

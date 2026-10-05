@@ -1,0 +1,88 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{booktabs,array}
+\usepackage[hidelinks]{hyperref}
+\usepackage[capitalise,nameinlink]{cleveref}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\ind}{\mathbb{1}}
+\newcommand{\what}{\widehat W}
+\newcommand{\ee}{\bm e}
+\newcommand{\nn}{\bm n}
+\newcommand{\tv}{\bm t}
+\newcommand{\xx}{\bm x}
+\newcommand{\yy}{\bm y}
+\newcommand{\sgn}{\operatorname{sgn}}
+\newcommand{\atan}{\operatorname{atan2}}
+\newcommand{\asinh}{\operatorname{asinh}}
+\newcommand{\Lap}{\Delta}
+\newcommand{\chord}{\mathrm{chord}}
+\newcommand{\status}[1]{\hfill\textsf{[#1]}}
+
+\title{Exact and asymptotic boundary integrals for SPH kernels:\\
+divergence-theorem edge reductions, closed forms and curvature expansions}
+\author{curvatureBoundaries project}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We collect, in one logical chain, the mathematics behind the boundary integrals used to couple
+smoothed-particle-hydrodynamics (SPH) fluids to solid boundaries: the kernel integral
+$\lambda(\xx)=\int_S W(|\xx-\xx'|)\,\dd\xx'$ over a solid $S$, its gradient, its moments, and the
+nodal weights of fields extended into the solid.  We prove (i) closed forms for planar and spherical
+boundaries with Wendland and cubic-spline kernels, (ii) a divergence-theorem reduction of area
+integrals over polygons to one-dimensional edge integrals, whose integrands are elementary for
+piecewise-polynomial kernels, (iii) a compact-potential recursion for higher moments and its use for
+FEM nodal weights, (iv) a closest-point curvature expansion and a slender-body (mean-value) series
+for boundaries that are curved or thin compared to the support radius, and (v) the wall Laplacian
+and wall-viscosity operators built on the same objects.  Every statement is tagged with how it was
+checked (symbolically in Maple, against independent quadrature, or not at all), and an appendix lists
+the problems found while auditing the existing note collection.
+\end{abstract}
+
+\tableofcontents
+
+\input{sections/01-setting}
+\input{sections/02-planar-sphere}
+\input{sections/03-edge-calculus}
+\input{sections/04-fem-weights}
+\input{sections/05-closed-boundaries}
+\input{sections/06-curvature}
+\input{sections/07-slender}
+\input{sections/08-three-dimensions}
+\input{sections/09-wall-operators}
+\input{sections/10-verification}
+
+\appendix
+\input{sections/A-audit}
+
+\begin{thebibliography}{9}
+\bibitem{wendland1995} H.~Wendland, Piecewise polynomial, positive definite and compactly supported
+radial functions of minimal degree, \emph{Adv.\ Comput.\ Math.}\ 4 (1995) 389--396.
+\bibitem{winchenbach2020} R.~Winchenbach, H.~Akhunov, A.~Kolb, Semi-analytic boundary handling below
+particle resolution for smoothed particle hydrodynamics, \emph{ACM Trans.\ Graph.}\ 39(6) (2020).
+\bibitem{winchenbach2025} R.~Winchenbach, A.~Kolb, arXiv:2507.21686 (2025), Sec.~6.2 (FEM-weighted
+boundary integrals, validation problems).
+\bibitem{chiron2019} L.~Chiron et al., SPH wall boundary conditions for three-dimensional complex
+geometries (2019), the wall Laplacian of Sec.~6.1 (renormalised Morris operator).
+\bibitem{vanoosterom1983} A.~Van Oosterom, J.~Strackee, The solid angle of a plane triangle,
+\emph{IEEE Trans.\ Biomed.\ Eng.}\ 30 (1983) 125--126.
+\bibitem{pizzetti1909} P.~Pizzetti, Sulla media dei valori che una funzione dei punti dello spazio
+assume alla superficie di una sfera, \emph{Rend.\ Lincei} 18 (1909) 182--185.
+\end{thebibliography}
+
+\end{document}
