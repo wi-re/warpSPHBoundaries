@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import torch
 
-from edgebound import np2d, torch2d
+from edgebound.edge import np2d, torch2d
 
 NAMES = ["cubic", "w2", "w4", "w6"]
 

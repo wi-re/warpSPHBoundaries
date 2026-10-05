@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 
 import edgebound as eb
-from edgebound import fem, np2d, np_fem
-from edgebound.kernels import KERNELS, WARPSPH_C2_PI, disk_moment, peval
-from edgebound.mpq import mpq
+from edgebound.edge import fem, np2d, np_fem
+from edgebound.edge.kernels import KERNELS, WARPSPH_C2_PI, disk_moment, peval
+from edgebound.edge.mpq import mpq
 
 from .conftest import rand_point, rand_triangle
 

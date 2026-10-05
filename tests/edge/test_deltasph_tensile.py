@@ -21,9 +21,9 @@ import torch
 import warp as wp
 from warpSPHCore import KernelFunctions
 
-from edgebound.deltasph2d import DeltaSPHConfig, hydrostatic_tank
-from edgebound.dfsph2d import F64
-from edgebound.tensile import tensile_vector_scene
+from edgebound.sim.deltasph2d import DeltaSPHConfig, hydrostatic_tank
+from edgebound.sim.dfsph2d import F64
+from edgebound.scene.tensile import tensile_vector_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 

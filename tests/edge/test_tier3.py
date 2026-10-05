@@ -6,9 +6,9 @@ import pytest
 import sympy as sp
 
 from curvbound import planar2d
-from edgebound import tier3
-from edgebound.kernels import kernel as get_kernel
-from edgebound.mpq import mpq
+from edgebound.edge import tier3
+from edgebound.edge.kernels import kernel as get_kernel
+from edgebound.edge.mpq import mpq
 
 NAMES = ["cubic", "w2", "w4", "w6"]
 
@@ -86,7 +86,7 @@ def test_F_k_regular_as_d_to_zero_and_sign_of_F1():
 def test_tier3_vs_tier2_accuracy_report():
     """kappa h = 1/4, d = 0.3: second order expansion (no mesh) vs polygons with edge length h/4, h/8 (tier 2)."""
     import numpy as np
-    from edgebound import np2d
+    from edgebound.edge import np2d
     d, kap = F(3, 10), F(1, 4)
     ex = float(tier3.lambda_exact_disk("w4", d, kap))
     e2 = abs(float(tier3.lambda_expansion("w4", d, kap, 2)) - ex)

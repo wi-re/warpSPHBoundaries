@@ -23,8 +23,8 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.scene import Body, ImplicitRep, Scene, SurfaceRep, VolumeRep
-from edgebound.tensile import tensile_factor, tensile_vector_scene
+from edgebound.scene.scene import Body, ImplicitRep, Scene, SurfaceRep, VolumeRep
+from edgebound.scene.tensile import tensile_factor, tensile_vector_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 LS = np.array([[0, 0], [2, 0], [2, 1], [1, 1], [1, 2], [0, 2]], dtype=float)
@@ -70,7 +70,7 @@ def dense_T(px, py, H, n=2000):
 def test_l_shape_matches_numpy_w4p5_gradient(device):
     """(a) the rotated, translated L-shape (center (0.3,-0.2), angle 0.7, H = 0.6, 200 pts seed 3): the scene route vs
     factor * np2d.gradient(family+"p5", stable=(16,8)) (<= 1e-10 max|T|), both families."""
-    from edgebound import np2d
+    from edgebound.edge import np2d
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(LS)], center=CENTER, angle=ANGLE)
     sc = Scene([body], device)
     pos = np.random.default_rng(3).uniform(-2, 3, (200, 2))
@@ -108,7 +108,7 @@ def test_flat_floor_matches_dense_grid_and_smoke(device):
 def test_negative_controls(device):
     """(c) negative controls: 1.01*T and -T differ from the grid of (b) by > 1e-3 relative; the plain monomial route for
     the L-shape of (a) (np2d.gradient without stable, same factor) differs from the stable result by > 1e-4 * max|T|."""
-    from edgebound import np2d
+    from edgebound.edge import np2d
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])
     sc = Scene([body], device)
     T = tensile_vector_scene(sc, np.array([[0.0, 0.3]]), 1.0, family="w4").cpu().numpy()[0]
@@ -136,7 +136,7 @@ def test_negative_controls(device):
 def test_guards(device):
     """(d) guards: family != "w2"/"w4" and non-SurfaceRep bodies raise NotImplementedError (family first, then the
     SurfaceRep guard)."""
-    from edgebound.implicitBodies import DiskBody
+    from edgebound.scene.implicitBodies import DiskBody
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])
     sc = Scene([body], device)
     pts = np.array([[0.0, 0.3]])
@@ -154,7 +154,7 @@ def test_guards(device):
 def test_idempotence(device):
     """(e) idempotence: two successive calls (each family) give identical results; warpbc.STABLE_KERNELS has exactly the
     keys it had after the first call (len unchanged after the second)."""
-    from edgebound import warpbc
+    from edgebound.edge import warpbc
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])
     sc = Scene([body], device)
     pts = np.array([[0.0, 0.3]])

@@ -29,7 +29,8 @@ import numpy as np, matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 %matplotlib inline
-from edgebound import np2d, np_fem, tier_select, fem_study
+from edgebound.edge import np2d, np_fem, tier_select
+from edgebound import fem_study
 """))
 
 cells.append(md("## 1. The value and the gradient field of one triangle (w4, h = 1, closed form, 4 µs per evaluation)"))

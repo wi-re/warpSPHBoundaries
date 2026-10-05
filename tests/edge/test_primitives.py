@@ -4,8 +4,8 @@ from fractions import Fraction as F
 import mpmath as mp
 import pytest
 
-from edgebound import primitives as pr
-from edgebound.mpq import mpq
+from edgebound.edge import primitives as pr
+from edgebound.edge.mpq import mpq
 
 
 Z = [F(3, 10), F(-3, 10), F(7, 5), F(1, 1000), F(-1, 10**9)]

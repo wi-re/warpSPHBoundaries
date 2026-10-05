@@ -15,8 +15,9 @@ import mpmath as mp
 import numpy as np
 import pytest
 
-from edgebound import cover, geometry as G, oracle
-from edgebound.core import GUARD, block_grad
+from edgebound.scene import cover
+from edgebound.edge import geometry as G, oracle
+from edgebound.edge.core import GUARD, block_grad
 
 TOL = 1e-12                     # relative to H^2 (see module docstring)
 

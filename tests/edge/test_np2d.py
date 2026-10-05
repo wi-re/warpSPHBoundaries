@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 import edgebound as eb
-from edgebound import fixtures as fx
-from edgebound import np2d
+from edgebound.edge import fixtures as fx
+from edgebound.edge import np2d
 
 DATA = fx.load()
 ELEMENTS = [c for c in DATA["cases"] if c["kind"] == "element" and len(c["polygon"]) == 3]

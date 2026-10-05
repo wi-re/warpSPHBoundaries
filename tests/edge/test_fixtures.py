@@ -11,8 +11,8 @@ import mpmath as mp
 import pytest
 
 import edgebound as eb
-from edgebound import fixtures as fx
-from edgebound.mpq import mpq
+from edgebound.edge import fixtures as fx
+from edgebound.edge.mpq import mpq
 
 DATA = fx.load()
 CASES = DATA["cases"]

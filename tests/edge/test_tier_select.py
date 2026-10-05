@@ -1,7 +1,7 @@
 """2D tier-selection study: ordering of the models vs R/h for a disk obstacle (records the regime map used in docs/tier-selection-2d.md)."""
 from fractions import Fraction as F
 
-from edgebound import tier_select
+from edgebound.edge import tier_select
 
 
 def test_regime_map():

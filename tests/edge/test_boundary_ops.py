@@ -9,10 +9,10 @@ import torch
 import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from edgebound import boundaryOps as B
-from edgebound import np2d, np_fem
-from edgebound.kernels import disk_moment, KERNELS
-from edgebound.mpq import mpq
+from edgebound.scene import boundaryOps as B
+from edgebound.edge import np2d, np_fem
+from edgebound.edge.kernels import disk_moment, KERNELS
+from edgebound.edge.mpq import mpq
 
 DEVICES = ["cpu"] + (["cuda:0"] if wp.is_cuda_available() else [])
 TD = torch.float64

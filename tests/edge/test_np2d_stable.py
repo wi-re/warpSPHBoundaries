@@ -5,7 +5,7 @@ import mpmath as mp
 import numpy as np
 import pytest
 
-from edgebound import np2d
+from edgebound.edge import np2d
 from .test_np2d import ELEMENTS, KERNELS, ref, rel_geometry
 
 REPRESENTABLE = [c for c in ELEMENTS if not c["id"].startswith(("small_element-1e6", "small_element-1e3", "tiny_chord-both", "tiny_chord-grazing",

@@ -10,8 +10,8 @@ selected by cfg.wallViscosityForm ("laplacian" default, "pairwise" kept).
 import pytest
 import warp as wp
 
-from edgebound.deltasph2d import DeltaSPHConfig, hydrostatic_tank
-from edgebound.scene import Scene
+from edgebound.sim.deltasph2d import DeltaSPHConfig, hydrostatic_tank
+from edgebound.scene.scene import Scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 

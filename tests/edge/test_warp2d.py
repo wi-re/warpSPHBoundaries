@@ -4,7 +4,7 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound import np2d, torch2d, warp2d
+from edgebound.edge import np2d, torch2d, warp2d
 from .test_np2d import ELEMENTS, KERNELS, MOMS, ref, rel_geometry
 
 DEVICES = ["cpu"] + (["cuda:0"] if wp.is_cuda_available() else [])
@@ -72,7 +72,7 @@ def test_torch_bridge_custom_adjoint_equals_torch_autograd(device, k):
 
 
 def test_throughput_report(capsys):
-    """not a pass/fail benchmark: records the speed so the numbers in the docs can be regenerated (python -m edgebound.warp_bench)."""
+    """not a pass/fail benchmark: records the speed so the numbers in the docs can be regenerated (python scripts/bench/warp_bench.py)."""
     rng = np.random.default_rng(1)
     V = rng.uniform(-1, 1, (20000, 3, 2))
     X = rng.uniform(-.4, .4, (20000, 2))

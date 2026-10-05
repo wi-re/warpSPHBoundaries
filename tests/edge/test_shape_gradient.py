@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 import edgebound as eb
-from edgebound import np2d
-from edgebound.mpq import mpq
+from edgebound.edge import np2d
+from edgebound.edge.mpq import mpq
 
 from .conftest import rand_point, rand_triangle
 

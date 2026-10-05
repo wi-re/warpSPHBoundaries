@@ -34,8 +34,8 @@ import torch
 import warp as wp
 from scipy import integrate
 
-from edgebound.scene import Body, ImplicitRep, Scene, SurfaceRep, VolumeRep
-from edgebound.viscosity import lap_factor, lap_lambda_scene
+from edgebound.scene.scene import Body, ImplicitRep, Scene, SurfaceRep, VolumeRep
+from edgebound.scene.viscosity import lap_factor, lap_lambda_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64
@@ -133,7 +133,7 @@ def lap_brute(fam, p, H, poly, solid_inside=True, nr=500, nt=1000):
 def _lam_l(scene, pts, H, fam, device):
     """the Density of the registered kernel L = W'/r (kernel `l` + family), per body [B, N] (for the negative control 2 f lambda)."""
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-    from edgebound.scene import BodyField, sceneOperation
+    from edgebound.scene.scene import BodyField, sceneOperation
     lap_factor(H, fam)                                              # idempotent registration
     pos = torch.as_tensor(np.asarray(pts), dtype=F64, device=device)
     n = len(pos)
@@ -277,7 +277,7 @@ def test_scaling_and_moving_body(device):
 def test_guards(device):
     """(e) family='w9', an ImplicitRep body (DiskBody) and a VolumeRep body raise NotImplementedError before computing anything
     (messages as in the spec)."""
-    from edgebound.implicitBodies import DiskBody
+    from edgebound.scene.implicitBodies import DiskBody
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])
     sc = Scene([body], device)
     pts = np.array([[0.0, 0.3]])
@@ -346,7 +346,7 @@ def test_one_adjacency_per_call(device):
     without an adjacency argument, f (2 lambda - tr Cov) with lap_factor): max|diff| <= 1e-12 max|result| (same pairs, same
     arithmetic, summation noise 1e-16; a wrongly shared adjacency is >= 1e-1)."""
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-    from edgebound.scene import BodyField, sceneOperation
+    from edgebound.scene.scene import BodyField, sceneOperation
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(LS)], center=CENTER, angle=ANGLE)
     sc = Scene([body], device)
     pts = np.random.default_rng(3).uniform(-2, 3, (200, 2))

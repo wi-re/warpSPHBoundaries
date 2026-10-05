@@ -18,7 +18,7 @@ scripts = ["matplotlib"]
 test = ["pytest"]
 
 [tool.setuptools.packages.find]
-where = ["python"]
+where = ["src"]
 include = ["edgebound*", "curvbound*"]
 
 [tool.pytest.ini_options]

@@ -6,7 +6,7 @@ import mpmath as mp
 import pytest
 
 import edgebound as eb
-from edgebound.mpq import mpq
+from edgebound.edge.mpq import mpq
 
 from .conftest import KERNELS
 

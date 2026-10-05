@@ -10,7 +10,7 @@ import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation, DomainDescription
 import warpSPHCore as core
-from edgebound import dfsph2d as D
+from edgebound.sim import dfsph2d as D
 from edgebound import paths
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
@@ -106,7 +106,7 @@ def test_agrees_with_omnisph_reference():
     old = os.getcwd()
     os.chdir(scratch)
     try:
-        from edgebound import dfsph_ref as R
+        from edgebound.sim import dfsph_ref as R
         r = 0.005
         fmin, fmax = (0.02, 0.02), (0.5, 0.15)
         c = R.omni_case(r, fmin, fmax, top=0.4)
@@ -134,8 +134,8 @@ def test_agrees_with_omnisph_reference():
 
 
 # ----------------------------------------------------------------------------------------------------------------------------- force tracking
-from edgebound import dfsph_cases as C
-from edgebound.scene import BodyField, sceneOperation, Body, SurfaceRep, Scene
+from edgebound.sim import dfsph_cases as C
+from edgebound.scene.scene import BodyField, sceneOperation, Body, SurfaceRep, Scene
 
 
 @pytest.mark.parametrize("device", DEVICES)

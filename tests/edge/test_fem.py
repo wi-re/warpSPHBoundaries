@@ -5,9 +5,9 @@ import mpmath as mp
 import pytest
 
 import edgebound as eb
-from edgebound import fem
-from edgebound.kernels import disk_moment, kernel as get_kernel, pderiv, peval
-from edgebound.mpq import mpq
+from edgebound.edge import fem
+from edgebound.edge.kernels import disk_moment, kernel as get_kernel, pderiv, peval
+from edgebound.edge.mpq import mpq
 
 from .conftest import KERNELS, rand_point, rand_triangle
 from .test_value import _tiling
@@ -83,7 +83,7 @@ def test_3_gradient_reproduction(name, p, rng):
     # single element vs polar: grad_x W = -(W'/r) y
     T, x = rand_triangle(rng), rand_point(rng)
     got = fem.field_gradient_integral(T, x, name, p, fem.nodal_values(T, p, A))
-    from edgebound.oracle import polar_moment_profile
+    from edgebound.edge.oracle import polar_moment_profile
     kern = get_kernel(name)
     pieces = [(lo, hi, {j - 1: -d for j, d in enumerate(pderiv(list(c))) if d != 0}) for lo, hi, c in kern.pieces]
     ref = [mp.mpf(0), mp.mpf(0)]
