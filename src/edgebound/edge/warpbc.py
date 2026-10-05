@@ -7,8 +7,8 @@ For every (query particle i, boundary element e) pair the P1 weights of the exac
 
 from nine "channels" -- the moments m_(0,0), m_(1,0), m_(0,1) and g_(0,0), g_(1,0), g_(0,1) (g_alpha = int y^alpha grad_x W) -- via the exact compiled
 plans of `np2d` (compact-potential recursion, inner potentials for elements inside the support, exact indicator/atan weights).
-Arithmetic inside the kernel is float64 whatever the I/O dtype (boundary pairs are few: only particles within one support of a wall); see
-docs/boundary-operations.md for the cost and the float32 discussion.
+Arithmetic inside the kernels is in the precision of warpSPHCore (`precision.py`: float64 by default, float32 with the Chebyshev stable plans via warpSPHCore_PRECISION); the I/O tensors
+are cast to it and the returned tensors are float64.  See docs/boundary-operations.md for the cost and the float32 discussion.
 
 The operations (Interpolate, Gradient, Divergence, Curl, Density) are applied to these weights in `boundaryOperation` (part 2).
 """
@@ -20,7 +20,8 @@ import warp as wp
 
 from . import np2d
 from .np2d import _compile_profile_moment, _inner_profile, compile_moment, kernel_profile
-from .warp2d import _dangle, _edge_integral, _isqrt, _sdiff, f64
+from .precision import IS_F32, IS_F64, np_real, require_f64, torch_real, vec2_t, vec3_t
+from .warp2d import _dangle, _edge_integral, _isqrt, _sdiff, real
 
 wp.config.quiet = True
 
@@ -172,12 +173,12 @@ class DevicePlan:
         self.nE, self.nV = len(E), len(V)
         i32 = lambda rows, k: wp.array(np.array([r[k] for r in rows] or [0], dtype=np.int32), dtype=int, device=device)
         self.radii_host = list(pb.radii)
-        self.radii = wp.array(np.array(pb.radii, dtype=np.float64), dtype=f64, device=device)
+        self.radii = wp.array(np.array(pb.radii, dtype=np_real), dtype=real, device=device)
         self.cn = wp.array(np.array(pb.cn or [0], dtype=np.int32), dtype=int, device=device)
-        self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np.float64), dtype=f64, device=device)
+        self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np_real), dtype=real, device=device)
         self.e = [i32(E, k) for k in range(9)]          # ch, i, a, b, R, var, gate, c0, c1
         self.v = [i32(V, k) for k in range(6)]          # ch, R, var, gate, c0, c1 (+ mR below)
-        self.v_mR = wp.array(np.array([r[6] for r in V] or [0.0], dtype=np.float64), dtype=f64, device=device)
+        self.v_mR = wp.array(np.array([r[6] for r in V] or [0.0], dtype=np_real), dtype=real, device=device)
         # u-basis of the kernel (pi W = sum b_k (R - r)^k per block), for the far-field Gauss branch
         from .np_fem import kernel_ubasis
         ubR, ubK, ubB = [], [], []
@@ -185,12 +186,12 @@ class DevicePlan:
             for k, b in d.items():
                 ubR.append(float(R)); ubK.append(int(k)); ubB.append(float(b))
         self.nub = len(ubR)
-        self.ubR = wp.array(np.array(ubR, dtype=np.float64), dtype=f64, device=device)
+        self.ubR = wp.array(np.array(ubR, dtype=np_real), dtype=real, device=device)
         self.ubK = wp.array(np.array(ubK, dtype=np.int32), dtype=int, device=device)
-        self.ubB = wp.array(np.array(ubB, dtype=np.float64), dtype=f64, device=device)
+        self.ubB = wp.array(np.array(ubB, dtype=np_real), dtype=real, device=device)
         gx, gw = np.polynomial.legendre.leggauss(GAUSS_N)
-        self.gx = wp.array((gx + 1) / 2, dtype=f64, device=device)
-        self.gw = wp.array(gw / 2, dtype=f64, device=device)
+        self.gx = wp.array((gx + 1) / 2, dtype=real, device=device)
+        self.gw = wp.array(gw / 2, dtype=real, device=device)
 
 
 class ChebPlan:
@@ -206,31 +207,31 @@ class ChebPlan:
         E, V = _channel_rows(pb, channels)
         self.nE, self.nV = len(E), len(V)
         i32 = lambda rows, k: wp.array(np.array([r[k] for r in rows] or [0], dtype=np.int32), dtype=int, device=device)
-        self.radii = wp.array(np.array(pb.radii, dtype=np.float64), dtype=f64, device=device)
-        self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np.float64), dtype=f64, device=device)
+        self.radii = wp.array(np.array(pb.radii, dtype=np_real), dtype=real, device=device)
+        self.cc = wp.array(np.array(pb.cc or [0.0], dtype=np_real), dtype=real, device=device)
         self.e = [i32(E, k) for k in range(9)]          # ch, i, a, b, R, var, gate, c0, c1
         self.v = [i32(V, k) for k in range(6)]          # ch, R, var, gate, c0, c1 (+ mR below)
-        self.v_mR = wp.array(np.array([r[6] for r in V] or [0.0], dtype=np.float64), dtype=f64, device=device)
+        self.v_mR = wp.array(np.array([r[6] for r in V] or [0.0], dtype=np_real), dtype=real, device=device)
         gx, gw = np.polynomial.legendre.leggauss(nodes)
-        self.gx = wp.array(gx, dtype=f64, device=device)       # on [-1, 1]
-        self.gw = wp.array(gw, dtype=f64, device=device)
+        self.gx = wp.array(gx, dtype=real, device=device)       # on [-1, 1]
+        self.gw = wp.array(gw, dtype=real, device=device)
 
 
 # ------------------------------------------------------------------------------------------------ the pair kernel
 @wp.kernel
 def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
-                         pos: wp.array(dtype=wp.vec2d), sup: wp.array(dtype=f64),
-                         verts: wp.array(dtype=wp.vec2d), elems: wp.array(dtype=wp.vec3i),
-                         radii: wp.array(dtype=f64), rin_idx: int, inv_pi: f64,
+                         pos: wp.array(dtype=vec2_t), sup: wp.array(dtype=real),
+                         verts: wp.array(dtype=vec2_t), elems: wp.array(dtype=wp.vec3i),
+                         radii: wp.array(dtype=real), rin_idx: int, inv_pi: real,
                          e_ch: wp.array(dtype=int), e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int),
                          e_R: wp.array(dtype=int), e_var: wp.array(dtype=int), e_gate: wp.array(dtype=int),
                          e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int), n_e: int,
                          v_ch: wp.array(dtype=int), v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
-                         v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=f64), n_v: int,
-                         cn: wp.array(dtype=int), cc: wp.array(dtype=f64),
-                         ub_R: wp.array(dtype=f64), ub_K: wp.array(dtype=int), ub_B: wp.array(dtype=f64), n_ub: int,
-                         gnode: wp.array(dtype=f64), gwt: wp.array(dtype=f64), n_g: int, far_ratio: f64, tiny: f64, n_radii: int,
-                         wout: wp.array2d(dtype=f64), gout: wp.array2d(dtype=f64)):
+                         v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=real), n_v: int,
+                         cn: wp.array(dtype=int), cc: wp.array(dtype=real),
+                         ub_R: wp.array(dtype=real), ub_K: wp.array(dtype=int), ub_B: wp.array(dtype=real), n_ub: int,
+                         gnode: wp.array(dtype=real), gwt: wp.array(dtype=real), n_g: int, far_ratio: real, tiny: real, n_radii: int,
+                         wout: wp.array2d(dtype=real), gout: wp.array2d(dtype=real)):
     tid = wp.tid()
     qi = pair_q[tid]
     el = elems[pair_e[tid]]
@@ -241,9 +242,9 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
     r2 = (verts[el[2]] - xv) / h
     # barycentric functions lambda_k(x + y) = l_k + g_k . y   (x = origin), from the original vertex order (orientation independent)
     d2 = (r1[0] - r0[0]) * (r2[1] - r0[1]) - (r1[1] - r0[1]) * (r2[0] - r0[0])
-    l = wp.vec3d()
-    gx = wp.vec3d()
-    gy = wp.vec3d()
+    l = vec3_t()
+    gx = vec3_t()
+    gy = vec3_t()
     for k in range(3):
         a = r1
         b = r2
@@ -257,12 +258,12 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
         gx[k] = (a[1] - b[1]) / d2
         gy[k] = (b[0] - a[0]) / d2
     # ---- far-field Gauss branch: element far from x relative to its size, kernel smooth on it (no straddled radius) or element tiny
-    cxm = (r0[0] + r1[0] + r2[0]) / f64(3.0)
-    cym = (r0[1] + r1[1] + r2[1]) / f64(3.0)
+    cxm = (r0[0] + r1[0] + r2[0]) / real(3.0)
+    cym = (r0[1] + r1[1] + r2[1]) / real(3.0)
     rho = wp.sqrt(cxm * cxm + cym * cym)
-    emax = f64(0.0)
-    rmin = f64(1.0e300)
-    rmax = f64(0.0)
+    emax = real(0.0)
+    rmin = real(1.0e300)
+    rmax = real(0.0)
     for e in range(3):
         pa = r0
         pb = r1
@@ -275,7 +276,7 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
         dd = pb - pa
         ln = wp.sqrt(dd[0] * dd[0] + dd[1] * dd[1])
         emax = wp.max(emax, ln)
-        tt = wp.clamp(-(pa[0] * dd[0] + pa[1] * dd[1]) / (ln * ln), f64(0.0), f64(1.0))
+        tt = wp.clamp(-(pa[0] * dd[0] + pa[1] * dd[1]) / (ln * ln), real(0.0), real(1.0))
         qx = pa[0] + tt * dd[0]
         qy = pa[1] + tt * dd[1]
         rmin = wp.min(rmin, wp.sqrt(qx * qx + qy * qy))
@@ -285,39 +286,39 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
         if rmin < radii[ri] and radii[ri] < rmax:
             straddle = 1
     if rho >= far_ratio * emax and (straddle == 0 or emax <= tiny):
-        w0 = f64(0.0)
-        w1 = f64(0.0)
-        w2 = f64(0.0)
-        gx0 = f64(0.0)
-        gy0 = f64(0.0)
-        gx1 = f64(0.0)
-        gy1 = f64(0.0)
-        gx2 = f64(0.0)
-        gy2 = f64(0.0)
+        w0 = real(0.0)
+        w1 = real(0.0)
+        w2 = real(0.0)
+        gx0 = real(0.0)
+        gy0 = real(0.0)
+        gx1 = real(0.0)
+        gy1 = real(0.0)
+        gx2 = real(0.0)
+        gy2 = real(0.0)
         area2 = wp.abs(d2)
         for ia in range(n_g):
             for ib in range(n_g):
                 ua = gnode[ia]
                 vb = gnode[ib]
                 m1 = ua
-                m2 = vb * (f64(1.0) - ua)
-                m0 = f64(1.0) - m1 - m2
-                wt = gwt[ia] * gwt[ib] * (f64(1.0) - ua) * area2
+                m2 = vb * (real(1.0) - ua)
+                m0 = real(1.0) - m1 - m2
+                wt = gwt[ia] * gwt[ib] * (real(1.0) - ua) * area2
                 yx = m0 * r0[0] + m1 * r1[0] + m2 * r2[0]
                 yy = m0 * r0[1] + m1 * r1[1] + m2 * r2[1]
                 rr = wp.sqrt(yx * yx + yy * yy)
-                Wv = f64(0.0)
-                dW = f64(0.0)
+                Wv = real(0.0)
+                dW = real(0.0)
                 for t_ in range(n_ub):
                     Rb = ub_R[t_]
                     if rr < Rb:
                         uu = Rb - rr
                         kk = ub_K[t_]
-                        Wv += ub_B[t_] * wp.pow(uu, f64(kk))
+                        Wv += ub_B[t_] * wp.pow(uu, real(kk))
                         if kk >= 1:
-                            dW -= ub_B[t_] * f64(kk) * wp.pow(uu, f64(kk - 1))
+                            dW -= ub_B[t_] * real(kk) * wp.pow(uu, real(kk - 1))
                 Wv = Wv * inv_pi
-                dWr = dW * inv_pi / wp.max(rr, f64(1.0e-300))
+                dWr = dW * inv_pi / wp.max(rr, real(1.0e-300))
                 w0 += wt * m0 * Wv
                 w1 += wt * m1 * Wv
                 w2 += wt * m2 * Wv
@@ -342,18 +343,18 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
     p0 = r0
     p1 = r1
     p2 = r2
-    if d2 < f64(0.0):
+    if d2 < real(0.0):
         tmp = p0
         p0 = p2
         p2 = tmp
-    z = wp.vec3d()
-    s0 = wp.vec3d()
-    s1 = wp.vec3d()
-    n0 = wp.vec3d()
-    n1 = wp.vec3d()
-    t0 = wp.vec3d()
-    t1 = wp.vec3d()
-    vmax2 = f64(0.0)
+    z = vec3_t()
+    s0 = vec3_t()
+    s1 = vec3_t()
+    n0 = vec3_t()
+    n1 = vec3_t()
+    t0 = vec3_t()
+    t1 = vec3_t()
+    vmax2 = real(0.0)
     neg = int(0)
     nzero = int(0)
     for e in range(3):
@@ -375,20 +376,20 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
         s0[e] = (d[0] * p[0] + d[1] * p[1]) / ell
         s1[e] = (d[0] * q[0] + d[1] * q[1]) / ell
         vmax2 = wp.max(vmax2, p[0] * p[0] + p[1] * p[1])
-        if z[e] < f64(0.0):
+        if z[e] < real(0.0):
             neg = 1
-        if z[e] == f64(0.0):
+        if z[e] == real(0.0):
             nzero += 1
-    ind = f64(0.0)
+    ind = real(0.0)
     if neg == 0:
         if nzero == 0:
-            ind = f64(1.0)
+            ind = real(1.0)
         elif nzero == 1:
-            ind = f64(0.5)
+            ind = real(0.5)
         else:
             for vi in range(3):
                 zprev = z[(vi + 2) % 3]
-                if z[vi] == f64(0.0) and zprev == f64(0.0):
+                if z[vi] == real(0.0) and zprev == real(0.0):
                     pv = p0
                     pn = p1
                     pp = p2
@@ -403,13 +404,13 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
                     a_ = pn - pv
                     b_ = pp - pv
                     ang = wp.atan2(a_[0] * b_[1] - a_[1] * b_[0], a_[0] * b_[0] + a_[1] * b_[1])
-                    if ang <= f64(0.0):
-                        ang = ang + f64(6.283185307179586)
-                    ind = ang / f64(6.283185307179586)
+                    if ang <= real(0.0):
+                        ang = ang + real(6.283185307179586)
+                    ind = ang / real(6.283185307179586)
     rin = radii[rin_idx]
     inside_in = vmax2 <= rin * rin
-    ch_e = wp.vector(f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0))   # edge/value parts [x 1/pi]
-    ch_i = wp.vector(f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0))   # indicator parts
+    ch_e = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))   # edge/value parts [x 1/pi]
+    ch_i = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))   # indicator parts
     for t in range(n_e):
         gate_ok = (e_gate[t] == 0) or (e_gate[t] == 1 and not inside_in) or (e_gate[t] == 2 and inside_in)
         if gate_ok:
@@ -417,7 +418,7 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
             inside = vmax2 <= R * R
             var_ok = (e_var[t] == 2) or (e_var[t] == 1 and inside) or (e_var[t] == 0 and not inside)
             if var_ok:
-                acc = f64(0.0)
+                acc = real(0.0)
                 for e in range(3):
                     az = wp.abs(z[e])
                     if az < R:
@@ -438,16 +439,16 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
             var_ok = (v_var[t] == 2) or (v_var[t] == 1 and inside) or (v_var[t] == 0 and not inside)
             if var_ok:
                 mR = v_mR[t]
-                acc = f64(0.0)
-                acc_i = f64(0.0)
+                acc = real(0.0)
+                acc_i = real(0.0)
                 if inside:
                     for e in range(3):
-                        poly = f64(0.0)
+                        poly = real(0.0)
                         for k in range(v_c0[t], v_c1[t]):
-                            poly += cc[k] / f64(cn[k] + 2) * _sdiff(0, cn[k], s0[e], s1[e], z[e])
+                            poly += cc[k] / real(cn[k] + 2) * _sdiff(0, cn[k], s0[e], s1[e], z[e])
                         acc += z[e] * poly
                 else:
-                    acc_i = f64(2.0) * mR * ind
+                    acc_i = real(2.0) * mR * ind
                     for e in range(3):
                         az = wp.abs(z[e])
                         if az < R:
@@ -455,13 +456,13 @@ def _pair_weights_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int
                             lo = wp.max(s0[e], -L)
                             hi = wp.min(s1[e], L)
                             if lo < hi:
-                                poly = f64(0.0)
+                                poly = real(0.0)
                                 for k in range(v_c0[t], v_c1[t]):
-                                    poly += cc[k] / f64(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z[e])
+                                    poly += cc[k] / real(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z[e])
                                 acc += z[e] * poly - mR * _dangle(z[e], lo, hi)
                 ch_e[v_ch[t]] = ch_e[v_ch[t]] + acc
                 ch_i[v_ch[t]] = ch_i[v_ch[t]] + acc_i
-    c = wp.vector(f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0))
+    c = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))
     for k in range(9):
         c[k] = inv_pi * ch_e[k] + ch_i[k]
     # weights (units of h): m = c[0..2];  g_alpha = (c[3],c[4]), (c[5],c[6]), (c[7],c[8])
@@ -482,6 +483,7 @@ def pair_weights(pair_q, pair_e, positions, supports, vertices, elements, kernel
     """P1 weights for every (query, element) pair.  Inputs: torch tensors (on `device`, zero copy after a dtype cast) or numpy arrays, any float dtype.
     Returns (w (P,3), G (P,3,2)) float64 in physical units: numpy, or torch tensors on the device if `as_torch`."""
     import torch
+    require_f64("warpbc.pair_weights (the finite-element pair kernel)")
     plan = plan or DevicePlan(kernel, device)
     P = len(pair_q)
     wout = torch.zeros((max(P, 1), 3), dtype=torch.float64, device=device)
@@ -490,15 +492,15 @@ def pair_weights(pair_q, pair_e, positions, supports, vertices, elements, kernel
         keep = []
         wq, a = _wp_from(pair_q, wp.int32, device, torch.int32); keep.append(a)
         we, a = _wp_from(pair_e, wp.int32, device, torch.int32); keep.append(a)
-        wpos, a = _wp_from(positions, wp.vec2d, device, torch.float64); keep.append(a)
-        wsup, a = _wp_from(supports, f64, device, torch.float64); keep.append(a)
-        wv, a = _wp_from(vertices, wp.vec2d, device, torch.float64); keep.append(a)
+        wpos, a = _wp_from(positions, vec2_t, device, torch.float64); keep.append(a)
+        wsup, a = _wp_from(supports, real, device, torch.float64); keep.append(a)
+        wv, a = _wp_from(vertices, vec2_t, device, torch.float64); keep.append(a)
         wel, a = _wp_from(elements, wp.vec3i, device, torch.int32); keep.append(a)
         wp.launch(_pair_weights_kernel, dim=P, device=device, inputs=[
-            wq, we, wpos, wsup, wv, wel, plan.radii, plan.rin_idx, f64(1 / np.pi),
+            wq, we, wpos, wsup, wv, wel, plan.radii, plan.rin_idx, real(1 / np.pi),
             *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc,
-            plan.ubR, plan.ubK, plan.ubB, plan.nub, plan.gx, plan.gw, GAUSS_N, f64(FAR_RATIO), f64(TINY), len(plan.radii_host),
-            wp.from_torch(wout, dtype=f64), wp.from_torch(gout, dtype=f64)])
+            plan.ubR, plan.ubK, plan.ubB, plan.nub, plan.gx, plan.gw, GAUSS_N, real(FAR_RATIO), real(TINY), len(plan.radii_host),
+            wp.from_torch(wout, dtype=real), wp.from_torch(gout, dtype=real)])
         wp.synchronize_device(device)
     w, G = wout[:P], gout[:P].reshape(P, 3, 2)
     return (w, G) if as_torch else (w.cpu().numpy(), G.cpu().numpy())
@@ -514,53 +516,53 @@ def pair_weights(pair_q, pair_e, positions, supports, vertices, elements, kernel
 # The edge profile is compiled EXACTLY (Fractions) into its Chebyshev series on [0, R] (amplification ~1.2 instead of 1e2..2e4 for the
 # monomial basis) and integrated by Gauss-Legendre on dyadic panels around the foot point; the angle term stays closed form.
 @wp.func
-def _clenshaw(cc: wp.array(dtype=f64), c0: int, c1: int, x: f64) -> f64:
+def _clenshaw(cc: wp.array(dtype=real), c0: int, c1: int, x: real) -> real:
     """sum_k a_k T_k(x), a_k = cc[c0 + k], k = 0 .. c1 - c0 - 1."""
-    b1 = f64(0.0)
-    b2 = f64(0.0)
+    b1 = real(0.0)
+    b2 = real(0.0)
     for k in range(c1 - c0 - 1):
-        t = f64(2.0) * x * b1 - b2 + cc[c1 - 1 - k]
+        t = real(2.0) * x * b1 - b2 + cc[c1 - 1 - k]
         b2 = b1
         b1 = t
     return x * b1 - b2 + cc[c0]
 
 
 @wp.func
-def _cheb_integral(a: int, b: int, lo: f64, hi: f64, z: f64, R: f64, n0: f64, n1: f64, t0: f64, t1: f64,
-                   cc: wp.array(dtype=f64), c0: int, c1: int, gx: wp.array(dtype=f64), gw: wp.array(dtype=f64),
-                   nn: int, panels: int) -> f64:
+def _cheb_integral(a: int, b: int, lo: real, hi: real, z: real, R: real, n0: real, n1: real, t0: real, t1: real,
+                   cc: wp.array(dtype=real), c0: int, c1: int, gx: wp.array(dtype=real), gw: wp.array(dtype=real),
+                   nn: int, panels: int) -> real:
     """int_lo^hi y0^a y1^b P(r) ds  (y = z n + s t, r = sqrt(s^2 + z^2), P = the Chebyshev series cc[c0:c1] on [0, R]) by Gauss-Legendre
     (nn nodes per panel) on the dyadic panels of the chord around the foot point s = 0: per side, breakpoints 0, |z|, 2|z|, ..., 2^(panels-1)|z|
     (clipped to the side's chord end, last panel up to the end; empty panels skipped)."""
     az = wp.abs(z)
-    tot = f64(0.0)
+    tot = real(0.0)
     for side in range(2):
-        sg = f64(1.0)
-        t_lo = wp.max(lo, f64(0.0))
-        t_hi = wp.max(hi, f64(0.0))
+        sg = real(1.0)
+        t_lo = wp.max(lo, real(0.0))
+        t_hi = wp.max(hi, real(0.0))
         if side == 1:
-            sg = f64(-1.0)
-            t_lo = wp.max(-hi, f64(0.0))
-            t_hi = wp.max(-lo, f64(0.0))
+            sg = real(-1.0)
+            t_lo = wp.max(-hi, real(0.0))
+            t_hi = wp.max(-lo, real(0.0))
         for j in range(panels + 1):
-            ba = f64(0.0)
+            ba = real(0.0)
             if j >= 1:
-                ba = az * wp.pow(f64(2.0), f64(j - 1))
+                ba = az * wp.pow(real(2.0), real(j - 1))
             bb = t_hi
             if j < panels:
-                bb = az * wp.pow(f64(2.0), f64(j))        # Bs[j + 1] = |z| 2^j  (Bs[1] = |z|)
+                bb = az * wp.pow(real(2.0), real(j))        # Bs[j + 1] = |z| 2^j  (Bs[1] = |z|)
             pa = wp.clamp(ba, t_lo, t_hi)
             pb = wp.clamp(bb, t_lo, t_hi)
             if pb > pa:
-                half = (pb - pa) / f64(2.0)
-                mid = (pa + pb) / f64(2.0)
+                half = (pb - pa) / real(2.0)
+                mid = (pa + pb) / real(2.0)
                 for k in range(nn):
                     s = sg * (mid + half * gx[k])
                     r = wp.sqrt(s * s + z * z)
-                    xx = wp.clamp(f64(2.0) * r / R - f64(1.0), f64(-1.0), f64(1.0))
+                    xx = wp.clamp(real(2.0) * r / R - real(1.0), real(-1.0), real(1.0))
                     y0 = z * n0 + s * t0
                     y1 = z * n1 + s * t1
-                    m = f64(1.0)
+                    m = real(1.0)
                     for _ in range(a):
                         m = m * y0
                     for _ in range(b):
@@ -571,16 +573,16 @@ def _cheb_integral(a: int, b: int, lo: f64, hi: f64, z: f64, R: f64, n0: f64, n1
 
 @wp.kernel
 def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
-                          pos: wp.array(dtype=wp.vec2d), sup: wp.array(dtype=f64),
-                          verts: wp.array(dtype=wp.vec2d), edges: wp.array(dtype=wp.vec2i),
-                          radii: wp.array(dtype=f64), inv_pi: f64,
+                          pos: wp.array(dtype=vec2_t), sup: wp.array(dtype=real),
+                          verts: wp.array(dtype=vec2_t), edges: wp.array(dtype=wp.vec2i),
+                          radii: wp.array(dtype=real), inv_pi: real,
                           e_ch: wp.array(dtype=int), e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int),
                           e_R: wp.array(dtype=int), e_var: wp.array(dtype=int), e_gate: wp.array(dtype=int),
                           e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int), n_e: int,
                           v_ch: wp.array(dtype=int), v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
-                          v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=f64), n_v: int,
-                          cn: wp.array(dtype=int), cc: wp.array(dtype=f64),
-                          cout: wp.array2d(dtype=f64)):
+                          v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=real), n_v: int,
+                          cn: wp.array(dtype=int), cc: wp.array(dtype=real),
+                          cout: wp.array2d(dtype=real)):
     tid = wp.tid()
     qi = pair_q[tid]
     ed = edges[pair_e[tid]]
@@ -590,7 +592,7 @@ def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=in
     q = (verts[ed[1]] - xv) / h
     d = q - p
     ell = wp.sqrt(d[0] * d[0] + d[1] * d[1])
-    if ell == f64(0.0):
+    if ell == real(0.0):
         return
     t0 = d[0] / ell
     t1 = d[1] / ell
@@ -599,7 +601,7 @@ def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=in
     z = (p[0] * q[1] - p[1] * q[0]) / ell     # positive when x lies on the solid side
     s0 = (d[0] * p[0] + d[1] * p[1]) / ell
     s1 = (d[0] * q[0] + d[1] * q[1]) / ell
-    ch = wp.vector(f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0))
+    ch = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))
     az = wp.abs(z)
     for t in range(n_e):
         if (e_var[t] != 1) and (e_gate[t] != 2):
@@ -622,9 +624,9 @@ def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=in
                 hi = wp.min(s1, L)
                 if lo < hi:
                     mR = v_mR[t]
-                    poly = f64(0.0)
+                    poly = real(0.0)
                     for k in range(v_c0[t], v_c1[t]):
-                        poly += cc[k] / f64(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z)
+                        poly += cc[k] / real(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z)
                     ch[v_ch[t]] = ch[v_ch[t]] + z * poly - mR * _dangle(z, lo, hi)
     for k in range(9):
         cout[tid, k] = inv_pi * ch[k]
@@ -632,16 +634,16 @@ def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=in
 
 @wp.kernel
 def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
-                               pos: wp.array(dtype=wp.vec2d), sup: wp.array(dtype=f64),
-                               verts: wp.array(dtype=wp.vec2d), edges: wp.array(dtype=wp.vec2i),
-                               radii: wp.array(dtype=f64), inv_pi: f64,
+                               pos: wp.array(dtype=vec2_t), sup: wp.array(dtype=real),
+                               verts: wp.array(dtype=vec2_t), edges: wp.array(dtype=wp.vec2i),
+                               radii: wp.array(dtype=real), inv_pi: real,
                                e_ch: wp.array(dtype=int), e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int),
                                e_R: wp.array(dtype=int), e_var: wp.array(dtype=int), e_gate: wp.array(dtype=int),
                                e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int), n_e: int,
                                v_ch: wp.array(dtype=int), v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_gate: wp.array(dtype=int),
-                               v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=f64), n_v: int,
-                               cc: wp.array(dtype=f64), gx: wp.array(dtype=f64), gw: wp.array(dtype=f64), nn: int, panels: int,
-                               cout: wp.array2d(dtype=f64)):
+                               v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int), v_mR: wp.array(dtype=real), n_v: int,
+                               cc: wp.array(dtype=real), gx: wp.array(dtype=real), gw: wp.array(dtype=real), nn: int, panels: int,
+                               cout: wp.array2d(dtype=real)):
     """a copy of _edge_channels_kernel with the monomial `_edge_integral` replaced by the Chebyshev-quadrature `_cheb_integral`
     (the value term is `z * _cheb_integral(0, 0, ...) - mR * _dangle`); the chord clip, the gates, the n_i factor and the 1/pi are unchanged."""
     tid = wp.tid()
@@ -653,7 +655,7 @@ def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dty
     q = (verts[ed[1]] - xv) / h
     d = q - p
     ell = wp.sqrt(d[0] * d[0] + d[1] * d[1])
-    if ell == f64(0.0):
+    if ell == real(0.0):
         return
     t0 = d[0] / ell
     t1 = d[1] / ell
@@ -662,7 +664,7 @@ def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dty
     z = (p[0] * q[1] - p[1] * q[0]) / ell     # positive when x lies on the solid side
     s0 = (d[0] * p[0] + d[1] * p[1]) / ell
     s1 = (d[0] * q[0] + d[1] * q[1]) / ell
-    ch = wp.vector(f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0), f64(0.0))
+    ch = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))
     az = wp.abs(z)
     for t in range(n_e):
         if (e_var[t] != 1) and (e_gate[t] != 2):
@@ -720,21 +722,21 @@ def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, ke
     import torch
     plan = plan if plan is not None else _cheb_plan_for(kernel, device, nodes, channels)
     P = len(pair_q)
-    cout = torch.zeros((max(P, 1), NCH), dtype=torch.float64, device=device)
+    cout = torch.zeros((max(P, 1), NCH), dtype=torch_real, device=device)
     if P:
         keep = []
         wq, a = _wp_from(pair_q, wp.int32, device, torch.int32); keep.append(a)
         we, a = _wp_from(pair_e, wp.int32, device, torch.int32); keep.append(a)
-        wpos, a = _wp_from(positions, wp.vec2d, device, torch.float64); keep.append(a)
-        wsup, a = _wp_from(supports, f64, device, torch.float64); keep.append(a)
-        wv, a = _wp_from(vertices, wp.vec2d, device, torch.float64); keep.append(a)
+        wpos, a = _wp_from(positions, vec2_t, device, torch_real); keep.append(a)
+        wsup, a = _wp_from(supports, real, device, torch_real); keep.append(a)
+        wv, a = _wp_from(vertices, vec2_t, device, torch_real); keep.append(a)
         wed, a = _wp_from(edges, wp.vec2i, device, torch.int32); keep.append(a)
         wp.launch(_edge_channels_cheb_kernel, dim=P, device=device, inputs=[
-            wq, we, wpos, wsup, wv, wed, plan.radii, f64(1 / np.pi),
+            wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
             *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV,
-            plan.cc, plan.gx, plan.gw, nodes, panels, wp.from_torch(cout, dtype=f64)])
+            plan.cc, plan.gx, plan.gw, nodes, panels, wp.from_torch(cout, dtype=real)])
         wp.synchronize_device(device)
-    c = cout[:P]
+    c = cout[:P].to(torch.float64)                                   # the kernel computed in `real`; the tensors handed on are float64
     return c if as_torch else c.cpu().numpy()
 
 
@@ -744,6 +746,8 @@ def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, 
     -> the Chebyshev-quadrature plan at that resolution; False -> the monomial plan; None -> a passed ChebPlan / a STABLE_KERNELS entry, else the
     monomial plan (the default, unchanged).  `channels` (iterable of 0..8, default all): evaluate only the terms of these channels (the others stay 0; the kept ones are bit-identical)."""
     import torch
+    if stable is None and plan is None and IS_F32 and STABLE_KERNELS.get(kernel) is None:
+        stable = (8, 6)                                    # float32: the monomial plan amplifies rounding 1e2 - 2e4x; the Chebyshev route is the float32 default (stable=False forces the monomial one)
     if isinstance(stable, tuple):
         return _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, kernel, device, stable[0], stable[1], as_torch=as_torch, channels=channels)
     if stable is None:
@@ -754,18 +758,18 @@ def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, 
     # monomial path
     plan = plan or _device_plan(kernel, device, channels)
     P = len(pair_q)
-    cout = torch.zeros((max(P, 1), NCH), dtype=torch.float64, device=device)
+    cout = torch.zeros((max(P, 1), NCH), dtype=torch_real, device=device)
     if P:
         keep = []
         wq, a = _wp_from(pair_q, wp.int32, device, torch.int32); keep.append(a)
         we, a = _wp_from(pair_e, wp.int32, device, torch.int32); keep.append(a)
-        wpos, a = _wp_from(positions, wp.vec2d, device, torch.float64); keep.append(a)
-        wsup, a = _wp_from(supports, f64, device, torch.float64); keep.append(a)
-        wv, a = _wp_from(vertices, wp.vec2d, device, torch.float64); keep.append(a)
+        wpos, a = _wp_from(positions, vec2_t, device, torch_real); keep.append(a)
+        wsup, a = _wp_from(supports, real, device, torch_real); keep.append(a)
+        wv, a = _wp_from(vertices, vec2_t, device, torch_real); keep.append(a)
         wed, a = _wp_from(edges, wp.vec2i, device, torch.int32); keep.append(a)
         wp.launch(_edge_channels_kernel, dim=P, device=device, inputs=[
-            wq, we, wpos, wsup, wv, wed, plan.radii, f64(1 / np.pi),
-            *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc, wp.from_torch(cout, dtype=f64)])
+            wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
+            *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc, wp.from_torch(cout, dtype=real)])
         wp.synchronize_device(device)
-    c = cout[:P]
+    c = cout[:P].to(torch.float64)                                   # the kernel computed in `real`; the tensors handed on are float64
     return c if as_torch else c.cpu().numpy()

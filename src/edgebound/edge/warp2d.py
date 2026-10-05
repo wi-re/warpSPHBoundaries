@@ -1,4 +1,4 @@
-"""Stage 5: Warp (CPU/CUDA) kernels for the 2D edge reductions, triangles, float64.
+"""Stage 5: Warp (CPU/CUDA) kernels for the 2D edge reductions, triangles, in the precision of warpSPHCore (`precision.py`; float64 by default).
 
 One generic "plan interpreter" kernel: the exact compiled plan (np2d.compile_moment: truncated and inner variants, indicator weights,
 all exact rationals rounded once) is flattened into constant arrays; every thread handles one (triangle, point) pair, loops over the
@@ -10,7 +10,7 @@ Analytic adjoints are explicit kernels (no taping through loops / clip logic, as
     shape_gradient(...)                       d/d vertices (edge-local Reynolds adjoint)
     TorchMoment                               torch.autograd.Function: forward = Warp, backward = the explicit adjoint kernels
 
-float64 only here (float32 on GPU needs the Chebyshev stable path of stage 3; not ported).
+The finite-element kernels of this module (`moment`, `moment_gradient`, `shape_gradient`, `TorchMoment`) are float64 only (monomial plans: float32 needs the Chebyshev stable path, see warpbc).
 """
 from fractions import Fraction
 from functools import lru_cache
@@ -21,28 +21,28 @@ import warp as wp
 from . import np2d
 
 wp.config.quiet = True
-f64 = wp.float64
+from .precision import IS_F64, np_real, real, require_f64, vec2_t, vec3_t     # noqa: E402,F401  (warpSPHCore's scalar_t; docs: precision.py)
 
 
 # ---------------------------------------------------------------------------------------------- device functions
 @wp.func
-def _isqrt(a: f64) -> f64:
-    if a > f64(0.0):
+def _isqrt(a: real) -> real:
+    if a > real(0.0):
         return wp.sqrt(a)
-    return f64(0.0)
+    return real(0.0)
 
 
 @wp.func
-def _asinh(u: f64) -> f64:
+def _asinh(u: real) -> real:
     a = wp.abs(u)
-    v = wp.log(a + wp.sqrt(a * a + f64(1.0)))
-    if u < f64(0.0):
+    v = wp.log(a + wp.sqrt(a * a + real(1.0)))
+    if u < real(0.0):
         v = -v
     return v
 
 
 @wp.func
-def _Im(m: int, s: f64, z: f64) -> f64:
+def _Im(m: int, s: real, z: real) -> real:
     """odd antiderivative of r^m, m >= 0 (parity-chain recurrence; z = 0 guarded)."""
     zz = z * z
     r2 = s * s + zz
@@ -50,99 +50,99 @@ def _Im(m: int, s: f64, z: f64) -> f64:
     val = s
     idx = int(0)
     if m % 2 == 1:
-        tail = f64(0.0)
-        if z != f64(0.0):
+        tail = real(0.0)
+        if z != real(0.0):
             tail = zz * _asinh(s / wp.abs(z))
-        val = (s * r + tail) / f64(2.0)
+        val = (s * r + tail) / real(2.0)
         idx = 1
     while idx < m:
         idx += 2
-        rp = f64(0.0)
+        rp = real(0.0)
         if idx % 2 == 0:
-            rp = wp.pow(r2, f64(idx / 2))
+            rp = wp.pow(r2, real(idx / 2))
         else:
-            rp = r * wp.pow(r2, f64((idx - 1) / 2))
-        val = (s * rp + f64(idx) * zz * val) / f64(idx + 1)
+            rp = r * wp.pow(r2, real((idx - 1) / 2))
+        val = (s * rp + real(idx) * zz * val) / real(idx + 1)
     return val
 
 
 @wp.func
-def _binom(n: int, k: int) -> f64:
-    v = f64(1.0)
+def _binom(n: int, k: int) -> real:
+    v = real(1.0)
     for i in range(k):
-        v = v * f64(n - i) / f64(i + 1)
+        v = v * real(n - i) / real(i + 1)
     return v
 
 
 @wp.func
-def _S(j: int, m: int, s: f64, z: f64) -> f64:
+def _S(j: int, m: int, s: real, z: real) -> real:
     """int s^j r^m ds, m >= 0."""
     zz = z * z
-    tot = f64(0.0)
+    tot = real(0.0)
     if j % 2 == 0:
         h = j / 2
         for i in range(h + 1):
-            sg = f64(1.0)
+            sg = real(1.0)
             if (h - i) % 2 == 1:
-                sg = f64(-1.0)
-            tot += _binom(h, i) * sg * wp.pow(zz, f64(h - i)) * _Im(m + 2 * i, s, z)
+                sg = real(-1.0)
+            tot += _binom(h, i) * sg * wp.pow(zz, real(h - i)) * _Im(m + 2 * i, s, z)
     else:
         h = (j - 1) / 2
         r2 = s * s + zz
         r = _isqrt(r2)
         for i in range(h + 1):
             mm = m + 2 * i
-            rp = f64(0.0)
+            rp = real(0.0)
             if mm % 2 == 0:
-                rp = wp.pow(r2, f64((mm + 2) / 2))
+                rp = wp.pow(r2, real((mm + 2) / 2))
             else:
-                rp = r * wp.pow(r2, f64((mm + 1) / 2))
-            sg = f64(1.0)
+                rp = r * wp.pow(r2, real((mm + 1) / 2))
+            sg = real(1.0)
             if (h - i) % 2 == 1:
-                sg = f64(-1.0)
-            tot += _binom(h, i) * sg * wp.pow(zz, f64(h - i)) * rp / f64(mm + 2)
+                sg = real(-1.0)
+            tot += _binom(h, i) * sg * wp.pow(zz, real(h - i)) * rp / real(mm + 2)
     return tot
 
 
 @wp.func
-def _dangle(z: f64, lo: f64, hi: f64) -> f64:
-    if z == f64(0.0):
-        return f64(0.0)
+def _dangle(z: real, lo: real, hi: real) -> real:
+    if z == real(0.0):
+        return real(0.0)
     y = z * (hi - lo)
     x = z * z + lo * hi
-    if y == f64(0.0) and x == f64(0.0):
-        return f64(0.0)
+    if y == real(0.0) and x == real(0.0):
+        return real(0.0)
     return wp.atan2(y, x)
 
 
 @wp.func
-def _sdiff(j: int, m: int, lo: f64, hi: f64, z: f64) -> f64:
+def _sdiff(j: int, m: int, lo: real, hi: real, z: real) -> real:
     return _S(j, m, hi, z) - _S(j, m, lo, z)
 
 
 @wp.func
-def _ypoly_coef(a: int, b: int, j: int, z: f64, n0: f64, n1: f64, t0: f64, t1: f64) -> f64:
+def _ypoly_coef(a: int, b: int, j: int, z: real, n0: real, n1: real, t0: real, t1: real) -> real:
     """coefficient of s^j in (z n0 + s t0)^a (z n1 + s t1)^b   (j <= a + b)."""
-    tot = f64(0.0)
+    tot = real(0.0)
     for ja in range(a + 1):
         jb = j - ja
         if jb >= 0 and jb <= b:
-            ca = _binom(a, ja) * wp.pow(t0, f64(ja)) * wp.pow(z * n0, f64(a - ja))
-            cb = _binom(b, jb) * wp.pow(t1, f64(jb)) * wp.pow(z * n1, f64(b - jb))
+            ca = _binom(a, ja) * wp.pow(t0, real(ja)) * wp.pow(z * n0, real(a - ja))
+            cb = _binom(b, jb) * wp.pow(t1, real(jb)) * wp.pow(z * n1, real(b - jb))
             tot += ca * cb
     return tot
 
 
 # ---------------------------------------------------------------------------------------------- the kernels
 @wp.func
-def _edge_integral(a: int, b: int, shift: int, lo: f64, hi: f64, z: f64, n0: f64, n1: f64, t0: f64, t1: f64,
-                   cn: wp.array(dtype=int), cc: wp.array(dtype=f64), c0: int, c1: int) -> f64:
+def _edge_integral(a: int, b: int, shift: int, lo: real, hi: real, z: real, n0: real, n1: real, t0: real, t1: real,
+                   cn: wp.array(dtype=int), cc: wp.array(dtype=real), c0: int, c1: int) -> real:
     """int_chord s^shift y^(a,b) (sum_n c_n r^n) ds."""
-    tot = f64(0.0)
+    tot = real(0.0)
     for j in range(a + b + 1):
         yc = _ypoly_coef(a, b, j, z, n0, n1, t0, t1)
-        if yc != f64(0.0):
-            inner = f64(0.0)
+        if yc != real(0.0):
+            inner = real(0.0)
             for k in range(c0, c1):
                 inner += cc[k] * _sdiff(j + shift, cn[k], lo, hi, z)
             tot += yc * inner
@@ -150,16 +150,16 @@ def _edge_integral(a: int, b: int, shift: int, lo: f64, hi: f64, z: f64, n0: f64
 
 
 @wp.kernel
-def _moment_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2d), hs: wp.array(dtype=f64),
-                   radii: wp.array(dtype=f64), inv_pi: f64,
+def _moment_kernel(verts: wp.array2d(dtype=vec2_t), xs: wp.array(dtype=vec2_t), hs: wp.array(dtype=real),
+                   radii: wp.array(dtype=real), inv_pi: real,
                    # edge terms
                    e_i: wp.array(dtype=int), e_a: wp.array(dtype=int), e_b: wp.array(dtype=int), e_R: wp.array(dtype=int),
                    e_var: wp.array(dtype=int), e_c0: wp.array(dtype=int), e_c1: wp.array(dtype=int),
                    # value terms
                    v_R: wp.array(dtype=int), v_var: wp.array(dtype=int), v_c0: wp.array(dtype=int), v_c1: wp.array(dtype=int),
-                   v_mR: wp.array(dtype=f64),
-                   cn: wp.array(dtype=int), cc: wp.array(dtype=f64), n_edge_terms: int, n_val_terms: int, alpha_k: int,
-                   out: wp.array(dtype=f64)):
+                   v_mR: wp.array(dtype=real),
+                   cn: wp.array(dtype=int), cc: wp.array(dtype=real), n_edge_terms: int, n_val_terms: int, alpha_k: int,
+                   out: wp.array(dtype=real)):
     tid = wp.tid()
     h = hs[tid]
     xv = xs[tid]
@@ -168,19 +168,19 @@ def _moment_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2
     p2 = (verts[tid, 2] - xv) / h
     # ccw normalisation
     a2 = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0])
-    if a2 < f64(0.0):
+    if a2 < real(0.0):
         tmp = p0
         p0 = p2
         p2 = tmp
     # per-edge geometry in vec3d (component = edge)
-    z = wp.vec3d()
-    s0 = wp.vec3d()
-    s1 = wp.vec3d()
-    n0 = wp.vec3d()
-    n1 = wp.vec3d()
-    t0 = wp.vec3d()
-    t1 = wp.vec3d()
-    vmax2 = f64(0.0)
+    z = vec3_t()
+    s0 = vec3_t()
+    s1 = vec3_t()
+    n0 = vec3_t()
+    n1 = vec3_t()
+    t0 = vec3_t()
+    t1 = vec3_t()
+    vmax2 = real(0.0)
     neg = int(0)
     nzero = int(0)
     for e in range(3):
@@ -202,21 +202,21 @@ def _moment_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2
         s0[e] = (d[0] * p[0] + d[1] * p[1]) / ell
         s1[e] = (d[0] * q[0] + d[1] * q[1]) / ell
         vmax2 = wp.max(vmax2, p[0] * p[0] + p[1] * p[1])
-        if z[e] < f64(0.0):
+        if z[e] < real(0.0):
             neg = 1
-        if z[e] == f64(0.0):
+        if z[e] == real(0.0):
             nzero += 1
-    ind = f64(0.0)
+    ind = real(0.0)
     if neg == 0:
         if nzero == 0:
-            ind = f64(1.0)
+            ind = real(1.0)
         elif nzero == 1:
-            ind = f64(0.5)
+            ind = real(0.5)
         else:
             # vertex: shared by the two zero edges (edge i-1 ends at vertex i)
             for vi in range(3):
                 zprev = z[(vi + 2) % 3]
-                if z[vi] == f64(0.0) and zprev == f64(0.0):
+                if z[vi] == real(0.0) and zprev == real(0.0):
                     pv = p0
                     pn = p1
                     pp = p2
@@ -231,11 +231,11 @@ def _moment_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2
                     a_ = pn - pv
                     b_ = pp - pv
                     ang = wp.atan2(a_[0] * b_[1] - a_[1] * b_[0], a_[0] * b_[0] + a_[1] * b_[1])
-                    if ang <= f64(0.0):
-                        ang = ang + f64(6.283185307179586)
-                    ind = ang / f64(6.283185307179586)
-    total_e = f64(0.0)
-    total_i = f64(0.0)
+                    if ang <= real(0.0):
+                        ang = ang + real(6.283185307179586)
+                    ind = ang / real(6.283185307179586)
+    total_e = real(0.0)
+    total_i = real(0.0)
     # ---------------- edge terms
     for t in range(n_edge_terms):
         R = radii[e_R[t]]
@@ -264,12 +264,12 @@ def _moment_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2
             mR = v_mR[t]
             if inside:
                 for e in range(3):
-                    poly = f64(0.0)
+                    poly = real(0.0)
                     for k in range(v_c0[t], v_c1[t]):
-                        poly += cc[k] / f64(cn[k] + 2) * _sdiff(0, cn[k], s0[e], s1[e], z[e])
+                        poly += cc[k] / real(cn[k] + 2) * _sdiff(0, cn[k], s0[e], s1[e], z[e])
                     total_e += z[e] * poly
             else:
-                total_i += f64(2.0) * mR * ind
+                total_i += real(2.0) * mR * ind
                 for e in range(3):
                     az = wp.abs(z[e])
                     if az < R:
@@ -277,20 +277,20 @@ def _moment_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2
                         lo = wp.max(s0[e], -L)
                         hi = wp.min(s1[e], L)
                         if lo < hi:
-                            poly = f64(0.0)
+                            poly = real(0.0)
                             for k in range(v_c0[t], v_c1[t]):
-                                poly += cc[k] / f64(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z[e])
+                                poly += cc[k] / real(cn[k] + 2) * _sdiff(0, cn[k], lo, hi, z[e])
                             total_e += z[e] * poly - mR * _dangle(z[e], lo, hi)
-    out[tid] = (inv_pi * total_e + total_i) * wp.pow(h, f64(alpha_k))
+    out[tid] = (inv_pi * total_e + total_i) * wp.pow(h, real(alpha_k))
 
 
 @wp.kernel
-def _shape_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2d), hs: wp.array(dtype=f64),
-                  radii: wp.array(dtype=f64), inv_pi: f64,
+def _shape_kernel(verts: wp.array2d(dtype=vec2_t), xs: wp.array(dtype=vec2_t), hs: wp.array(dtype=real),
+                  radii: wp.array(dtype=real), inv_pi: real,
                   g_i: wp.array(dtype=int), g_a: wp.array(dtype=int), g_b: wp.array(dtype=int), g_R: wp.array(dtype=int),
                   g_c0: wp.array(dtype=int), g_c1: wp.array(dtype=int), n_terms: int,
-                  cn: wp.array(dtype=int), cc: wp.array(dtype=f64), alpha_k: int, mode: int,
-                  out: wp.array2d(dtype=wp.vec2d), gx: wp.array(dtype=wp.vec2d)):
+                  cn: wp.array(dtype=int), cc: wp.array(dtype=real), alpha_k: int, mode: int,
+                  out: wp.array2d(dtype=vec2_t), gx: wp.array(dtype=vec2_t)):
     """mode 0: shape gradient (d/d vertices) + gx (d/dx = -sum_e n_e int y^alpha W ds); one pass over the kernel blocks."""
     tid = wp.tid()
     h = hs[tid]
@@ -299,15 +299,15 @@ def _shape_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2d
     p1 = (verts[tid, 1] - xv) / h
     p2 = (verts[tid, 2] - xv) / h
     a2 = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0])
-    flip = a2 < f64(0.0)
+    flip = a2 < real(0.0)
     if flip:
         tmp = p0
         p0 = p2
         p2 = tmp
-    acc0 = wp.vec2d(f64(0.0), f64(0.0))
-    acc1 = wp.vec2d(f64(0.0), f64(0.0))
-    acc2 = wp.vec2d(f64(0.0), f64(0.0))
-    g = wp.vec2d(f64(0.0), f64(0.0))
+    acc0 = vec2_t(real(0.0), real(0.0))
+    acc1 = vec2_t(real(0.0), real(0.0))
+    acc2 = vec2_t(real(0.0), real(0.0))
+    g = vec2_t(real(0.0), real(0.0))
     for e in range(3):
         p = p0
         q = p1
@@ -326,8 +326,8 @@ def _shape_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2d
         z = (p[0] * q[1] - p[1] * q[0]) / ell
         s0 = (d[0] * p[0] + d[1] * p[1]) / ell
         s1 = (d[0] * q[0] + d[1] * q[1]) / ell
-        a0 = f64(0.0)
-        a1s = f64(0.0)
+        a0 = real(0.0)
+        a1s = real(0.0)
         for t in range(n_terms):
             R = radii[g_R[t]]
             az = wp.abs(z)
@@ -339,7 +339,7 @@ def _shape_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2d
                     a0 += _edge_integral(g_a[t], g_b[t], 0, lo, hi, z, n0, n1, t0, t1, cn, cc, g_c0[t], g_c1[t])
                     a1s += _edge_integral(g_a[t], g_b[t], 1, lo, hi, z, n0, n1, t0, t1, cn, cc, g_c0[t], g_c1[t])
         a1 = (a1s - s0 * a0) / (s1 - s0)
-        nvec = wp.vec2d(n0, n1)
+        nvec = vec2_t(n0, n1)
         start = nvec * (a0 - a1)
         end = nvec * a1
         g = g - nvec * a0
@@ -352,7 +352,7 @@ def _shape_kernel(verts: wp.array2d(dtype=wp.vec2d), xs: wp.array(dtype=wp.vec2d
         if e == 2:
             acc2 += start
             acc0 += end
-    sc = inv_pi * wp.pow(h, f64(alpha_k - 1))
+    sc = inv_pi * wp.pow(h, real(alpha_k - 1))
     if flip:
         # vertices were reversed: accumulators refer to (v2, v1, v0)
         out[tid, 0] = acc2 * sc
@@ -410,32 +410,33 @@ def _grad_plan(kernel, alpha):
 
 
 def _arr(a, dtype, device):
-    return wp.array(np.asarray(a, dtype=np.float64 if dtype is f64 else np.int32) if len(a) else np.zeros(1, dtype=np.float64 if dtype is f64 else np.int32), dtype=dtype, device=device)
+    return wp.array(np.asarray(a, dtype=np_real if dtype is real else np.int32) if len(a) else np.zeros(1, dtype=np_real if dtype is real else np.int32), dtype=dtype, device=device)
 
 
 def _prep_inputs(verts, x, h, device):
-    verts = np.ascontiguousarray(verts, dtype=np.float64)
-    x = np.ascontiguousarray(x, dtype=np.float64)
+    verts = np.ascontiguousarray(verts, dtype=np_real)
+    x = np.ascontiguousarray(x, dtype=np_real)
     N = verts.shape[0]
-    hs = np.full(N, float(h)) if np.ndim(h) == 0 else np.asarray(h, dtype=np.float64)
-    return N, wp.array(verts, dtype=wp.vec2d, device=device), wp.array(x, dtype=wp.vec2d, device=device), wp.array(hs, dtype=f64, device=device)
+    hs = np.full(N, float(h)) if np.ndim(h) == 0 else np.asarray(h, dtype=np_real)
+    return N, wp.array(verts, dtype=vec2_t, device=device), wp.array(x, dtype=vec2_t, device=device), wp.array(hs, dtype=real, device=device)
 
 
 class MomentLauncher:
     """plan arrays resident on `device`; `run(wv, wx, wh, out)` launches the moment kernel on device arrays (no host traffic)."""
 
     def __init__(self, kernel, alpha=(0, 0), device="cuda:0"):
+        require_f64("warp2d.MomentLauncher (monomial finite-element kernels)")
         self.alpha = tuple(alpha)
         self.device = device
         radii, cn, cc, E, V = _moment_plan(kernel, self.alpha)
         col = lambda rows, k, dt: _arr([r[k] for r in rows], dt, device)
         ec = [r[5] for r in E]
         vc = [r[2] for r in V]
-        self.args = [_arr(radii, f64, device), f64(1 / np.pi),
+        self.args = [_arr(radii, real, device), real(1 / np.pi),
                      col(E, 0, int), col(E, 1, int), col(E, 2, int), col(E, 3, int), col(E, 4, int),
                      _arr([c[0] for c in ec], int, device), _arr([c[1] for c in ec], int, device),
-                     col(V, 0, int), col(V, 1, int), _arr([c[0] for c in vc], int, device), _arr([c[1] for c in vc], int, device), col(V, 3, f64),
-                     _arr(cn, int, device), _arr(cc, f64, device), len(E), len(V), self.alpha[0] + self.alpha[1]]
+                     col(V, 0, int), col(V, 1, int), _arr([c[0] for c in vc], int, device), _arr([c[1] for c in vc], int, device), col(V, 3, real),
+                     _arr(cn, int, device), _arr(cc, real, device), len(E), len(V), self.alpha[0] + self.alpha[1]]
 
     def run(self, wv, wx, wh, out):
         wp.launch(_moment_kernel, dim=out.shape[0], device=self.device, inputs=[wv, wx, wh, *self.args, out])
@@ -443,21 +444,22 @@ class MomentLauncher:
 
 def moment(verts, x, kernel, alpha=(0, 0), h=1.0, device="cuda:0"):
     N, wv, wx, wh = _prep_inputs(verts, x, h, device)
-    out = wp.zeros(N, dtype=f64, device=device)
+    out = wp.zeros(N, dtype=real, device=device)
     MomentLauncher(kernel, alpha, device).run(wv, wx, wh, out)
     return out.numpy()
 
 
 def _shape_and_grad(verts, x, kernel, alpha, h, device):
+    require_f64("warp2d.shape_gradient / moment_gradient")
     radii, cn, cc, rows = _grad_plan(kernel, tuple(alpha))
     N, wv, wx, wh = _prep_inputs(verts, x, h, device)
-    out = wp.zeros((N, 3), dtype=wp.vec2d, device=device)
-    gx = wp.zeros(N, dtype=wp.vec2d, device=device)
+    out = wp.zeros((N, 3), dtype=vec2_t, device=device)
+    gx = wp.zeros(N, dtype=vec2_t, device=device)
     wp.launch(_shape_kernel, dim=N, device=device, inputs=[
-        wv, wx, wh, _arr(radii, f64, device), f64(1 / np.pi),
+        wv, wx, wh, _arr(radii, real, device), real(1 / np.pi),
         _arr([r[0] for r in rows], int, device), _arr([r[1] for r in rows], int, device), _arr([r[2] for r in rows], int, device),
         _arr([r[3] for r in rows], int, device), _arr([r[4] for r in rows], int, device), _arr([r[5] for r in rows], int, device), len(rows),
-        _arr(cn, int, device), _arr(cc, f64, device), alpha[0] + alpha[1], 0, out, gx])
+        _arr(cn, int, device), _arr(cc, real, device), alpha[0] + alpha[1], 0, out, gx])
     return out.numpy(), gx.numpy()
 
 

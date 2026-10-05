@@ -39,8 +39,9 @@ def test_pair_sums_match_warpoperation(device):
     sim.rho = rho
     acc = sim._fluid_accel(t(p))
     # warpSPHCore reference
-    t32 = lambda a: torch.as_tensor(a, dtype=torch.float32, device=device)            # warpOperation computes in float32
-    ps = ParticleState(positions=t32(pos), supports=t32(np.full(n, h)), masses=t32(V), kinds=torch.zeros(n, dtype=torch.int32, device=device), densities=rho.float())
+    from warpSPHCore.type_config import get_torch_precision
+    t32 = lambda a: torch.as_tensor(a, dtype=get_torch_precision(), device=device)     # warpOperation computes in warpSPHCore's precision (float64 under edgebound's default, float32 otherwise)
+    ps = ParticleState(positions=t32(pos), supports=t32(np.full(n, h)), masses=t32(V), kinds=torch.zeros(n, dtype=torch.int32, device=device), densities=rho.to(get_torch_precision()))
     lo, hi = pos.min(0) - 2 * h, pos.max(0) + 2 * h
     domain = DomainDescription(t32(lo), t32(hi), torch.zeros(2, dtype=torch.bool, device=device), 2)
     props_d = OperationProperties(kernel=KernelFunctions.Wendland2, operation=WarpOperation.Density, operationMode=OperationDirection.AllToAll)
