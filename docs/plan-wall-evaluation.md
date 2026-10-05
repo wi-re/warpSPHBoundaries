@@ -2,6 +2,8 @@
 
 Status 2026-10-05, `main` = `local-model` = `0ccfcf4` (not pushed). Supersedes HANDOFF Part A4 "Phase 2" (the candidate list there is folded in below); phases 3–5 of A4 stand. Written for continuing without the local-model protocol: steps are sized for one sitting each, with a verification route and a stop rule, not as work documents.
 
+> **Prerequisite (user, 2026-10-05):** `docs/work-item-repo-layout.md` — move to `src/edgebound` + `scripts/`, pyproject, cleanup pass — comes first, so the file moves and the renames of step 2 are separate commits.
+
 ## 1. The terminology decision (user, 2026-10-05)
 
 | term | means | holds | lives |
