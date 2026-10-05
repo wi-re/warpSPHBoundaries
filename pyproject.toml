@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edgebound"
+version = "0.1.0"
+description = "Exact SPH boundary integrals via divergence-theorem edge reductions (2D), scene layer and delta+-SPH / DFSPH solvers on analytic boundaries"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "mpmath", "torch", "warp-lang"]
+
+[project.optional-dependencies]
+# the solvers import warpSPH{,Core} (editable installs from ~/dev/warpSPH*; not on PyPI)
+solvers = ["warpSPH", "warpSPHCore"]
+scripts = ["matplotlib"]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["edgebound*", "curvbound*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
