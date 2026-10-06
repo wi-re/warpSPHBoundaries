@@ -207,28 +207,32 @@ class DeltaSPH2D:
         (all neighbours count when C = 0).  Wall: the continuum of wall particles (density mu/dx^2), the exact edge reduction (cover) and closed-form area (cone).  No scene: lam of shape [0, N], near empty, nothing added.
         `adj`: the wall adjacency at x (the cover vector takes its restriction to the near-wall particles)."""
         cfg = self.cfg
-        near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
         nz = i != j
         ii, jj, rr = i[nz], j[nz], r[nz]
         d = x[ii] - x[jj]
         unit = d / rr.clamp(min=1e-300)[:, None]
         C = self._sum(unit, ii)
         nw = cfg.wallMass / self.dx ** 2
-        if len(near):
-            if isinstance(adj, FusedWall):
-                cover = -(math.pi * self.H ** 3 / 3) * adj.out["cover"].sum(0)[near]                 # grad int K over the solid = -(pi H^3 / 3) g0 of the cone kernel (cover.cover_vector_scene)
-            else:
+        fused = isinstance(adj, FusedWall)
+        if fused:                                                                                    # full-length outputs, masked to the near-wall particles (no host sync)
+            nearm = (lam.sum(0) > 1e-9).to(F64)
+            C = C - nw * (math.pi * self.H ** 3 / 3) * adj.out["cover"].sum(0) * nearm[:, None]      # grad int K over the solid = -(pi H^3 / 3) g0 of the cone kernel (cover.cover_vector_scene); grad int K = int unit(x - x'), no minus
+        else:
+            near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
+            if len(near):
                 cover = cover_vector_scene(self.scene, x[near], self.H, None if adj is None else adj.restrict(near))
-            C = C.index_add(0, near, nw * cover)          # grad int K = int unit(x - x'), no minus
+                C = C.index_add(0, near, nw * cover)
         norm = C.norm(dim=1)
         c = C / norm.clamp(min=1e-300)[:, None]
         cosang = -((unit) * c[ii]).sum(1)                                                            # -n_ij . c
         inCone = torch.acos(cosang.clamp(-1.0, 1.0)) <= cfg.barecascoThreshold / 2
         count = self._sum(inCone.to(F64), ii)
-        if len(near):
+        allcount = self._sum(torch.ones_like(rr), ii)                                                # C = 0: all neighbours count (wall particles too)
+        if fused:
+            areas = adj.cone_area(c, cfg.barecascoThreshold / 2) * nearm                             # [2, N]: cone, full disk (the wall continuum)
+            count, allcount = count + nw * areas[0], allcount + nw * areas[1]
+        elif len(near):
             count = count.index_add(0, near, nw * cone_area_scene(self.scene, x[near], c[near], cfg.barecascoThreshold / 2, self.H))
-        allcount = self._sum(torch.ones_like(rr), ii)
-        if len(near):                                                                                # C = 0: all neighbours count (wall particles too)
             allcount = allcount.index_add(0, near, nw * cone_area_scene(self.scene, x[near], c[near], math.pi, self.H))
         count = torch.where(norm > 1e-12, count, allcount)
         return count < 0.5

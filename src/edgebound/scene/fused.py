@@ -105,6 +105,94 @@ def _wall_contract_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=i
                 pool[base + 1] = pool[base + 1] + R10 * v0 + R11 * v1
 
 
+@wp.func
+def _wrap_pi(a: wp.float64):
+    two_pi = wp.float64(6.283185307179586476925286766559)
+    r = a + wp.float64(3.1415926535897932384626433832795)
+    r = r - two_pi * wp.floor(r / two_pi)
+    return r - wp.float64(3.1415926535897932384626433832795)
+
+
+@wp.func
+def _chord_deficit(l: wp.float64, h: wp.float64, z: wp.float64, H: wp.float64, be: wp.float64, pn: wp.float64):
+    """the part of the sector (1/2) H^2 (h - l) that a chord interval of an edge removes: (1/2) H^2 (c_hi - c_lo) - (1/2) z^2 (tan(c_hi - pn) - tan(c_lo - pn)), [c_lo, c_hi] = [l, h] cap (pn - be, pn + be) (the copy of the 2 pi periodic interval whose centre is nearest the midpoint); 0 when empty."""
+    two_pi = wp.float64(6.283185307179586476925286766559)
+    m = wp.float64(0.5) * (l + h)
+    k = wp.floor((m - pn) / two_pi + wp.float64(0.5))
+    c_lo = wp.max(l, pn + two_pi * k - be)
+    c_hi = wp.min(h, pn + two_pi * k + be)
+    out = wp.float64(0.0)
+    if c_lo < c_hi:
+        out = wp.float64(0.5) * H * H * (c_hi - c_lo) - wp.float64(0.5) * z * z * (wp.tan(c_hi - pn) - wp.tan(c_lo - pn))
+    return out
+
+
+@wp.kernel
+def _cone_area_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int), pe: wp.array(dtype=int), cand: wp.array(dtype=int),
+                      lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64), ind: wp.array(dtype=wp.float64),
+                      verts: wp.array(dtype=wp.float64), edges: wp.array(dtype=int), axis: wp.array(dtype=wp.float64), dth: wp.float64, al: wp.float64,
+                      N: int, out: wp.array(dtype=wp.float64)):
+    """per query row: the areas area(solid cap disk(p, H) cap wedge(p, axis, al)) -> out[q] and the full disk -> out[N + q] (added), H = lsup[row].  Local form of cone_area.py: the far edges' sector parts of the
+    per-edge formula sum to (1/2) H^2 W (indicator - background) along every ray (signed crossings), so  area = (1/2) H^2 W indicator - sum_{edges within H} s_e (chord deficit);  edges at segment distance >= H have an empty chord."""
+    row = wp.tid()
+    q = cand[row]
+    H = lsup[row]
+    px = lpos[2 * row]
+    py = lpos[2 * row + 1]
+    th = wp.atan2(axis[2 * q + 1], axis[2 * q]) - dth                     # the world axis in the body frame
+    pi = wp.float64(3.1415926535897932384626433832795)
+    two_pi = wp.float64(6.283185307179586476925286766559)
+    wedge_on = al < pi
+    a_wedge = wp.float64(0.0)
+    a_full = wp.float64(0.0)
+    for i in range(row_start[row], row_start[row + 1]):
+        e = pe[perm[i]]
+        v0 = edges[2 * e]
+        v1 = edges[2 * e + 1]
+        Ax = verts[2 * v0] - px
+        Ay = verts[2 * v0 + 1] - py
+        Bx = verts[2 * v1] - px
+        By = verts[2 * v1 + 1] - py
+        cr = Ax * By - Ay * Bx
+        L = wp.sqrt((Bx - Ax) * (Bx - Ax) + (By - Ay) * (By - Ay))
+        if L > wp.float64(0.0) and wp.abs(cr) >= wp.float64(1.0e-300):
+            s = wp.float64(1.0)
+            if cr < wp.float64(0.0):
+                s = wp.float64(-1.0)
+            z = wp.abs(cr) / L
+            if z < H:
+                pa = wp.atan2(Ay, Ax)
+                dphi = _wrap_pi(wp.atan2(By, Bx) - pa)
+                lo = pa
+                hi = pa + dphi
+                if dphi < wp.float64(0.0):
+                    lo = pa + dphi
+                    hi = pa
+                dx = (Bx - Ax) / L
+                dy = (By - Ay) / L
+                t = Ax * dx + Ay * dy
+                pn = lo + _wrap_pi(wp.atan2(Ay - t * dy, Ax - t * dx) - lo)
+                be = wp.acos(z / H)
+                a_full += s * _chord_deficit(lo, hi, z, H, be, pn)
+                if wedge_on:
+                    c = lo + _wrap_pi(th - lo)
+                    for kk in range(-1, 2):
+                        w0 = c + two_pi * wp.float64(kk) - al
+                        w1 = c + two_pi * wp.float64(kk) + al
+                        l = wp.max(lo, w0)
+                        h = wp.min(hi, w1)
+                        if l < h:
+                            a_wedge += s * _chord_deficit(l, h, z, H, be, pn)
+                else:
+                    a_wedge += s * _chord_deficit(lo, hi, z, H, be, pn)
+    idv = ind[row]
+    w_wedge = two_pi
+    if wedge_on:
+        w_wedge = wp.float64(2.0) * al
+    out[q] = out[q] + wp.float64(0.5) * H * H * w_wedge * idv - a_wedge
+    out[N + q] = out[N + q] + wp.float64(0.5) * H * H * two_pi * idv - a_full
+
+
 _SPEC_CACHE = {}
 
 
@@ -190,3 +278,30 @@ class FusedWall:
             shape = {"lam": (B, N), "lap": (B, N), "g0": (B, N, 2), "a1g1": (B, N, 2), "cov": (B, N, 2, 2)}[o.kind]
             res[o.name] = t.reshape(shape)
         return res
+
+    def cone_area(self, axes, half_angle):
+        """[2, N] float64: area(solid cap disk(x, H) cap wedge(x, axis, half_angle)) (row 0, units length^2; `half_angle >= pi` = the full disk) and the full-disk area (row 1) for the world `axes` [N, 2]
+        (only the direction matters), summed over the bodies (a query outside the candidate list of a background rep gets nothing from it); one launch per (body, rep) over the pair topology of this position set (`scene/cone_area.py` is the reference).  The disk radius is the support of the
+        query, so the pair filter (edges within one support) contains every edge with a chord.  Evaluated in float64 whatever the edge-kernel precision (angle differences near pi/2 amplify float32 round-off)."""
+        N, dev = self.N, self.dev
+        out = torch.zeros(2 * N, dtype=F64, device=dev)
+        wout = wp.from_torch(out, dtype=wp.float64)
+        axis = wp.from_torch(axes.to(F64).contiguous().reshape(-1), dtype=wp.float64)
+        for it in self.items:
+            ba, rep = it["ba"], it["rep"]
+            _, perm, start, cand32, _ = it["keep"]
+            if it.get("cone") is None:
+                lpos = ba.lpos.to(F64).contiguous().reshape(-1)
+                lsup = ba.lsup.to(F64).contiguous()
+                ind = it["topo"].indicator(rep, ba.lpos).to(F64).contiguous()
+                verts = rep.vertices.to(dev, F64).contiguous().reshape(-1)
+                edges = rep.edges.to(dev, torch.int32).contiguous().reshape(-1)
+                pe = it["topo"].e.to(torch.int32).contiguous()
+                it["cone"] = (lpos, lsup, ind, verts, edges, pe,
+                              tuple(wp.from_torch(t, dtype=dt) for t, dt in ((lpos, wp.float64), (lsup, wp.float64), (ind, wp.float64), (verts, wp.float64), (edges, wp.int32), (pe, wp.int32))))
+            wl, ws, wi, wv, we, wpe = it["cone"][6]
+            wp.launch(_cone_area_kernel, dim=it["rows"], device=dev, inputs=[
+                wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wpe, wp.from_torch(cand32, dtype=wp.int32),
+                wl, ws, wi, wv, we, axis, wp.float64(float(ba.body.angle)), wp.float64(float(half_angle)), N, wout])
+        wp.synchronize_device(dev)
+        return out.reshape(2, N)

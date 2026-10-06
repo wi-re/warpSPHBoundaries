@@ -115,3 +115,25 @@ def test_fused_evaluate_order_independence(device):
     assert float(second["lam"].abs().max()) > 0.5 and torch.equal(first["cover"], fresh.evaluate(g_only)["cover"])
     assert torch.equal(third["A"], 2.0 * second["A"]) or float((third["A"] - 2.0 * second["A"]).abs().max()) <= 1e-12 * float(second["A"].abs().max())
     assert torch.equal(third["lam"], second["lam"])
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("half_angle", [math.pi / 6, math.pi / 3, 2.0])
+def test_fused_cone_area_equals_cone_area_scene(device, half_angle):
+    """`FusedWall.cone_area` (local form: indicator sector minus the chord deficits of the edges within one support) vs `cone_area_scene` (the non-local per-edge closed form), both float64: the two
+    differ by round-off of O(H^2) numbers only; tolerance 1e-11 H^2 stated before looking.  Two bodies (L-shape with a reflex corner, thin box), 500 queries inside / near / far, constant support
+    (the reference takes one H), random axes; row 1 is the full disk."""
+    from edgebound.scene.cone_area import cone_area_scene
+    H = 0.5
+    sc, ps, pos, _ = make(device, constant_support=H)
+    N = len(pos)
+    axes = torch.as_tensor(np.random.default_rng(9).uniform(-1, 1, (N, 2)), dtype=F64, device=device)
+    fw = FusedWall(sc, sc.adjacency(ps, props(WarpOperation.Density, "w2")), (FusedGroup("w2"),))
+    got = fw.cone_area(axes, half_angle)
+    assert got.shape == (2, N)
+    for row, al in ((0, half_angle), (1, math.pi)):
+        ref = cone_area_scene(sc, pos, axes, al, H)
+        d = float((got[row] - ref).abs().max())
+        assert d <= 1e-11 * H * H, (row, d)
+    assert float(got[1].max()) > 0.1 * H * H                                       # the queries do see the walls (not a vacuous comparison)
+    assert torch.equal(got, fw.cone_area(axes, half_angle))                         # deterministic
