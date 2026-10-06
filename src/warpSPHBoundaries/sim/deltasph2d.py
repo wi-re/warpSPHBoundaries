@@ -415,9 +415,9 @@ class DeltaSPH2D:
                     on = (hit & (nearm > 0))[:, None]
                     nu_w = fac / 8.0
                     term = torch.where(on, -2.0 * nu_w * vrel * (gm / (rho * dd))[:, None], torch.zeros_like(v))
-                    if cfg.wallViscosityForm == "noslipCurv":                                       # second order: the wall gradient is (v_rel / d) - (d / 2) lap v, not v_rel / d (the profile is not linear: v = a s + (lap v / 2) s^2 through the wall point, lap v = the viscous acceleration of the particle / nu)
-                        kappa = (gm * dd / rho)[:, None]                                            # c d / (2 nu) with c = 2 nu |G| / rho
-                        term = torch.where(on, (term + kappa * viscf) / (1.0 + kappa), torch.zeros_like(v))
+                    if cfg.wallViscosityForm == "noslipCurv":                                       # EXPERIMENTAL, EMPIRICAL (not a derived method): a correction in the spirit of the second-order wall gradient v_rel / d - (d / 2) lap v.  The consistent algebra gives
+                        kappa = (gm * dd / rho)[:, None]                                            # term = (term0 + kappa viscf) / (1 - kappa) (kappa = |G| d / rho); that form makes the plane Poiseuille amplitude WORSE (0.920 / 0.958 at n = 32 / 64, the flux form is 0.950 / 0.966).
+                        term = torch.where(on, (term + kappa * viscf) / (1.0 + kappa), torch.zeros_like(v))   # The (1 + kappa) used here fits the channel (1.011 / 1.001) but has no derivation and is wrong on curved walls: do not use it beyond the plane channel (docs/plan-next-steps.md).
                     if lever is not None and cfg.wallFrictionLever == "contact":
                         lever[bi] = cp
                 acc = acc + term

@@ -129,9 +129,11 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
   `-(2/gamma) sum_s f_s (grad B)_s . grad gamma_as` where `mu (grad v) . n = tau` is the wall shear stress and, for laminar flow, `tau = nu v(z) / z` with `z` a short distance from the wall: this is the solver's
   `wallViscosityForm="noslip"` (first order: v(z)/z estimates the wall gradient).  Mayrhofer et al. section 6 generalise the wall boundary condition to arbitrary order by a weighted local least-squares polynomial of the field along the wall
   normal with the wall value constrained (Robin condition), and show on a wave problem that m = 2 reduces the error by up to 30 % relative to m = 1; section 7.2 removes the hydrostatic / body-force part of the
-  extrapolated pressure for the wall pressure condition (consistent with `bodyForceAtWall`).  `noslipCurv` (this session, derived locally: gradient `v_rel / d - (d/2) lap v` with `lap v` from the particle's viscous acceleration) is the
-  second-order member of the same family obtained from the momentum balance instead of a least-squares fit; no citation for this exact form was found.
-* **Planar wall**: `noslipCurv` brings the plane Poiseuille amplitude to 1.011 / 1.006 / 1.001 at n = 32 / 48 / 64 (flux form 0.95-0.97, mirror 0.90-0.93), momentum balance 0.999.
+  extrapolated pressure for the wall pressure condition (consistent with `bodyForceAtWall`).  `noslipCurv` is NOT that: it was meant as the second-order wall gradient `v_rel / d - (d/2) lap v` with `lap v` from the viscous acceleration, but the consistent algebra
+  (`term = (term0 + kappa viscf) / (1 - kappa)`) gives a plane-channel amplitude of 0.920 / 0.958 (n = 32 / 64), worse than the flux form (0.950 / 0.966); the implemented `(1 + kappa)` (a sign slip found later) fits the channel (1.011 / 1.001)
+  but has no derivation.  It stays as an EXPERIMENTAL flag, not a method; the first-order wall error is not the missing (d/2) lap v of the gradient alone: the linear continuation of the wall extension misses the (lap v / 2) s^2 part
+  of the profile in the whole wall region of the Laplacian integral, a moment of the wall region that needs its own geometric integral.
+* **Planar wall**: the empirical `noslipCurv` gives the plane Poiseuille amplitude 1.011 / 1.006 / 1.001 at n = 32 / 48 / 64 (flux form 0.95-0.97, mirror 0.90-0.93), momentum balance 0.999 (see the caveat above).
 * **Curved walls (Taylor-Couette, r1 = 0.2, r2 = 0.5, `scripts/studies/taylor_couette.py`)**:
   * *Torque bookkeeping, FIXED*: the tangential wall friction was booked at the contact point while the fluid loses the momentum at the particle position, so the torque was not conserved between the two walls (outer / -inner
     1.13 at n = 48, 1.21 at n = 32).  `wallFrictionLever="particle"` (now the default) books it where the fluid loses it: outer / -inner = 1.0004, and `tests/sim/test_wall_friction_torque.py` checks
@@ -140,6 +142,9 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
     not the wall-normal second derivative on a curved wall: for Couette flow lap u = 0 but u'' = 2B/r^3 != 0, so the correction must carry the curvature terms; it is exact on flat walls only); `noslipMirror` (exact
     wall integral): torque 1.031 of the exact and balanced 1.001, but the profile is non-monotone-wrong (u_theta 0.159, 0.163, 0.140 vs exact 0.175, 0.141, 0.114 in the three inner bins) and the outer bin does not vanish.
     So no closure is right on both walls; the errors are 5-25 % at r1 / H = 2.4 and r2 / H = 6.
+  * *Bulk operator in curved shear* (new check, exact Taylor-Couette profile, interior particles, fluid-only operator, exact value 0): the azimuthal viscous acceleration is 28 / 10 / 4.4 / 2.3 / 0.7 % of nu u'' at H/dx = 3 / 4 / 5 / 6 / 8, independent of the resolution at fixed H/dx
+    (lattice anisotropy of the alpha-viscosity pair sum: u'' and u'/r cancel only to that accuracy).  The default H = 4 dx therefore carries a ~10 % consistency error in curved shear; at H = 6 dx it is 2 %, and the annulus
+    profile (0.907) and torque (0.783) did NOT improve with H = 6 dx, so it is not the dominant error there.
   * Periodic cylinder array: K = 27.5 vs 30 (the body force in the wall pressure condition changes it by < 0.5 %).
   * Candidate next steps (decision pending): (a) the weighted local least-squares polynomial along the wall normal with the wall value constrained (Mayrhofer et al. section 6; second order for flat and curved
     walls, needs the fluid neighbour sums of each near-wall particle along its own normal); (b) a curvature-aware version of `noslipCurv` (normal second derivative from the vector Laplacian with the metric terms);
