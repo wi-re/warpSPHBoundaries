@@ -123,6 +123,20 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
   model of the solver (a model question, independent of periodicity).  Candidate next studies, in order: wall-closure calibration on the channel + a Couette annulus (a convex curved wall with an exact solution) with the
   mirror and flux forms, the dependence on H / dx and on shifting, and a sampling check of the half-spacing wall gap (fluid mass).
 
+### Wall viscosity closure investigation (2026-10-06, after the first ladder results)
+
+* **Literature (read: Mayrhofer, Ferrand, Kassiotis, Violeau, Morel 2013, arXiv:1304.3692, sections 2-3, 6-7).**  The semi-analytical wall boundary conditions of Ferrand et al. use the Laplacian with boundary term
+  `-(2/gamma) sum_s f_s (grad B)_s . grad gamma_as` where `mu (grad v) . n = tau` is the wall shear stress and, for laminar flow, `tau = nu v(z) / z` with `z` a short distance from the wall: this is the solver's
+  `wallViscosityForm="noslip"` (first order: v(z)/z estimates the wall gradient).  Mayrhofer et al. section 6 generalise the wall boundary condition to arbitrary order by a weighted local least-squares polynomial of the field along the wall
+  normal with the wall value constrained (Robin condition), and show on a wave problem that m = 2 reduces the error by up to 30 % relative to m = 1; section 7.2 removes the hydrostatic / body-force part of the
+  extrapolated pressure for the wall pressure condition (consistent with `bodyForceAtWall`).  `noslipCurv` (this session, derived locally: gradient `v_rel / d - (d/2) lap v` with `lap v` from the particle's viscous acceleration) is the
+  second-order member of the same family obtained from the momentum balance instead of a least-squares fit; no citation for this exact form was found.
+* **Planar wall**: `noslipCurv` brings the plane Poiseuille amplitude to 1.011 / 1.006 / 1.001 at n = 32 / 48 / 64 (flux form 0.95-0.97, mirror 0.90-0.93), momentum balance 0.999.
+* **Curved walls are not yet right**: Taylor-Couette (r1 = 0.2, r2 = 0.5, n = 48, `noslipCurv`): profile amplitude 0.908, torque on the inner cylinder 0.727 of the exact value, torque on the outer 1.127 of minus the inner (angular momentum
+  is not balanced between the walls).  Periodic cylinder array: K = 27.5 vs 30 (the body force in the wall pressure condition changes it by < 0.5 %).  Suspects, to be tested on the annulus: (a) the flux form uses
+  `|G| = |sum_s grad gamma_s|` (the net vector) where the sum of the segment magnitudes `sum_s |grad gamma_s|` (`oint W dl`) belongs for a curved wall; (b) the load bookkeeping applies the tangential wall friction at the contact point
+  (lever = cp) while the fluid loses angular momentum at the particle position, so the torque is not conserved between the two bodies (factor r_cp / r_p ~ 1 - 0.5 dx / r).
+
 ### Risks
 
 * The Dirichlet frame pins a region that is also a shifting / density-diffusion neighbour; edge effects at the frame feed the wake through the periodic image.  Rung 5 quantifies this.

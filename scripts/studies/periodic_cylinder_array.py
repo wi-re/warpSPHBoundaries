@@ -55,7 +55,8 @@ def main():
     ap.add_argument("--f", type=float, default=0.03)
     ap.add_argument("--time", type=float, default=40.0)
     ap.add_argument("--H", type=float, default=4.0, help="support in units of dx")
-    ap.add_argument("--wall", default="noslip", help="wallViscosityForm: noslip (flux form), noslipMirror (exact Laplacian, antisymmetric mirror)")
+    ap.add_argument("--wall", default="noslip", help="wallViscosityForm: noslip (flux form), noslipMirror (exact Laplacian, antisymmetric mirror), noslipCurv (flux form with the second-order wall gradient)")
+    ap.add_argument("--noWallForce", action="store_true", help="leave the body force out of the wall pressure condition (the old behaviour)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -68,7 +69,7 @@ def main():
     nu = shear_nu(a.n, a.alpha, a.c0, a.device, a.H)
     print(f"N={len(pos)} c={c:.4f} nu_eff={nu:.5f} (alpha c0 H / 8 xi = {a.alpha * a.c0 * a.H * dx / (8 * 2.821384729):.5f})  K_SA={sangani_acrivos(c):.3f}")
     scene = Scene([Body(bodyId=0, center=(0.5, 0.5), reps=[DiskArrayRep([(0.0, 0.0)], [a.R])])], a.device)
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(a.f, 0.0), graphStep=True, shifting=True, wallViscosityForm=a.wall)
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(a.f, 0.0), bodyForceAtWall=not a.noWallForce, graphStep=True, shifting=True, wallViscosityForm=a.wall)
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=a.H * dx)
     hist = LoadHistory()
     Fbal = sim.cfg.rho0 * a.f * len(pos) * dx * dx                         # the body force on the fluid particles actually present (the cut lattice fills the fluid region to ~1 %)
@@ -79,10 +80,10 @@ def main():
         k += 1
         if k % 1000 == 0:
             F = hist.total()[-200:, 0].mean()
-            U = float(sim.v[:, 0].mean()) * (1.0 - c)
+            U = float(sim.v[:, 0].sum()) * dx * dx
             print(f"t={sim.time:7.2f} U={U:.5f} F={F:.5f} (balance {Fbal:.5f}, {F / Fbal:.4f}) K={F / (nu * U):.3f} Fy={hist.total()[-200:, 1].mean():+.1e}  {time.time() - t0:.0f}s", flush=True)
     F = hist.total()[-500:, 0].mean()
-    U = float(sim.v[:, 0].mean()) * (1.0 - c)
+    U = float(sim.v[:, 0].sum()) * dx * dx
     print(f"final: F/balance={F / Fbal:.4f}  K={F / (nu * U):.3f}  K_SA={sangani_acrivos(c):.3f}  ratio={F / (nu * U) / sangani_acrivos(c):.3f}")
 
 

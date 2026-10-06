@@ -83,6 +83,7 @@ class DeltaSPHConfig:
     wallParticleSpacing: float = 0.0    # > 0: the wall as a lattice of wall particles of this spacing (in dx) summed pairwise (scene/particles.py, the particle representation of the boundary provider; eager only), 0 = the analytic bodies (exact integrals)
     periodic: Optional[Periodic] = None   # periodic box (pairs.py): minimum-image pair geometry on the raw positions, which are never wrapped; fluid-fluid terms only (the wall integrals take their own image shifts, step 1b of docs/plan-next-steps.md)
     bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
+    bodyForceAtWall: bool = True        # the body force enters the wall pressure condition dp/dn = rho (g + f - a_wall) . n (a uniform force acts on the fluid at a wall like gravity; it is not hydrostatic in the density diffusion)
     pinned: Optional[Pinned] = None     # a prescribed-velocity band of fluid particles (pinned.py): the free stream of a periodic flow past a body
     fluidWarp: bool = True              # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
@@ -201,11 +202,11 @@ class DeltaSPH2D:
             G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
             self._wallCache = None if self._graphMode else (x.clone(), poses, adj, pm, lam, G, self.Hvec.clone(), self.kinds.clone())
         if isinstance(adj, WallAggregate):
-            a1 = torch.stack([self.cfg.rho0 * (self.g[None] - b.accelerationAt(x)) for b in self.scene.bodies])
+            a1 = torch.stack([self.cfg.rho0 * (self._gWall()[None] - b.accelerationAt(x)) for b in self.scene.bodies])
             return lam, G, self.cfg.wallMass * adj.evaluate((WallOutput("A", 0, "a1g1"),), a1=a1)["A"], adj
         flds = []
         for b in self.scene.bodies:
-            a1 = self.cfg.rho0 * (self.g[None] - b.accelerationAt(x))
+            a1 = self.cfg.rho0 * (self._gWall()[None] - b.accelerationAt(x))
             flds.append(BodyField(torch.zeros(len(x), dtype=F64, device=self.dev), a1, rho=1.0, perQuery=True))
         A = self._wall_op(ps, pm, WarpOperation.Gradient, flds)
         return lam, G, A, adj
@@ -336,8 +337,8 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None and (not isinstance(adj, WallAggregate) or not self._graphMode):         # the index list is only needed by the non-fused and the 'pairwise' paths (and diagnostics); a graph capture has none
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
-        if cfg.viscosity and cfg.wallViscosity and cfg.wallViscosityForm not in ("laplacian", "pairwise", "noslip", "noslipMirror"):
-            raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise', 'noslip' or 'noslipMirror', got %r" % (cfg.wallViscosityForm,))
+        if cfg.viscosity and cfg.wallViscosity and cfg.wallViscosityForm not in ("laplacian", "pairwise", "noslip", "noslipMirror", "noslipCurv"):
+            raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise', 'noslip', 'noslipMirror' or 'noslipCurv', got %r" % (cfg.wallViscosityForm,))
         self.surface = self._detect_surface(x, None if fk else i, None if fk else j, None if fk else r, lam, adj, fk)
         if cfg.dilateSurface:
             self.surfaceDilated = fk.dilate(self.surface) if fk else self._sum(self.surface[j].to(F64), i) > 0.5            # pairs include i = j
@@ -378,9 +379,11 @@ class DeltaSPH2D:
             if want_forces:
                 forces = self._load(accw, x[None].expand(self.nb, -1, -1))                          # load of the fluid on each body: -m sum a (a pair force is central: its torque about the centre is that of the force at the particle)
         # artificial viscosity (fluid only)
+        viscf = None                                                                               # the fluid-pair viscous acceleration (the curvature estimate of the second-order no-slip wall)
         if cfg.viscosity:
             if fw is not None:
-                acc = acc + fw.viscosity(fps, fadj, v)
+                viscf = fw.viscosity(fps, fadj, v)
+                acc = acc + viscf
             else:
                 vij = v[i] - v[j]
                 mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
@@ -390,7 +393,7 @@ class DeltaSPH2D:
         if want_forces and self.nb and cfg.viscosity and cfg.wallViscosity:
             visc = torch.zeros((self.nb, len(x), 2), dtype=F64, device=self.dev)                    # per body acceleration of the wall viscous term, for the load of the fluid on the body
             lever = x[None].repeat(self.nb, 1, 1)                                                   # where the reaction acts: the particle, or the contact point for the tangential no-slip friction
-        if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip", "noslipMirror"):
+        if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip", "noslipMirror", "noslipCurv"):
             fac = cfg.alpha * cfg.c0 * H / self.xi                                                  # full-length form: the near-wall rows are a mask, not an index list (no host sync)
             nearm = (lam.sum(0) > 1e-9).to(F64)
             for bi, b in enumerate(self.scene.bodies):
@@ -407,7 +410,13 @@ class DeltaSPH2D:
                     dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
                     dd = dsd.clamp(min=0.25 * self.dx)
                     cp = x - dsd[:, None] * nsd                                                     # the wall point: the wall velocity of the friction is the one THERE (rotating walls)
-                    term = torch.where((hit & (nearm > 0))[:, None], -2.0 * (fac / 8.0) * (v - b.velocityAt(cp)) * (gm / (rho * dd))[:, None], torch.zeros_like(v))
+                    vrel = v - b.velocityAt(cp)
+                    on = (hit & (nearm > 0))[:, None]
+                    nu_w = fac / 8.0
+                    term = torch.where(on, -2.0 * nu_w * vrel * (gm / (rho * dd))[:, None], torch.zeros_like(v))
+                    if cfg.wallViscosityForm == "noslipCurv":                                       # second order: the wall gradient is (v_rel / d) - (d / 2) lap v, not v_rel / d (the profile is not linear: v = a s + (lap v / 2) s^2 through the wall point, lap v = the viscous acceleration of the particle / nu)
+                        kappa = (gm * dd / rho)[:, None]                                            # c d / (2 nu) with c = 2 nu |G| / rho
+                        term = torch.where(on, (term + kappa * viscf) / (1.0 + kappa), torch.zeros_like(v))
                     if lever is not None:
                         lever[bi] = cp
                 acc = acc + term
@@ -452,6 +461,10 @@ class DeltaSPH2D:
         if forces is not None:
             forces = torch.stack([forces, self._load(visc, lever) if visc is not None else torch.zeros_like(forces)])      # [2, B, 3]: pressure, wall viscous; (Fx, Fy, torque about the centre)
         return acc, drho, forces
+
+    def _gWall(self):
+        """the body acceleration the wall pressure condition sees, dp/dn = rho (g + f - a_wall) . n: a uniform body force acts on the fluid at a wall like gravity (the wall must carry it), cfg.bodyForceAtWall."""
+        return self.g + self._const(self.cfg.bodyForce) if self.cfg.bodyForceAtWall else self.g
 
     def _const(self, values):
         """a small constant as a device tensor, made once (a host-to-device copy cannot be captured in a CUDA graph; the first use is in the eager warm-up)."""
