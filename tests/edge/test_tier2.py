@@ -4,8 +4,8 @@ from fractions import Fraction as F
 import numpy as np
 import pytest
 
-import edgebound as eb
-from edgebound.edge import np2d
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge import np2d
 
 NAMES = ["cubic", "w2", "w4", "w6"]
 

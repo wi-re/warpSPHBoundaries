@@ -13,8 +13,8 @@ from fractions import Fraction as F
 from scipy.spatial import Delaunay
 
 import mpmath as mp
-import edgebound as eb
-from edgebound.edge import fem, np_fem
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge import fem, np_fem
 
 
 def mesh8():

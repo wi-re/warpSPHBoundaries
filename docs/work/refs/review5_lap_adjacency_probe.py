@@ -1,8 +1,8 @@
 # reviewer probe for WORK-006 T6.2: lap_lambda_scene with ONE adjacency (kernel l+family) for Density and Covariance
 import time, torch
-from edgebound.sim.cases import marrone_dambreak
-from edgebound.scene.viscosity import lap_lambda_scene, lap_factor
-from edgebound.scene.scene import BodyField, sceneOperation
+from warpSPHBoundaries.sim.cases import marrone_dambreak
+from warpSPHBoundaries.scene.viscosity import lap_lambda_scene, lap_factor
+from warpSPHBoundaries.scene.scene import BodyField, sceneOperation
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 sim,_ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()

@@ -6,7 +6,7 @@ Input: branch `local-model` (commits since the tag `reviewed-(NNN-1)`, or since 
 ```
 git log --oneline <base>..local-model            # one commit per task + the report, subjects "WORK-NNN Tn.m: ..."
 git diff --stat <base>..local-model              # only the files WORK-NNN allows? anything else = violation
-git diff <base>..local-model -- tests/ results/ python/edgebound/deltasph2d.py python/edgebound/scene.py python/edgebound/warpbc.py   # existing tests / baselines / solver untouched unless allowed
+git diff <base>..local-model -- tests/ results/ python/warpSPHBoundaries/deltasph2d.py python/warpSPHBoundaries/scene.py python/warpSPHBoundaries/warpbc.py   # existing tests / baselines / solver untouched unless allowed
 git status --short                                 # clean
 python -m pytest tests/edge/test_deltasph.py tests/edge/test_scene.py tests/edge/test_dfsph.py -q    # 72 passed (GPU, ~2 min)
 python -m pytest <the new test files> -q

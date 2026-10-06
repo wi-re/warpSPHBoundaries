@@ -2,9 +2,9 @@ import sys; sys.path.insert(0, "/home/lu26029/dev/curvatureBoundaries/docs/work/
 import numpy as np, torch, math
 from lap_lshape_probe import *
 import lap_scene_probe as P
-from edgebound.edge import kernels
+from warpSPHBoundaries.edge import kernels
 from warpSPHCore import *
-from edgebound.scene.scene import sceneOperation, BodyField
+from warpSPHBoundaries.scene.scene import sceneOperation, BodyField
 CEN, ANG, H = (0.3, -0.2), 0.7, 0.6
 sc = Scene([Body(bodyId=0, reps=[SurfaceRep.polygon(LS)], center=CEN, angle=ANG)], dev)
 wp_ = LS @ rot(ANG).T + np.asarray(CEN)

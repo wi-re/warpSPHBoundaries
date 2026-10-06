@@ -1,7 +1,7 @@
 """Truncated-run regression harness for the delta+-SPH solver (`deltasph2d.py`).
 
 The full validation cases take 5-90 min each; this runs short variants so a later
-refactor can be checked in minutes.  It reuses the `edgebound.sim.validation` runners
+refactor can be checked in minutes.  It reuses the `warpSPHBoundaries.sim.validation` runners
 (`run_tank` / `run_dambreak` / `run_sloshing`) with truncated `T` and records a
 small set of scalar metrics per case.
 
@@ -43,9 +43,9 @@ import time
 import numpy as np
 import torch
 
-from edgebound.sim.validation import ke_relmax, run_dambreak, run_sloshing, run_tank
+from warpSPHBoundaries.sim.validation import ke_relmax, run_dambreak, run_sloshing, run_tank
 
-from edgebound import paths
+from warpSPHBoundaries import paths
 
 REPO_ROOT = str(paths.REPO_ROOT)
 RESULTS_DIR = str(paths.results_dir() / "deltasph")

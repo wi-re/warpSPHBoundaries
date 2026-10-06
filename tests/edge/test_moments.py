@@ -4,9 +4,9 @@ from fractions import Fraction as F
 import mpmath as mp
 import pytest
 
-import edgebound as eb
-from edgebound.edge.kernels import disk_moment, kernel
-from edgebound.edge.mpq import mpq
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge.kernels import disk_moment, kernel
+from warpSPHBoundaries.edge.mpq import mpq
 
 from .conftest import KERNELS, rand_point, rand_triangle
 from .conftest import big_triangle, tiling
@@ -68,7 +68,7 @@ def test_half_plane_second_component_first_moment(name):
         return sum(sum(c * r ** i for i, c in enumerate(cc)) for lo, hi, cc in k.pieces
                    if mpq(lo) <= r <= mpq(hi) and r < 1) / mp.pi if False else None
 
-    from edgebound.edge.kernels import peval
+    from warpSPHBoundaries.edge.kernels import peval
     def Wf(r):
         tot = mp.mpf(0)
         for lo, hi, cc in k.pieces:

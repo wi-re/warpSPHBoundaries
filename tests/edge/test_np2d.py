@@ -5,9 +5,9 @@ import mpmath as mp
 import numpy as np
 import pytest
 
-import edgebound as eb
-from edgebound.edge import fixtures as fx
-from edgebound.edge import np2d
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge import fixtures as fx
+from warpSPHBoundaries.edge import np2d
 
 DATA = fx.load()
 ELEMENTS = [c for c in DATA["cases"] if c["kind"] == "element" and len(c["polygon"]) == 3]

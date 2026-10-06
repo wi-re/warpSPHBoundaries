@@ -1,14 +1,14 @@
 """Reviewer's probe for REVIEW-002 (throw-away; run from the repo root with the `warp` env).
 (1) physical tensile term T_y at the flat-floor point (0,0.3), H=1, by (a) the closed-form factor c2^5/(pi^4 c25) and (b) an independent
-    midpoint-grid integral of W^4 dW/dy over the half disk (no edgebound code); the WORK-002 doc uses (c2/c25)^5/pi^4.
+    midpoint-grid integral of W^4 dW/dy over the half disk (no warpSPHBoundaries code); the WORK-002 doc uses (c2/c25)^5/pi^4.
 (2) np2d stable-route error of W^5 (w4) as a function of the distance from a vertex, exact mpmath reference."""
 import sys, math
 sys.path.insert(0, "python")
 import numpy as np, mpmath as mp
 from fractions import Fraction as F
-from edgebound.edge import kernels, np2d, geometry as G
-from edgebound.edge.core import GUARD, block_grad
-from edgebound.edge.kernels import power_terms as terms, power_monomials as ref_coeffs
+from warpSPHBoundaries.edge import kernels, np2d, geometry as G
+from warpSPHBoundaries.edge.core import GUARD, block_grad
+from warpSPHBoundaries.edge.kernels import power_terms as terms, power_monomials as ref_coeffs
 POLY = [(0, 0), (1, 0), (1, 1), (0, 1)]
 
 # ---- (1)

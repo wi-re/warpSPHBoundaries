@@ -4,10 +4,10 @@
 # Reference numbers (2026-10-05, RTX PRO 6000 Blackwell idle): f64 dam break 20.2 / sloshing 12.0 ms/step, f32 17.4 / 9.4 (before step 3: 24.8 / 15.2, before 1b: 30.8 / 22.2).
 import os, sys, time
 import numpy as np, torch
-import edgebound                                                   # noqa: F401  (float64 unless warpSPHCore_PRECISION is set)
-from edgebound import paths
-from edgebound.edge import precision as PR
-from edgebound.sim import cases
+import warpSPHBoundaries                                                   # noqa: F401  (float64 unless warpSPHCore_PRECISION is set)
+from warpSPHBoundaries import paths
+from warpSPHBoundaries.edge import precision as PR
+from warpSPHBoundaries.sim import cases
 
 fused = "--old-wall" not in sys.argv
 graph = "--graph" in sys.argv                                    # fluidWarp + graphStep: the whole step replayed as a CUDA graph (sim/graphstep.py)

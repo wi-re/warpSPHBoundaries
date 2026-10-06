@@ -1,7 +1,7 @@
-diff --git a/python/edgebound/deltasph2d.py b/python/edgebound/deltasph2d.py
+diff --git a/python/warpSPHBoundaries/deltasph2d.py b/python/warpSPHBoundaries/deltasph2d.py
 index 5ea9dec..ebf736c 100644
---- a/python/edgebound/deltasph2d.py
-+++ b/python/edgebound/deltasph2d.py
+--- a/python/warpSPHBoundaries/deltasph2d.py
++++ b/python/warpSPHBoundaries/deltasph2d.py
 @@ -85,6 +85,7 @@ class DeltaSPHConfig:
      surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle (wall part of the free-surface detector)
      coverExact: bool = False            # wall part of the Barecasco cover vector from the exact edge reduction (cover.cover_vector_scene) instead of the polar quadrature; the cone count still uses the samples (Q3b)

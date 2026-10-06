@@ -6,7 +6,7 @@ against that same `scalar_t`, so the edge machinery follows the precision of the
 
 Two rules of this package on top of it:
 
-* **edgebound's default is float64** (the validation, the exactness tests and the bit-level regression harness are float64 contracts).  `edgebound/__init__.py` calls
+* **warpSPHBoundaries's default is float64** (the validation, the exactness tests and the bit-level regression harness are float64 contracts).  `warpSPHBoundaries/__init__.py` calls
   `ensure_default()` before anything imports warpSPHCore; if nothing was configured it selects float64.  To run in float32 set `warpSPHCore_PRECISION=float32` in the
   environment (or `warpSPHCore_config.configure(precision="float32")` before the first import); if warpSPHCore was imported first with its float32 default, the edge kernels
   are float32 as well (a warning says so).
@@ -49,9 +49,9 @@ vec3_t = wp.types.vector(length=3, dtype=real)
 np_real = {wp.float16: np.float16, wp.float32: np.float32, wp.float64: np.float64}[real]
 torch_real = get_torch_precision()
 
-if not IS_F64 and "edgebound_precision_warned" not in os.environ:
-    os.environ["edgebound_precision_warned"] = "1"
-    warnings.warn("edgebound edge kernels run in %s (warpSPHCore.type_config.scalar_t); the exactness tests, the regression harness and the finite-element pair kernels "
+if not IS_F64 and "warpSPHBoundaries_precision_warned" not in os.environ:
+    os.environ["warpSPHBoundaries_precision_warned"] = "1"
+    warnings.warn("warpSPHBoundaries edge kernels run in %s (warpSPHCore.type_config.scalar_t); the exactness tests, the regression harness and the finite-element pair kernels "
                   "are float64 contracts (set warpSPHCore_PRECISION=float64)" % real.__name__, RuntimeWarning, stacklevel=2)
 
 

@@ -8,9 +8,9 @@ import torch
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 from curvbound import planar2d
-import edgebound as eb
-from edgebound.scene import boundaryOps as B
-from edgebound.scene.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.scene import boundaryOps as B
+from warpSPHBoundaries.scene.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy
 
 DEV = "cuda:0" if torch.cuda.is_available() else "cpu"
 TD = torch.float64

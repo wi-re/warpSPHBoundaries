@@ -13,8 +13,8 @@ from fractions import Fraction as F
 import mpmath as mp
 import numpy as np
 
-from edgebound.edge import fixtures as fx
-from edgebound.edge import np2d
+from warpSPHBoundaries.edge import fixtures as fx
+from warpSPHBoundaries.edge import np2d
 
 KERNELS = ["cubic", "w2", "w4", "w6"]
 
@@ -161,7 +161,7 @@ def tiny_relative(verbose=True):
 
 def _area_gauss(V, X, kname, n):
     """baseline: tensor-Gauss (Duffy) quadrature of int_T W over the triangle, n x n points, no clipping."""
-    from edgebound.edge.kernels import kernel as get_kernel
+    from warpSPHBoundaries.edge.kernels import kernel as get_kernel
     k = get_kernel(kname)
     xg, wg = np.polynomial.legendre.leggauss(n)
     u = (xg + 1) / 2

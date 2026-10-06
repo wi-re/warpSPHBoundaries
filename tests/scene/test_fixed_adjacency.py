@@ -19,7 +19,7 @@ from warpSPHCore import WarpOperation
 sys.path.insert(0, os.path.dirname(__file__))
 from test_fused_wall import make, make_box, props, FusedGroup, FusedWall, WallOutput   # noqa: E402
 
-from edgebound.scene.fixedadj import fixed_adjacency   # noqa: E402
+from warpSPHBoundaries.scene.fixedadj import fixed_adjacency   # noqa: E402
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64
@@ -81,7 +81,7 @@ def test_build_does_not_synchronise(scene):
 @pytest.mark.parametrize("device", DEVICES)
 @pytest.mark.parametrize("case", ["tank", "dambreak"])
 def test_solver_state_does_not_depend_on_the_adjacency_kind(device, case):
-    from edgebound.sim import cases
+    from warpSPHBoundaries.sim import cases
     res = {}
     for fixed in (False, True):
         if case == "tank":

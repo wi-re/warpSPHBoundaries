@@ -2,8 +2,8 @@
 
 **Status:** [V] (the flat-wall absolute, distance floor, Galilean, Couette/Poiseuille, off-switch and five-step checks below; the gate / sloshing / stability numbers in `../deltasph-validation.md`, WORK-007 section)
 **Tier(s):** n/a (solver wall term, not an obstacle tier) · **Dimension:** 2D
-**Depends on:** the kernel table (`curvbound.kernels`), the scene operations of `src/edgebound/scene/scene.py` (`signed_distance`, `Body.velocityAt`, the wall gradient `G` of `_wall_data`); `laplacian-wall.md` §3.5 (ν_eff) and §8 (Chiron et al. 2019 Eq. 91–92)
-**Implemented in:** `src/edgebound/sim/deltasph2d.py` (the `"noslip"` branch of the wall-viscosity block of `rhs`)
+**Depends on:** the kernel table (`curvbound.kernels`), the scene operations of `src/warpSPHBoundaries/scene/scene.py` (`signed_distance`, `Body.velocityAt`, the wall gradient `G` of `_wall_data`); `laplacian-wall.md` §3.5 (ν_eff) and §8 (Chiron et al. 2019 Eq. 91–92)
+**Implemented in:** `src/warpSPHBoundaries/sim/deltasph2d.py` (the `"noslip"` branch of the wall-viscosity block of `rhs`)
 **Verified by:** `tests/sim/test_deltasph_noslip.py` (T7.1)
 
 The third wall-viscosity form, `cfg.wallViscosityForm = "noslip"` (the default stays `"laplacian"`): the existing `"laplacian"` (exact wall Laplacian, free-slip) and `"pairwise"` (warpSPH free-slip mirror, polar quadrature) both damp only the wall-**normal** component of the relative velocity (free-slip). This form damps the **all-components** relative velocity (no-slip), using a one-sided finite difference of the normal derivative in the style of Chiron et al. 2019, Eq. 91–92. It needs no new Warp or scene code: the wall gradient `G` and the signed distance are already computed in every step.

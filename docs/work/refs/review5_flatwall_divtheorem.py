@@ -1,4 +1,4 @@
-# independent: flat wall, Delta-lambda(z) = -z * int W'(r)/r dx'  (divergence theorem on the wall line), no edgebound code
+# independent: flat wall, Delta-lambda(z) = -z * int W'(r)/r dx'  (divergence theorem on the wall line), no warpSPHBoundaries code
 import numpy as np
 from scipy.integrate import quad
 def W2(q): return 7/np.pi*(1-q)**4*(1+4*q)

@@ -3,7 +3,7 @@
 **Status:** 2D: [V] (strip and disk mean-value series, exact references incl. the circle edge identity, crossover vs tier-2 polygons); 3D ball primitive and strand series: [D]/[P] (3D is deferred until all of 2D is done)
 **Tier(s):** 4 · **Dimension:** 2D (strip and disk) and 3D (strand, ball)
 **Depends on:** `edge-primitives.md`, `../notation.md`
-**Implemented in:** `src/edgebound/edge/tier4.py` (2D: `disk_series`, `strip_series`, `strip_exact`, `arc_value`), `oracle.polar_disk_*`
+**Implemented in:** `src/warpSPHBoundaries/edge/tier4.py` (2D: `disk_series`, `strip_series`, `strip_exact`, `arc_value`), `oracle.polar_disk_*`
 **Verified by:** `tests/edge/test_tier4.py`
 
 ## 1. Statement

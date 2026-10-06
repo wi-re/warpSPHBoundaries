@@ -14,9 +14,9 @@ import pytest
 import torch
 import warp as wp
 
-import edgebound  # noqa: F401
-from edgebound.sim import cases
-from edgebound.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig
+import warpSPHBoundaries  # noqa: F401
+from warpSPHBoundaries.sim import cases
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64

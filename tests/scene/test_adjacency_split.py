@@ -13,8 +13,8 @@ import torch
 import warp as wp
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
-from edgebound.scene.scene import Body, BodyField, Scene, SurfaceRep, SceneAdjacency, PairMoments, sceneOperation
-from edgebound.scene.viscosity import lap_factor
+from warpSPHBoundaries.scene.scene import Body, BodyField, Scene, SurfaceRep, SceneAdjacency, PairMoments, sceneOperation
+from warpSPHBoundaries.scene.viscosity import lap_factor
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64
@@ -127,7 +127,7 @@ def test_restrict_equals_a_fresh_adjacency_of_the_subset(device, indicator_first
         print(f"(c) indicator_first={indicator_first} {kernel}: restricted vs fresh max|diff| {d:.1e}")
     for kernel in ("cone", "w2p5"):
         if kernel == "w2p5":
-            from edgebound.scene import tensile
+            from warpSPHBoundaries.scene import tensile
             tensile._register("w2")
         pr = props(WarpOperation.Gradient, kernel)
         a = evaluate(sc, ps_sub, kernel, (WarpOperation.Gradient,), sc.precompute(sub, pr, channels=(3, 4)))

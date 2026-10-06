@@ -1,6 +1,6 @@
 # Tier selection in 2D: which model for which obstacle size (convex disk obstacle)
 
-**Status:** [V] measured (`python -m edgebound.edge.tier_select`, `tests/edge/test_tier_select.py`); exact reference = circle edge identity (`tier4.arc_value`, agrees with the polar oracle to 1e-42)
+**Status:** [V] measured (`python -m warpSPHBoundaries.edge.tier_select`, `tests/edge/test_tier_select.py`); exact reference = circle edge identity (`tier4.arc_value`, agrees with the polar oracle to 1e-42)
 
 Setup: solid disk of radius `R`, particle at distance `d = 0.3 h` from the surface (centre at distance `R + d`), kernel w4, support `h`. Absolute error of the value `λ`
 (`λ ≈ 0.01 … 0.1` here, so 1e-4 is ~0.1–1 %). All models see the same particle; tier 2 = regular polygon inscribed in the circle with the given edge length.

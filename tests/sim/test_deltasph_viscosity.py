@@ -23,8 +23,8 @@ import torch
 import warp as wp
 from warpSPHCore import KernelFunctions
 
-from edgebound.sim.deltasph2d import DeltaSPHConfig
-from edgebound.sim.cases import hydrostatic_tank
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
+from warpSPHBoundaries.sim.cases import hydrostatic_tank
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 

@@ -1,4 +1,4 @@
-"""Reviewer probe for WORK-005 (Q1): flat wall (solid y<0), particle at (0,z), support H=1, Wendland C2 / C4 (2D, normalised).  Plain numpy/scipy, shares no code with edgebound.
+"""Reviewer probe for WORK-005 (Q1): flat wall (solid y<0), particle at (0,z), support H=1, Wendland C2 / C4 (2D, normalised).  Plain numpy/scipy, shares no code with warpSPHBoundaries.
  A(z) = int_solid W'(r)/r (yhat.n)^2 dA   -- the pairwise (Monaghan, free-slip mirror) wall coefficient:  acc_pair = fac * 2 u_n * A * n    (A < 0),  fac = alpha c0 H / xi
  B(z) = int_solid lap W dA = z * int_chord W'(r)/r ds   (Green; polar and edge forms are both evaluated and compared)
  Laplacian form: acc_lap = nu_eff * (-2 u_n) * B * n     (mirror ghost v_j - v_i = -2 u_n n, constant n)

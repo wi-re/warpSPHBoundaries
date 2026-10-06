@@ -6,9 +6,9 @@ import mpmath as mp
 import numpy as np
 import pytest
 
-import edgebound as eb
-from edgebound.edge import fem, np2d, np_fem
-from edgebound.edge.kernels import KERNELS, WARPSPH_C2_PI, disk_moment, peval
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge import fem, np2d, np_fem
+from warpSPHBoundaries.edge.kernels import KERNELS, WARPSPH_C2_PI, disk_moment, peval
 
 from .conftest import rand_point, rand_triangle
 

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import torch
 
-from edgebound.edge import np2d, torch2d
+from warpSPHBoundaries.edge import np2d, torch2d
 
 NAMES = ["cubic", "w2", "w4", "w6"]
 
@@ -90,7 +90,7 @@ def test_autograd_at_degenerate_points_finite_and_equal_to_analytic(case, name):
         # indicator (interior angle / 2 pi) and the angle terms are constant/forced-zero for autograd, so autograd misses the vertex
         # derivative.  The analytic edge-local adjoint is the production path there; verify IT against exact finite differences.
         from fractions import Fraction as F
-        import edgebound as eb
+        import warpSPHBoundaries as eb
         T = [(F(float(a)), F(float(b))) for a, b in V[0]]
         xf = (F(float(X[0, 0])), F(float(X[0, 1])))
         step = F(1, 10**9)

@@ -7,8 +7,8 @@ import mpmath as mp
 import numpy as np
 import pytest
 
-from edgebound.edge import fem, np_fem
-from edgebound.edge.fem_fixtures import PATH
+from warpSPHBoundaries.edge import fem, np_fem
+from warpSPHBoundaries.edge.fem_fixtures import PATH
 
 DATA = json.loads(Path(PATH).read_text())
 CASES = DATA["cases"]

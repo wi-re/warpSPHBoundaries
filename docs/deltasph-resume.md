@@ -3,7 +3,7 @@
 Read first: `deltasph-plan.md` (strategy, §3b port + 3D), `deltasph-validation.md` (results), `deltasph-porting-notes.md` (term map warpSPH ↔ here, §4b ported / not ported, change log). This file is the short way back in.
 
 ## State
-All code and docs are committed (last code commit 30fae1e, docs after). Solver `src/edgebound/sim/deltasph2d.py` (`DeltaSPH2D`; cases `hydrostatic_tank`, `english_wedge`, `marrone_dambreak`, `sloshing_tank`), scoring / runners
+All code and docs are committed (last code commit 30fae1e, docs after). Solver `src/warpSPHBoundaries/sim/deltasph2d.py` (`DeltaSPH2D`; cases `hydrostatic_tank`, `english_wedge`, `marrone_dambreak`, `sloshing_tank`), scoring / runners
 `deltasph_validation.py`, snapshots `deltasph_snap.py`, videos `dfsph_video.py` (also used for DFSPH), comparison figure `deltasph_compare.py`, tests `tests/sim/test_deltasph.py` (10) + `test_scene.py` (50) + `test_dfsph.py` (12): all passing at the last run
 (72 on the three files). Scene additions: `Scene.inside`, `Scene.signed_distance`; shared fix in `dfsph2d.neighbor_pairs` (cell 1.01 H, dense path N ≤ 8000).
 

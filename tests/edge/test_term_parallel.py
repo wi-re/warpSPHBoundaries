@@ -10,7 +10,7 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.edge import warpbc
+from warpSPHBoundaries.edge import warpbc
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
@@ -47,8 +47,8 @@ def both(geometry, kernel, device, **kw):
 def test_term_parallel_equals_sequential(device, geometry):
     """(a) monomial plan (stable=False) and Chebyshev plan (stable=(8, 6)), kernels w2 (all channels), lw2 (all), w2p5 and cone (gradient channels (3, 4)) and a (0,)- and (5, 6)-pruned plan:
     equal to 1e-14 of the scale, equal run to run, pruned channels exactly 0."""
-    from edgebound.scene.viscosity import lap_factor
-    from edgebound.scene import tensile
+    from warpSPHBoundaries.scene.viscosity import lap_factor
+    from warpSPHBoundaries.scene import tensile
     lap_factor(1.0, "w2"); tensile._register("w2")
     for stable in (False, (8, 6)):
         for kernel, ch in (("w2", None), ("lw2", None), ("w2p5", (3, 4)), ("cone", (3, 4)), ("w2", (0,)), ("w2", (5, 6))):

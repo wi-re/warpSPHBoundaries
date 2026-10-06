@@ -15,7 +15,7 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.edge import warpbc
+from warpSPHBoundaries.edge import warpbc
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
@@ -41,7 +41,7 @@ def test_pruned_edge_channels_equal_the_full_channels(device, geometry):
     torch.equal to the full result, its 3:5 are 0, and the full g0 is not small (the pruned result is not the full one)."""
     verts, edges, pos, sup, pair_q, pair_e = geometry
     dev = str(device)
-    from edgebound.scene.viscosity import lap_factor
+    from warpSPHBoundaries.scene.viscosity import lap_factor
     lap_factor(1.0, "w2")                                                    # registers the 'lw2' kernel (lazy registration)
     for kernel, stable in (("cone", None), ("lw2", None), ("w2", None), ("w2", (16, 8))):
         full = warpbc.edge_channels(pair_q, pair_e, pos, sup, verts, edges, kernel, device=dev, stable=stable)
@@ -102,8 +102,8 @@ def test_pruned_adjacency_guard_and_equality(device):
     use of a pruned adjacency: a Density, a Covariance, a Gradient of a perQuery field with a1, a Gradient with
     returnReaction, and a Gradient through an adjacency pruned to a set that does not contain {3,4} (channels=(0,))."""
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-    from edgebound.sim.cases import hydrostatic_tank
-    from edgebound.scene.scene import BodyField, sceneOperation
+    from warpSPHBoundaries.sim.cases import hydrostatic_tank
+    from warpSPHBoundaries.scene.scene import BodyField, sceneOperation
     dev = str(device)
     sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device)
     ps = ParticleState(positions=sim.x, supports=sim.Hvec, masses=torch.full_like(sim.rho, sim.m),
@@ -147,8 +147,8 @@ def test_cover_and_tensile_pruned_equal_full(device, monkeypatch):
     indicator pseudo-pairs of the full adjacency matter).  The tolerance allows for the index_add_ atomics of
     sceneOperation (not guaranteed bit-reproducible); the reviewer measured 0 on all three (scales 0.308 / 235 / 751)."""
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-    from edgebound.scene import cover, tensile
-    from edgebound.scene.scene import Body, Scene, SurfaceRep
+    from warpSPHBoundaries.scene import cover, tensile
+    from warpSPHBoundaries.scene.scene import Body, Scene, SurfaceRep
     dev = str(device)
     LS = np.array([[0, 0], [2, 0], [2, 1], [1, 1], [1, 2], [0, 2]], dtype=float)
     CENTER, ANGLE, H = (0.3, -0.2), 0.7, 0.6

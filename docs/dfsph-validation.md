@@ -1,6 +1,6 @@
 # DFSPH on the scene boundary layer: validation against omniSPH (2D)
 
-**Status:** [V] — solver `src/edgebound/sim/dfsph2d.py`, omniSPH reference `dfsph_ref.py`, tables `python scripts/dfsph_validation.py`, tests `tests/sim/test_dfsph.py` (12).
+**Status:** [V] — solver `src/warpSPHBoundaries/sim/dfsph2d.py`, omniSPH reference `dfsph_ref.py`, tables `python scripts/dfsph_validation.py`, tests `tests/sim/test_dfsph.py` (12).
 Purpose: use the scene layer (`scene-architecture.md`) in a real solver, with a domain body instead of boundary particles, before 3D.
 
 ## 1. The solver

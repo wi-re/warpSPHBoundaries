@@ -5,7 +5,7 @@ import math, sys
 sys.path.insert(0, "python")
 import numpy as np
 from matplotlib.path import Path
-from edgebound.scene import cover
+from warpSPHBoundaries.scene import cover
 
 def brute(poly, x, H, n=3000):
     x = np.array(x); g = (np.arange(n) + 0.5) / n * 2 * H - H

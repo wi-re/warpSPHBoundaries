@@ -1,8 +1,8 @@
 # reviewer probe: no-slip wall viscosity at the solver level.  Couette u = a (y - y_floor), floor at rest; Poiseuille u = (y - y_f)(Y - (y - y_f)).
 # bulk = solver's own pairwise term; wall = candidates.  Rows z = 0.5, 1.5, 2.5, 3.5 dp above the floor, central columns of the tank.
 import torch, numpy as np
-from edgebound.sim.deltasph2d import DeltaSPHConfig
-from edgebound.sim.cases import hydrostatic_tank
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
+from warpSPHBoundaries.sim.cases import hydrostatic_tank
 sim, info = hydrostatic_tank(dp=0.04, domain="surface", device="cuda:0", cfg=DeltaSPHConfig())
 x = sim.x; dp, H = sim.dx, sim.H; fac = sim.cfg.alpha*sim.cfg.c0*H/sim.xi; nu = fac/8
 yf = float(x[:,1].min()) - 0.5*dp                       # floor surface

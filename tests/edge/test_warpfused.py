@@ -9,8 +9,8 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.edge import warpbc, warpfused
-from edgebound.edge.warpfused import FusedGroup
+from warpSPHBoundaries.edge import warpbc, warpfused
+from warpSPHBoundaries.edge.warpfused import FusedGroup
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
@@ -32,8 +32,8 @@ def geometry(device):
 
 @pytest.mark.parametrize("device", DEVICES)
 def test_fused_groups_equal_separate_launches(device, geometry):
-    from edgebound.scene.viscosity import lap_factor
-    from edgebound.scene import tensile
+    from warpSPHBoundaries.scene.viscosity import lap_factor
+    from warpSPHBoundaries.scene import tensile
     lap_factor(1.0, "w2"); tensile._register("w2")
     verts, edges, pos, sup, pq, pe = geometry
     groups = (FusedGroup("w2"), FusedGroup("lw2"), FusedGroup("cone", (3, 4)), FusedGroup("w2p5", (3, 4)), FusedGroup("w2", (5, 6), "cheb", 8, 6))

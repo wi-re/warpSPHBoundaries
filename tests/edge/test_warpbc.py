@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 import warp as wp
 
-from edgebound.edge import warpbc
-from edgebound.edge.fem_fixtures import PATH
+from warpSPHBoundaries.edge import warpbc
+from warpSPHBoundaries.edge.fem_fixtures import PATH
 
 DATA = json.loads(Path(PATH).read_text())
 DEVICES = ["cpu"] + (["cuda:0"] if wp.is_cuda_available() else [])
@@ -39,7 +39,7 @@ def test_p1_weights_match_golden_fixtures(device, k):
 
 @pytest.mark.parametrize("name", ["quartic", "quintic", "b7", "b8", "poly6", "w2", "cubic"])
 def test_all_supported_kernels_on_random_pairs(name):
-    from edgebound.edge import np_fem
+    from warpSPHBoundaries.edge import np_fem
     rng = np.random.default_rng(4)
     N = 50
     V = rng.uniform(-1, 1, (N, 3, 2))

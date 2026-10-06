@@ -11,8 +11,8 @@ import pytest
 import torch
 import warp as wp
 
-import edgebound  # noqa: F401
-from edgebound.sim.deltasph2d import DeltaSPHConfig
+import warpSPHBoundaries  # noqa: F401
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
 import test_implicit_disk_solver as disk
 
 pytestmark = pytest.mark.skipif(not wp.is_cuda_available(), reason="CUDA")
@@ -41,5 +41,5 @@ def test_wall_particles_reproduce_the_analytic_scheme():
     assert fine["a"] < 0.05 and fine["loads"] < 0.01 and fine["x"] < 0.05 and fine["v"] < 0.03 and fine["rho"] < 1e-3, fine
     assert coarse["a"] > 2 * fine["a"] and coarse["v"] > 2 * fine["v"], (coarse, fine)                # the lattice spacing matters: negative control
     b = disk.make("implicit", dp=0.03, cfg=DeltaSPHConfig(graphStep=True, wallParticleSpacing=0.125))
-    from edgebound.sim.graphstep import graphable
+    from warpSPHBoundaries.sim.graphstep import graphable
     assert not graphable(b)                                                                        # wall particles are not captured

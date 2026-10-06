@@ -6,8 +6,8 @@ import numpy as np
 import torch
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from edgebound.scene.implicitBodies import DiskBody
-from edgebound.scene.scene import Body, BodyField, ImplicitRep, Scene, SurfaceRep, sceneOperation
+from warpSPHBoundaries.scene.implicitBodies import DiskBody
+from warpSPHBoundaries.scene.scene import Body, BodyField, ImplicitRep, Scene, SurfaceRep, sceneOperation
 
 
 def run(N=1_000_000, nBodies=100, dev="cuda:0", h_over_dx=3.0):

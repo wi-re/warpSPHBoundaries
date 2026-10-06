@@ -1,4 +1,4 @@
-"""Validation of DeltaSPH2D against warpSPH's `sun2017DeltaSPH`/`deltaSPH` + mDBC.   python scripts/deltasph_validation.py tank|wedge|dambreak|sloshing …  (runners: edgebound.sim.validation)
+"""Validation of DeltaSPH2D against warpSPH's `sun2017DeltaSPH`/`deltaSPH` + mDBC.   python scripts/deltasph_validation.py tank|wedge|dambreak|sloshing …  (runners: warpSPHBoundaries.sim.validation)
 
  sloshing : SPHERIC test case 10 (warpSPH `examples/sloshingTank`): rolling tank as rotating gravity, Sensor-1 pressure
  dambreak : Marrone et al. 2011 s.3.1 (warpSPH `probe_deltaSPHMarrone.py`): probes P1-P3, front, KE
@@ -8,7 +8,7 @@
 """
 import sys
 
-from edgebound.sim.validation import (report_dambreak, report_tank, report_wedge, run_dambreak, run_sloshing, run_tank, run_wedge)
+from warpSPHBoundaries.sim.validation import (report_dambreak, report_tank, report_wedge, run_dambreak, run_sloshing, run_tank, run_wedge)
 
 def main():
     what = sys.argv[1] if len(sys.argv) > 1 else "tank"

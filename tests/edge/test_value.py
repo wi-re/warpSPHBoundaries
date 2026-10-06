@@ -4,9 +4,9 @@ from fractions import Fraction as F
 import mpmath as mp
 import pytest
 
-import edgebound as eb
-from edgebound.edge import geometry as G
-from edgebound.edge.mpq import mpq
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge import geometry as G
+from warpSPHBoundaries.edge.mpq import mpq
 from curvbound import planar2d
 
 from .conftest import KERNELS, big_triangle, rand_point, rand_triangle, tiling
@@ -126,8 +126,8 @@ def test_unsplit_form_for_polygons_inside_the_innermost_piece(name):
     """Remedy for tiny elements (edge-value-identity.md s.6): if the whole polygon lies inside
     r <= R_1 (innermost kernel piece), value = sum_e z int M_in(r)/r^2 ds with M_in/r^2 a POLYNOMIAL:
     no indicator, no atan.  (Float64 cancellation of the split form is avoided; this checks the identity.)"""
-    from edgebound.edge.kernels import kernel as get_kernel
-    from edgebound.edge import primitives as pr
+    from warpSPHBoundaries.edge.kernels import kernel as get_kernel
+    from warpSPHBoundaries.edge import primitives as pr
     kern = get_kernel(name)
     lo, hi, c = kern.pieces[0]                       # innermost piece, (pi*W) coefficients, r in [0, hi]
     for T, x in [([(F(-1, 10), F(-1, 20)), (F(1, 5), F(-1, 10)), (F(0), F(1, 4))], (F(1, 50), F(1, 30))),

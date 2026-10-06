@@ -19,9 +19,9 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.edge.kernels import KERNELS
-from edgebound.scene.scene import Body, ImplicitRep, Scene, SurfaceRep, VolumeRep
-from edgebound.scene.tensile import tensile_factor, tensile_vector_scene
+from warpSPHBoundaries.edge.kernels import KERNELS
+from warpSPHBoundaries.scene.scene import Body, ImplicitRep, Scene, SurfaceRep, VolumeRep
+from warpSPHBoundaries.scene.tensile import tensile_factor, tensile_vector_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
@@ -65,7 +65,7 @@ def dense_T(px, py, H, n=2000):
 def test_l_shape_matches_numpy_w2p5_gradient(device):
     """(a) the rotated, translated L-shape (center (0.3,-0.2), angle 0.7, H = 0.6, 200 pts seed 3): the scene route
     vs factor * np2d.gradient(w2p5, stable=(16,8)) (<= 1e-6 max|T|)."""
-    from edgebound.edge import np2d
+    from warpSPHBoundaries.edge import np2d
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(LS)], center=CENTER, angle=ANGLE)
     sc = Scene([body], device)
     pos = np.random.default_rng(3).uniform(-2, 3, (200, 2))
@@ -117,7 +117,7 @@ def test_magnitude_and_sign_are_real(device):
 @pytest.mark.parametrize("device", DEVICES)
 def test_non_w2_and_non_surface_raise(device):
     """(d) guards: family != "w2" and non-SurfaceRep bodies raise NotImplementedError before computing anything."""
-    from edgebound.scene.implicitBodies import DiskBody
+    from warpSPHBoundaries.scene.implicitBodies import DiskBody
     body = Body(bodyId=0, reps=[SurfaceRep.polygon(FLOOR)])
     sc = Scene([body], device)
     pts = np.array([[0.0, 0.3]])

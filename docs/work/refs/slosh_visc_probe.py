@@ -3,9 +3,9 @@ prints KE max-rel vs the stored reference slosh_B_nx200 and the wall time.   usa
 import sys, time
 sys.path.insert(0, "python")
 import numpy as np
-from edgebound.sim import validation as dv
-from edgebound.sim.validation import ke_relmax
-from edgebound import paths
+from warpSPHBoundaries.sim import validation as dv
+from warpSPHBoundaries.sim.validation import ke_relmax
+from warpSPHBoundaries import paths
 _ke_relmax = lambda series, name: ke_relmax(series, str(paths.results_dir() / 'deltasph' / name))
 T = float(sys.argv[1]); t0 = time.time()
 sim, info, res = dv.run_sloshing(nx=200, T=T, shifting=True, noPen="impulse", verbose=False, viscosityExact=True)

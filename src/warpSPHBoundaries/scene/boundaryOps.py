@@ -33,7 +33,7 @@ _KERNEL_NAMES = {KernelFunctions.CubicSpline: "cubic", KernelFunctions.QuarticSp
 
 
 def kernelName(kernel: "KernelFunctions | str") -> str:
-    if isinstance(kernel, str):                                            # a registered kernel name (edgebound.kernels.KERNELS)
+    if isinstance(kernel, str):                                            # a registered kernel name (warpSPHBoundaries.kernels.KERNELS)
         from ..edge import kernels
         if kernel in kernels.KERNELS:
             return kernel

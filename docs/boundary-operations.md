@@ -1,12 +1,12 @@
 # Boundary operations with the warpSPH call shape (2D, tiers 1/2 on the GPU)
 
-**Status:** [V] — `src/edgebound/scene/boundaryOps.py` (interface), `warpbc.py` (Warp pair engine), `implicitBodies.py` (tiers 3/4), tests `tests/edge/test_boundary_ops.py`, `test_warpbc.py`, `test_implicit_bodies.py`, `test_kernels_extra.py`
+**Status:** [V] — `src/warpSPHBoundaries/scene/boundaryOps.py` (interface), `warpbc.py` (Warp pair engine), `implicitBodies.py` (tiers 3/4), tests `tests/edge/test_boundary_ops.py`, `test_warpbc.py`, `test_implicit_bodies.py`, `test_kernels_extra.py`
 
 ## 1. Call shape
 
 ```python
 from warpSPHCore import OperationProperties, WarpOperation, GradientScheme, KernelFunctions, OperationDirection, ParticleState
-from edgebound.scene.boundaryOps import BoundaryMesh, buildBoundaryAdjacency, boundaryOperation
+from warpSPHBoundaries.scene.boundaryOps import BoundaryMesh, buildBoundaryAdjacency, boundaryOperation
 
 mesh = BoundaryMesh(vertices[V,2], elements[E,3], bodyIds[E])                 # triangles (a polyline wall = a thin strip of triangles)
 props = OperationProperties(kernel=KernelFunctions.Wendland4, operation=WarpOperation.Gradient,
@@ -57,8 +57,8 @@ i.e. the whole boundary treatment costs about as much as one particle operator p
 ## 3. Tiers 3 and 4 in this interface (implemented; hard switches, no blending)
 
 ```python
-from edgebound.scene.boundaryOps import BoundaryDescription
-from edgebound.scene.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy
+from warpSPHBoundaries.scene.boundaryOps import BoundaryDescription
+from warpSPHBoundaries.scene.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy
 desc = BoundaryDescription(mesh=wallMesh,                                   # optional explicit triangles (tiers 1/2)
                            bodies=[DiskBody(center, R), HalfPlaneBody(point, normalIntoFluid),
                                    DiskBody(c2, R2, solid="outside")],      # solid disk, planar wall, circular cavity wall
@@ -70,7 +70,7 @@ For every (particle, body) pair the model is chosen **per particle** from `R/h_i
 
 | `R / h_i` | model | evaluated by | measured error vs the exact disk (value / gradient), `d = 0.05…0.6 h` |
 |---|---|---|---|
-| `≥ 2` | tier 3: `F_0 + κF_1 + κ²F_2`, gradient `∂_d λ n`, `d < 0` and cavities via the complement identity | torch, Hermite tables `F_k(q), F_k'(q)` (512 intervals per kernel, exact mpmath moments, cached in `src/edgebound/data/tables/`) | `R = 4h`: 1.8e-5 / 3.9e-5; `R = 2h`: 1.4e-4 / 2.8e-4 |
+| `≥ 2` | tier 3: `F_0 + κF_1 + κ²F_2`, gradient `∂_d λ n`, `d < 0` and cavities via the complement identity | torch, Hermite tables `F_k(q), F_k'(q)` (512 intervals per kernel, exact mpmath moments, cached in `src/warpSPHBoundaries/data/tables/`) | `R = 4h`: 1.8e-5 / 3.9e-5; `R = 2h`: 1.4e-4 / 2.8e-4 |
 | `≤ 0.2` (and `[D−a, D+a]` inside one kernel piece, particle outside) | tier 4: disk series `K = 2` | torch, exact polynomial coefficients of `Δ^k W` | `R = 0.1h`: 2.4e-7 / 8.8e-6 (derivative of an asymptotic series loses an order) |
 | in between, or the series' validity fails | tier 2: **polygonisation of the body** (fan, edge `h/16`, polygon area = disk area) merged into the element mesh; only the pairs of particles with hard tier 2 are generated | Warp pair engine | `R = 0.7h`: 6e-8 / 6e-7; `R = 0.35h`: 2e-7 / 3e-6 |
 | `HalfPlaneBody` | always tier 3 with `κ = 0`: exact planar closed form `λ_2(d)` (also `d ≤ 0`) | table | ≤ 1e-9 vs the PLAN closed form |

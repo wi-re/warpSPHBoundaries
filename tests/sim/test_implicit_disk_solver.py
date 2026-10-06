@@ -16,11 +16,11 @@ import pytest
 import torch
 import warp as wp
 
-import edgebound  # noqa: F401
-from edgebound.scene.implicitBodies import DiskBody
-from edgebound.scene.scene import Body, ImplicitRep, Scene, SdfRep, SurfaceRep
-from edgebound.sim import dfsph2d
-from edgebound.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig
+import warpSPHBoundaries  # noqa: F401
+from warpSPHBoundaries.scene.implicitBodies import DiskBody
+from warpSPHBoundaries.scene.scene import Body, ImplicitRep, Scene, SdfRep, SurfaceRep
+from warpSPHBoundaries.sim import dfsph2d
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig
 
 pytestmark = pytest.mark.skipif(not wp.is_cuda_available(), reason="CUDA")
 DEV = "cuda:0"

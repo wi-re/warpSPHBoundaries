@@ -18,7 +18,7 @@ You are an autonomous coding agent working on `curvatureBoundaries` (exact SPH b
 cd /home/lu26029/dev/curvatureBoundaries
 export PATH=/home/lu26029/miniconda3/envs/warp/bin:$PATH     # python with torch, warp, mpmath, pytest, warpSPH*
 python -m pytest tests/edge/test_deltasph.py tests/edge/test_scene.py tests/edge/test_dfsph.py -q     # ~ 2 min (72 passed on 2026-10-03), GPU; must stay green
-cd python && python -m edgebound.<module> ...                  # solver runners (see docs/deltasph-resume.md "Reproduce")
+cd python && python -m warpSPHBoundaries.<module> ...                  # solver runners (see docs/deltasph-resume.md "Reproduce")
 ```
 Scratch space: `.tmp/` (ignored). Long commands (> 2 minutes): run in the background with output to a log file (`nohup ... > .tmp/<name>.log 2>&1 &`), then poll the log; never block on one call for more than ~10 minutes; give every command a sensible `timeout`. The solver is deterministic only up to GPU reduction order (`index_add_`), so identical commands can differ in the last digits; the work documents say how to treat that.
 Background reading (only what a task points to): `HANDOFF.md` Part A (plan and glossary of the quadrature items Q1–Q3), `docs/deltasph-porting-notes.md` (term map, change log), `docs/deltasph-validation.md` (results), `docs/scene-architecture.md`.
@@ -31,7 +31,7 @@ Background reading (only what a task points to): `HANDOFF.md` Part A (plan and g
 5. If red: debug at most **3 distinct attempts** per failure (each attempt = a changed hypothesis, logged in 2–3 lines). Then section 5.
 
 ## 4. Verification discipline
-* Prefer an **independent** check over a self-consistent one: compare against `python/edgebound/oracle.py` (mpmath polar quadrature, shares no code with the closed forms), against a brute-force numpy loop, or against stored series in `results/deltasph/`. A test that compares a function with a copy of itself proves nothing.
+* Prefer an **independent** check over a self-consistent one: compare against `python/warpSPHBoundaries/oracle.py` (mpmath polar quadrature, shares no code with the closed forms), against a brute-force numpy loop, or against stored series in `results/deltasph/`. A test that compares a function with a copy of itself proves nothing.
 * State the **tolerance before** you look at the result, and give the reason for it (round-off scale, determinism measurement, ...). Never widen it afterwards.
 * When a number is "close", say by how much relative to the tolerance. Report the worst case over the cases you tried, not the mean.
 * Check units and signs explicitly in the log for every new formula (one sentence: what a positive value means).

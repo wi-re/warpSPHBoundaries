@@ -1,7 +1,7 @@
-diff --git a/python/edgebound/cover.py b/python/edgebound/cover.py
+diff --git a/python/warpSPHBoundaries/cover.py b/python/warpSPHBoundaries/cover.py
 index 2818107..213f19b 100644
---- a/python/edgebound/cover.py
-+++ b/python/edgebound/cover.py
+--- a/python/warpSPHBoundaries/cover.py
++++ b/python/warpSPHBoundaries/cover.py
 @@ -142,5 +142,6 @@ def cover_vector_scene(scene, positions, H, adjacency=None):
      pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                               operationMode=OperationDirection.BoundaryToFluid)
@@ -9,10 +9,10 @@ index 2818107..213f19b 100644
 +    adjacency = adjacency if adjacency is not None else scene.buildAdjacency(ps, pr, channels=(3, 4))        # the Naive gradient of a constant needs g0 only
      out = sceneOperation(ps, pr, scene, adjacency, None, [one] * len(scene.bodies), perBody=True)
      return -(math.pi * float(H) ** 3 / 3) * out.sum(0)
-diff --git a/python/edgebound/deltasph2d.py b/python/edgebound/deltasph2d.py
+diff --git a/python/warpSPHBoundaries/deltasph2d.py b/python/warpSPHBoundaries/deltasph2d.py
 index 9b13938..120010f 100644
---- a/python/edgebound/deltasph2d.py
-+++ b/python/edgebound/deltasph2d.py
+--- a/python/warpSPHBoundaries/deltasph2d.py
++++ b/python/warpSPHBoundaries/deltasph2d.py
 @@ -112,6 +112,7 @@ class DeltaSPH2D:
          self.surface = torch.zeros(n, dtype=torch.bool, device=device)
          self.surfaceDilated = self.surface
@@ -41,10 +41,10 @@ index 9b13938..120010f 100644
          flds = []
          for b in self.scene.bodies:
              a1 = self.cfg.rho0 * (self.g[None] - b.accelerationAt(x))
-diff --git a/python/edgebound/scene.py b/python/edgebound/scene.py
+diff --git a/python/warpSPHBoundaries/scene.py b/python/warpSPHBoundaries/scene.py
 index 7d89ca5..e5d1fc3 100644
---- a/python/edgebound/scene.py
-+++ b/python/edgebound/scene.py
+--- a/python/warpSPHBoundaries/scene.py
++++ b/python/warpSPHBoundaries/scene.py
 @@ -253,8 +253,9 @@ class SurfaceRep:
          return wn + self.background
  
@@ -123,10 +123,10 @@ index 7d89ca5..e5d1fc3 100644
      N = adj.numQueries
      nb = len(scene.bodies)
      bodyFields = bodyFields or [BodyField() for _ in range(nb)]
-diff --git a/python/edgebound/tensile.py b/python/edgebound/tensile.py
+diff --git a/python/warpSPHBoundaries/tensile.py b/python/warpSPHBoundaries/tensile.py
 index 337afa9..09aafb9 100644
---- a/python/edgebound/tensile.py
-+++ b/python/edgebound/tensile.py
+--- a/python/warpSPHBoundaries/tensile.py
++++ b/python/warpSPHBoundaries/tensile.py
 @@ -84,5 +84,6 @@ def tensile_vector_scene(scene, positions, H, family="w2"):
      pr = OperationProperties(kernel=family + "p5", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                               operationMode=OperationDirection.BoundaryToFluid)
@@ -135,10 +135,10 @@ index 337afa9..09aafb9 100644
 +    adj = scene.buildAdjacency(ps, pr, channels=(3, 4))                                        # the Naive gradient of a constant needs g0 only
 +    out = sceneOperation(ps, pr, scene, adj, None, [one] * len(scene.bodies), perBody=True)
      return tensile_factor(H, family) * out.sum(0)
-diff --git a/python/edgebound/warpbc.py b/python/edgebound/warpbc.py
+diff --git a/python/warpSPHBoundaries/warpbc.py b/python/warpSPHBoundaries/warpbc.py
 index fc34154..ca5b2f7 100644
---- a/python/edgebound/warpbc.py
-+++ b/python/edgebound/warpbc.py
+--- a/python/warpSPHBoundaries/warpbc.py
++++ b/python/warpSPHBoundaries/warpbc.py
 @@ -143,19 +143,38 @@ def build_cheb_plan(kernel):
      return pb, rin_idx
  

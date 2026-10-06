@@ -2,8 +2,8 @@
 # counts only (no timings): safe on a loaded GPU.   python docs/work/refs/schedule_probe.py [dambreak|sloshing]
 import sys, inspect, hashlib, collections
 import torch
-from edgebound.scene import scene as S
-from edgebound.sim import cases
+from warpSPHBoundaries.scene import scene as S
+from warpSPHBoundaries.sim import cases
 
 case = sys.argv[1] if len(sys.argv) > 1 else "dambreak"
 sim = cases.marrone_dambreak(nx=40, shifting=True, noPen="impulse")[0] if case == "dambreak" else cases.sloshing_tank(nx=60)[0]
@@ -19,7 +19,7 @@ def pid(ps):
 def caller():
     out = []
     for f in inspect.stack()[2:]:
-        if "edgebound" in f.filename and not f.function.startswith(("buildAdjacency", "sceneOperation", "_wall_op", "B", "O")):
+        if "warpSPHBoundaries" in f.filename and not f.function.startswith(("buildAdjacency", "sceneOperation", "_wall_op", "B", "O")):
             out.append(f.function)
         if len(out) == 3: break
     return "<".join(out)
@@ -36,7 +36,7 @@ def O(ps, props, scene, adjacency=None, qv=None, flds=None, returnReaction=False
     log.append(("op", pid(ps), caller(), S.kernelName(props.kernel), None, "%s/%s%s" % (props.operation.name, props.gradientMode.name, "+reaction" if returnReaction else ""), id(adjacency) if adjacency is not None else 0))
     return oO(ps, props, scene, adjacency, qv, flds, returnReaction, perBody)
 S.Scene.adjacency = A; S.Scene.precompute = P; S.sceneOperation = O
-import edgebound.sim.deltasph2d as D, edgebound.scene.cover as C, edgebound.scene.tensile as T, edgebound.scene.viscosity as V
+import warpSPHBoundaries.sim.deltasph2d as D, warpSPHBoundaries.scene.cover as C, warpSPHBoundaries.scene.tensile as T, warpSPHBoundaries.scene.viscosity as V
 for m in (D, C, T, V):
     if hasattr(m, "sceneOperation"): m.sceneOperation = O
 log.clear(); ids.clear()

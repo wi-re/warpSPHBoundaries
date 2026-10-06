@@ -1,6 +1,6 @@
 # A box primitive for domain geometries: corner tables instead of an edge loop
 
-Status 2026-10-05 (evening): **implemented** as `BoxRep` (`src/edgebound/scene/scene.py`, tables in `scene/box.py`, tests `tests/scene/test_box_rep.py`, `domain_scene('box', …)`). **[V]** = checked numerically, **[D]** = derived, not run, **[P]** = plan. Prompted by: *most domains are boxes (tanks, channels, flumes, baffles, floors); is there a direct treatment?* Yes, and it is cheaper and more stable than the polygon edge loop for exactly these cases.
+Status 2026-10-05 (evening): **implemented** as `BoxRep` (`src/warpSPHBoundaries/scene/scene.py`, tables in `scene/box.py`, tests `tests/scene/test_box_rep.py`, `domain_scene('box', …)`). **[V]** = checked numerically, **[D]** = derived, not run, **[P]** = plan. Prompted by: *most domains are boxes (tanks, channels, flumes, baffles, floors); is there a direct treatment?* Yes, and it is cheaper and more stable than the polygon edge loop for exactly these cases.
 
 ## 1. The idea
 

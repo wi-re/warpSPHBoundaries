@@ -15,8 +15,8 @@ pytestmark = pytest.mark.skipif(not wp.is_cuda_available(), reason="CUDA")
 
 CODE = r'''
 import json, sys, numpy as np, torch
-import edgebound
-from edgebound.sim import cases
+import warpSPHBoundaries
+from warpSPHBoundaries.sim import cases
 out = {}
 for name, maker, steps, kw in (("dambreak", cases.marrone_dambreak, 150, dict(nx=40, shifting=True, noPen="impulse")), ("sloshing", cases.sloshing_tank, 120, dict(nx=60))):
     sim = maker(**kw)[0]

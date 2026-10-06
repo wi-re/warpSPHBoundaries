@@ -2,7 +2,7 @@
 absolute error of every applicable model against the exact disk (circle edge identity), as a function of R/h, and the size of the jump when
 switching between neighbouring tiers (the continuity question of HANDOFF §10).
 
-    python -m edgebound.edge.tier_select
+    python -m warpSPHBoundaries.edge.tier_select
 """
 from fractions import Fraction as F
 

@@ -3,7 +3,7 @@
 **Status:** [V] for P0–P3 in 2D (stage 1 exact/mpmath, stage 2/3 numpy with conditioning remedies); checks 1–7 green; the validation problems of the 2025 paper (arXiv:2507.21686, Sec. 6.2) are reproduced (§9)
 **Tier(s):** 1 (nodal re-expansion); the moment machinery is shared by 2, 3, 4 · **Dimension:** 2D
 **Depends on:** `moments-recursion.md`, `edge-gradient-identity.md`
-**Implemented in:** `src/edgebound/edge/fem.py` (stage 1), `src/edgebound/edge/np_fem.py` (numpy, hybrid), `np2d.grad_moment`, `fem_fixtures.py`, `fem_study.py`
+**Implemented in:** `src/warpSPHBoundaries/edge/fem.py` (stage 1), `src/warpSPHBoundaries/edge/np_fem.py` (numpy, hybrid), `np2d.grad_moment`, `fem_fixtures.py`, `fem_study.py`
 **Verified by:** `tests/edge/test_fem.py` (checks 1–6, exact/mpmath), `tests/edge/test_fem_np.py` (golden fixtures, float32, conditioning), `tests/fixtures/edge2d_fem_golden.json`
 
 ## 1. Statement

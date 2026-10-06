@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from edgebound.sim.cases import english_wedge, hydrostatic_tank
+from warpSPHBoundaries.sim.cases import english_wedge, hydrostatic_tank
 
 what, dp, T, out = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
 sim, info = english_wedge(dp=dp) if what == "wedge" else hydrostatic_tank(dp=dp)

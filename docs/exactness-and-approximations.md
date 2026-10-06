@@ -1,6 +1,6 @@
 # Exact core, cheap approximations (stage 2 results)
 
-**Status:** [V] — `src/edgebound/edge/np2d.py`, `tests/edge/test_np2d.py`, `python scripts/studies/np2d_study.py`
+**Status:** [V] — `src/warpSPHBoundaries/edge/np2d.py`, `tests/edge/test_np2d.py`, `python scripts/studies/np2d_study.py`
 **Audience:** the argument for the method: *what is exact, what is approximated, what the approximations cost.*
 
 ## The argument in four points

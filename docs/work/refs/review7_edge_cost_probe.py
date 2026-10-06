@@ -2,8 +2,8 @@
 # reviewer probe for WORK-008: where one SurfaceRep adjacency build spends its time (dam-break state, 300 steps), per kernel:
 # plan construction (DevicePlan / ChebPlan host->device) vs the launch, and the effect of dropping the terms of unused channels
 import time, torch, numpy as np
-from edgebound.sim.cases import marrone_dambreak
-from edgebound.edge import warpbc
+from warpSPHBoundaries.sim.cases import marrone_dambreak
+from warpSPHBoundaries.edge import warpbc
 sim, _ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()
 x = sim.x; H = sim.H; dev = str(x.device)
@@ -13,7 +13,7 @@ near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
 lpos = ((x[near] - body.center) @ body.pose.R)
 lsup = torch.full((len(near),), H, dtype=torch.float64, device=x.device)
 cl = rep._celllist(H)
-from edgebound.scene.scene import queryCellList, _segment_distance
+from warpSPHBoundaries.scene.scene import queryCellList, _segment_distance
 qi, e = queryCellList(cl, lpos)
 a, b = rep.vertices[rep.edges[e, 0].long()], rep.vertices[rep.edges[e, 1].long()]
 keep = _segment_distance(lpos[qi], a, b) < lsup[qi]

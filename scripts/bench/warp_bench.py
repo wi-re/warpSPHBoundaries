@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import warp as wp
 
-from edgebound.edge import np2d, torch2d, warp2d
+from warpSPHBoundaries.edge import np2d, torch2d, warp2d
 
 
 def run(N=1_000_000, kernel="w4"):

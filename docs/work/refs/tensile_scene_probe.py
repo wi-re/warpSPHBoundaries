@@ -6,11 +6,11 @@ Compared with the polar quadrature of DeltaSPH2D.shift (24 x 96) on the tank ini
 import sys, math
 sys.path.insert(0, "python")
 import torch
-from edgebound.edge import kernels
-from edgebound.edge.kernels import power_terms as terms
-from edgebound.sim.cases import hydrostatic_tank
-from edgebound.sim.pairs import F64, neighbor_pairs
-from edgebound.scene.scene import BodyField, sceneOperation
+from warpSPHBoundaries.edge import kernels
+from warpSPHBoundaries.edge.kernels import power_terms as terms
+from warpSPHBoundaries.sim.cases import hydrostatic_tank
+from warpSPHBoundaries.sim.pairs import F64, neighbor_pairs
+from warpSPHBoundaries.scene.scene import BodyField, sceneOperation
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
 kernels.KERNELS["w2p5"] = kernels._from_terms("w2p5", terms(5, "w2"))
@@ -38,8 +38,8 @@ print("prefactor in shift: wallMass*shiftR/w0^4 =", sim.cfg.wallMass * sim.cfg.s
 
 # ---- (2) Warp scene route vs the independent np2d stable=(16,8) route on a rotated, translated L-shaped body (T2.4: route D is GOOD, 5.9e-16 at k=5)
 import numpy as np
-from edgebound.edge import np2d
-from edgebound.scene.scene import Body, Scene, SurfaceRep
+from warpSPHBoundaries.edge import np2d
+from warpSPHBoundaries.scene.scene import Body, Scene, SurfaceRep
 LS = np.array([[0, 0], [2, 0], [2, 1], [1, 1], [1, 2], [0, 2]], dtype=float); C0, ANG, Hh = (0.3, -0.2), 0.7, 0.6
 R = np.array([[math.cos(ANG), -math.sin(ANG)], [math.sin(ANG), math.cos(ANG)]]); Wp = LS @ R.T + np.array(C0)
 sc = Scene([Body(bodyId=0, reps=[SurfaceRep.polygon(LS)], center=C0, angle=ANG)], "cuda:0")
@@ -53,11 +53,11 @@ print("(2) L-shape rotated, H=0.6: max|g0_warp - g0_np2d(16,8)| / max|g0_np2d| =
 
 # ---- (3) effect on shift(): patched copy of DeltaSPH2D whose wall tensile integral is the exact one
 import types, importlib.util
-src = open("src/edgebound/sim/deltasph2d.py").read()
+src = open("src/warpSPHBoundaries/sim/deltasph2d.py").read()
 old = src[src.index("                Fr = self.W(rk, H) ** 4"):src.index("                wall = wall.index_add(0, near, cfg.wallMass * cfg.shiftR / w0 ** 4 * T)")]
 new = "                T = _TE(self, near)\n"
 assert old in src
-mod = types.ModuleType("edgebound.deltasph2d_probe"); mod.__package__ = "edgebound"
+mod = types.ModuleType("warpSPHBoundaries.deltasph2d_probe"); mod.__package__ = "warpSPHBoundaries"
 def _TE(self, near):
     n_ = len(near)
     ps_ = ParticleState(positions=self.x[near], supports=torch.full((n_,), self.H, dtype=F64, device=self.dev), masses=torch.ones(n_, dtype=F64, device=self.dev),
@@ -66,7 +66,7 @@ def _TE(self, near):
     return (1.0 / 5.0) * c2 ** 5 / (math.pi ** 4 * c25 * self.H ** 8) * g
 mod.__dict__["_TE"] = _TE
 exec(compile(src.replace(old, new), "deltasph2d_probe", "exec"), mod.__dict__)
-import edgebound.sim.deltasph2d as orig
+import warpSPHBoundaries.sim.deltasph2d as orig
 def shift_effect(sim, label):
     dt = sim.dt
     u_q = sim.shift(dt)

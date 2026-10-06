@@ -4,8 +4,8 @@ from fractions import Fraction as F
 import mpmath as mp
 import pytest
 
-import edgebound as eb
-from edgebound.edge.mpq import mpq
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge.mpq import mpq
 from curvbound import planar2d
 
 from .conftest import KERNELS, rand_point, rand_triangle

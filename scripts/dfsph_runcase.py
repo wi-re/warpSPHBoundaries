@@ -6,8 +6,8 @@ import sys, time
 
 import numpy as np
 
-from edgebound.sim import dfsph_ref as R
-from edgebound.sim.dfsph2d import DFSPH2D, DFSPHConfig, domain_scene, lattice_calibration
+from warpSPHBoundaries.sim import dfsph_ref as R
+from warpSPHBoundaries.sim.dfsph2d import DFSPH2D, DFSPHConfig, domain_scene, lattice_calibration
 
 backend, r, T, out = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
 kw = {}
@@ -20,7 +20,7 @@ fmin, fmax, top, right = (0.1, 0.1), (0.3, 0.9), 1.0, 1.6
 omega = kw.pop("omega", 3.0)
 bodies = []
 if backend == "hex":                                   # the dam break into a spinning hexagon of dfsph_validation.obstacle (calibrated lattice, surface loop domain)
-    from edgebound.sim.dfsph_cases import tank_with_obstacle
+    from warpSPHBoundaries.sim.dfsph_cases import tank_with_obstacle
     sim, info = tank_with_obstacle(L=1.6, H=1.0, fill=0.8, fluidWidth=0.2, Rh=0.06, center=(0.9, 0.11), omega=omega, device="cuda:0", r=r)
     sim.cfg.__dict__.update(kw)
     n, h, lo, hi = len(sim.x), info["h"], info["lo"], np.array([1.6, 1.0])

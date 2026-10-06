@@ -14,7 +14,7 @@ import torch
 import warp as wp
 from warpSPHCore import KernelFunctions, ParticleState
 
-from edgebound.scene import AnalyticBoundary, Body, BoundaryProvider, DiskBody, ImplicitRep, ParticleBoundary, Scene, SurfaceRep, WallOutput
+from warpSPHBoundaries.scene import AnalyticBoundary, Body, BoundaryProvider, DiskBody, ImplicitRep, ParticleBoundary, Scene, SurfaceRep, WallOutput
 
 DEV = "cuda:0" if wp.is_cuda_available() else "cpu"
 F64 = torch.float64

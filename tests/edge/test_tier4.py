@@ -5,8 +5,8 @@ import mpmath as mp
 import numpy as np
 import pytest
 
-import edgebound as eb
-from edgebound.edge import np2d, tier4
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge import np2d, tier4
 
 TOL = mp.mpf(10) ** -35
 
@@ -54,7 +54,7 @@ def test_strip_series_orders_and_exact_strip_is_two_edges(name):
 def test_disk_series_k0_is_the_point_approximation():
     """leading term = pi a^2 W(D) (a 'point' with its volume) -- the 2D analogue of the slender-limit leading term."""
     name, a, D = "w4", F(1, 20), F(3, 5)
-    from edgebound.edge.kernels import kernel, peval
+    from warpSPHBoundaries.edge.kernels import kernel, peval
     lo, hi, c = kernel(name).pieces[0]
     W = peval([mp.mpf(v.numerator) / v.denominator for v in c], mp.mpf(3) / 5) / mp.pi
     assert abs(tier4.disk_series(name, a, D, 0) - mp.pi / 400 * W) < mp.mpf(10) ** -35

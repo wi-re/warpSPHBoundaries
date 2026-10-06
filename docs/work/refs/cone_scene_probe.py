@@ -1,5 +1,5 @@
 """Reviewer's probe for WORK-002 T2.1 (throw-away, NOT part of the deliverable; copy to .tmp/ to run, do not import in tests).
-Shows: (1) a degree-1 'cone' EdgeKernel registered in edgebound.edge.kernels.KERNELS runs through the UNMODIFIED Warp edge kernel;
+Shows: (1) a degree-1 'cone' EdgeKernel registered in warpSPHBoundaries.edge.kernels.KERNELS runs through the UNMODIFIED Warp edge kernel;
 (2) the scene path accepts a kernel *name* if kernelName passes strings through;  both reproduce cover.cover_vector_np.
 Conversion: W_cone = 3 (1-q)/(pi h^2)  (c2_pi = 3), K(r) = (r-H) 1[r<=H] = -H (1-q) at h = H, so
     grad_x int_solid K dA = -H * (pi h^2 / 3) * (grad_x int W_cone dA) = -(pi H^3 / 3) * g0     (h = H).
@@ -10,9 +10,9 @@ from fractions import Fraction as F
 sys.path.insert(0, "python")
 import numpy as np, torch
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from edgebound.scene import cover, scene as S
-from edgebound.edge import kernels
-from edgebound.scene.scene import Body, BodyField, Scene, SurfaceRep, sceneOperation
+from warpSPHBoundaries.scene import cover, scene as S
+from warpSPHBoundaries.edge import kernels
+from warpSPHBoundaries.scene.scene import Body, BodyField, Scene, SurfaceRep, sceneOperation
 
 kernels.KERNELS["cone"] = kernels._from_terms("cone", [(1, F(1), 1)])        # (coef, knot, power): shape (1 - q)^1, normalisation 3
 _orig = S.kernelName

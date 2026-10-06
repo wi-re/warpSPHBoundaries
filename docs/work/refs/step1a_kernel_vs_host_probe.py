@@ -3,9 +3,9 @@
 # back-to-back launches of pre-wrapped arrays; the GPU is idle between nothing, so this is the kernel duration), monomial f64 kernel and Chebyshev stable=(8, 6).   GPU idle: the numbers depend on load.
 import time, sys
 import numpy as np, torch, warp as wp
-from edgebound.sim.cases import marrone_dambreak
-from edgebound.edge import warpbc as W
-from edgebound.scene.scene import queryCellList, _segment_distance
+from warpSPHBoundaries.sim.cases import marrone_dambreak
+from warpSPHBoundaries.edge import warpbc as W
+from warpSPHBoundaries.scene.scene import queryCellList, _segment_distance
 
 sim, _ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")
 for _ in range(300): sim.step()

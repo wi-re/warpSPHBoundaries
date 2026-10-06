@@ -37,10 +37,10 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.edge import geometry as G
-from edgebound.edge import kernels, np2d, warpbc
-from edgebound.edge.core import GUARD, block_grad
-from edgebound.edge.kernels import power_monomials as ref_coeffs, power_terms as terms
+from warpSPHBoundaries.edge import geometry as G
+from warpSPHBoundaries.edge import kernels, np2d, warpbc
+from warpSPHBoundaries.edge.core import GUARD, block_grad
+from warpSPHBoundaries.edge.kernels import power_monomials as ref_coeffs, power_terms as terms
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64

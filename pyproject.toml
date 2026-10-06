@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "edgebound"
+name = "warpSPHBoundaries"
 version = "0.1.0"
 description = "Exact SPH boundary integrals via divergence-theorem edge reductions (2D), scene layer and delta+-SPH / DFSPH solvers on analytic boundaries"
 readme = "README.md"
@@ -19,10 +19,10 @@ test = ["pytest"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["edgebound*", "curvbound*"]
+include = ["warpSPHBoundaries*", "curvbound*"]
 
 [tool.setuptools.package-data]
-edgebound = ["data/tables/*.npz"]
+warpSPHBoundaries = ["data/tables/*.npz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

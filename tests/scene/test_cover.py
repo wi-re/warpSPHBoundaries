@@ -1,4 +1,4 @@
-"""Tests for the exact Barecasco cover vector (edgebound.cover) against the independent polar oracle.
+"""Tests for the exact Barecasco cover vector (warpSPHBoundaries.cover) against the independent polar oracle.
 
 Tolerances (stated with their reason):
   * mp closed form vs oracle  <= 1e-12 (relative to H^2): both evaluate the SAME smooth integral
@@ -15,9 +15,9 @@ import mpmath as mp
 import numpy as np
 import pytest
 
-from edgebound.scene import cover
-from edgebound.edge import geometry as G, oracle
-from edgebound.edge.core import GUARD, block_grad
+from warpSPHBoundaries.scene import cover
+from warpSPHBoundaries.edge import geometry as G, oracle
+from warpSPHBoundaries.edge.core import GUARD, block_grad
 
 TOL = 1e-12                     # relative to H^2 (see module docstring)
 

@@ -5,11 +5,11 @@
 # Per pair count: GPU time of the kernel alone (Warp events around back-to-back launches), and the channel values are saved to .tmp/ for the comparison.   GPU idle: timings depend on load.
 import os, sys
 import numpy as np, torch, warp as wp
-import edgebound                                                   # noqa: F401  (float64 default unless warpSPHCore_PRECISION is set)
-from edgebound import paths
-from edgebound.edge import precision as PR, warpbc as W
-from edgebound.sim.cases import marrone_dambreak
-from edgebound.scene.scene import queryCellList, _segment_distance
+import warpSPHBoundaries                                                   # noqa: F401  (float64 default unless warpSPHCore_PRECISION is set)
+from warpSPHBoundaries import paths
+from warpSPHBoundaries.edge import precision as PR, warpbc as W
+from warpSPHBoundaries.sim.cases import marrone_dambreak
+from warpSPHBoundaries.scene.scene import queryCellList, _segment_distance
 
 tag = PR.real.__name__
 sim, _ = marrone_dambreak(nx=67, shifting=True, noPen="impulse")

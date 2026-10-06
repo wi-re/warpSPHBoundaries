@@ -5,8 +5,8 @@ import torch
 import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationProperties, ParticleState, WarpOperation
-from edgebound.scene.implicitBodies import DiskBody, HalfPlaneBody
-from edgebound.scene.scene import Body, BodyField, ImplicitRep, Scene, SdfRep, SurfaceRep, VolumeRep, sceneOperation
+from warpSPHBoundaries.scene.implicitBodies import DiskBody, HalfPlaneBody
+from warpSPHBoundaries.scene.scene import Body, BodyField, ImplicitRep, Scene, SdfRep, SurfaceRep, VolumeRep, sceneOperation
 
 DEVICES = ["cpu"] + (["cuda:0"] if wp.is_cuda_available() else [])
 TD = torch.float64
@@ -368,7 +368,7 @@ def test_covariance_operation(device):
 @pytest.mark.parametrize("device", DEVICES)
 def test_scene_inside_agrees_across_representations(device):
     """point-in-solid: a tank wall as surface loop (background 1), as the omniSPH-style slab volume, as SDF, and a rotated hexagon body."""
-    from edgebound.sim.dfsph2d import domain_scene
+    from warpSPHBoundaries.sim.dfsph2d import domain_scene
     lo, hi, h = (0.0, 0.0), (1.0, 0.5), 0.05
     rng = np.random.default_rng(1)
     pts = torch.as_tensor(rng.uniform([-0.2, -0.2], [1.2, 0.7], (4000, 2)), dtype=torch.float64, device=device)
@@ -389,7 +389,7 @@ def test_scene_inside_agrees_across_representations(device):
 @pytest.mark.parametrize("device", DEVICES)
 def test_signed_distance_and_normal(device):
     """tank (surface loop, solid outside), a rotated hexagon and the SDF box agree with the exact distances; the normal points from the wall into the fluid."""
-    from edgebound.sim.dfsph2d import domain_scene
+    from warpSPHBoundaries.sim.dfsph2d import domain_scene
     lo, hi = (0.0, 0.0), (1.0, 0.5)
     pts = torch.tensor([[0.5, 0.05], [0.02, 0.3], [0.97, 0.45], [0.5, 0.49], [1.05, 0.2], [0.5, 0.25]], dtype=torch.float64, device=device)
     d_true = torch.tensor([0.05, 0.02, 0.03, 0.01, -0.05, 0.25], dtype=torch.float64, device=device)
@@ -416,7 +416,7 @@ def test_adjacency_kernel_guard(device):
     scene with a few particles: an adjacency built for kernel 'cone' passed to a Density of kernel 'lw2' (registered via
     viscosity.lap_factor(1.0, 'w2')) raises ValueError (match 'built for kernel'); the same adjacency with kernel 'cone' works and equals
     the result without an adjacency (max|diff| <= 1e-12, same pairs, same arithmetic)."""
-    from edgebound.scene.viscosity import lap_factor
+    from warpSPHBoundaries.scene.viscosity import lap_factor
     lap_factor(1.0, "w2")                                                    # registers the 'lw2' kernel (lazy registration)
     unit = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], dtype=float)
     sc = Scene([Body(bodyId=0, reps=[SurfaceRep.polygon(unit)])], device)

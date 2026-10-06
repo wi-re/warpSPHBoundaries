@@ -69,7 +69,7 @@ is awkward through the clipping).
 
 - Stage 0 (Maple): `maple/10`–`13` — primitives, truncated monomials, moments recursion, half-plane link
   to `λ_2(d)`; see the check tables in `derivations/`.
-- Stage 1 (mpmath): `src/edgebound/` + independent polar oracle (`oracle.py`, shares no code with
+- Stage 1 (mpmath): `src/warpSPHBoundaries/` + independent polar oracle (`oracle.py`, shares no code with
   `core.py`) + `tests/edge/` (all green). Reference accuracy ≈ 1e-35 (40 dps + 20 guard digits); oracle agreement
   asserted at 1e-30.
 - Golden fixtures: `tests/fixtures/edge2d_golden.json`, 92 cases (element and covering-mesh cases), 4 kernels,
@@ -115,7 +115,7 @@ match the fixtures and give ~120× over numpy for the value (`autodiff-and-gpu.m
 
 ### Stage 2 status
 
-numpy float64 (`src/edgebound/edge/np2d.py`) meets the table above on every fixture: worst 6e-14 (value), 5e-13 (gradient),
+numpy float64 (`src/warpSPHBoundaries/edge/np2d.py`) meets the table above on every fixture: worst 6e-14 (value), 5e-13 (gradient),
 1e-14 (moments) absolute. Details, float32 / quadrature variants and cost: `exactness-and-approximations.md`.
 
 ## Order of work

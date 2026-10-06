@@ -14,13 +14,13 @@ import torch
 import warp as wp
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
-from edgebound.edge.warpfused import FusedGroup
-from edgebound.scene import tensile
-from edgebound.scene.cover import cover_vector_scene
-from edgebound.scene.fused import FusedWall, WallOutput
-from edgebound.scene.scene import Body, BodyField, BoxRep, Scene, SurfaceRep, sceneOperation
-from edgebound.scene.tensile import tensile_factor, tensile_vector_scene
-from edgebound.scene.viscosity import lap_factor, lap_lambda_scene
+from warpSPHBoundaries.edge.warpfused import FusedGroup
+from warpSPHBoundaries.scene import tensile
+from warpSPHBoundaries.scene.cover import cover_vector_scene
+from warpSPHBoundaries.scene.fused import FusedWall, WallOutput
+from warpSPHBoundaries.scene.scene import Body, BodyField, BoxRep, Scene, SurfaceRep, sceneOperation
+from warpSPHBoundaries.scene.tensile import tensile_factor, tensile_vector_scene
+from warpSPHBoundaries.scene.viscosity import lap_factor, lap_lambda_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64
@@ -87,8 +87,8 @@ def test_fused_outputs_equal_scene_operations(device, constant):
 
 @pytest.mark.parametrize("device", DEVICES)
 def test_fused_rejects_other_representations_on_the_oracle_adjacency(device):
-    from edgebound.scene.implicitBodies import DiskBody
-    from edgebound.scene.scene import ImplicitRep
+    from warpSPHBoundaries.scene.implicitBodies import DiskBody
+    from warpSPHBoundaries.scene.scene import ImplicitRep
     sc = Scene([Body(bodyId=0, reps=[ImplicitRep(DiskBody(center=(0.5, 0.5), radius=0.2))])], device)
     assert FusedWall.supported(sc) and not FusedWall.supported(sc, lowering=False)         # a disk is integrated as its polygon only on the fixed-capacity adjacency (tests/scene/test_fused_implicit.py)
     pos = torch.tensor([[0.5, 0.5]], dtype=F64, device=device)
@@ -115,7 +115,7 @@ def make_box(device, solid, n=500, seed=2):
 def test_fused_box_equals_scene_operations(device, solid):
     """`BoxRep` bodies in the fused path (corner tables for `w2` / `lw2` / `w2p5`, the exact polygon for `cone`) against `sceneOperation` and the library functions on the same scene (the same tables:
     round-off only, 1e-12 of the scale), and `cone_area` against `cone_area_scene` (1e-11 H^2); tank (`outside`) and obstacle (`inside`), two bodies, deterministic."""
-    from edgebound.scene.cone_area import cone_area_scene
+    from warpSPHBoundaries.scene.cone_area import cone_area_scene
     H = 0.5
     sc, ps, pos, a1 = make_box(device, solid)
     B, N = len(sc.bodies), len(pos)
@@ -174,7 +174,7 @@ def test_fused_cone_area_equals_cone_area_scene(device, half_angle):
     """`FusedWall.cone_area` (local form: indicator sector minus the chord deficits of the edges within one support) vs `cone_area_scene` (the non-local per-edge closed form), both float64: the two
     differ by round-off of O(H^2) numbers only; tolerance 1e-11 H^2 stated before looking.  Two bodies (L-shape with a reflex corner, thin box), 500 queries inside / near / far, constant support
     (the reference takes one H), random axes; row 1 is the full disk."""
-    from edgebound.scene.cone_area import cone_area_scene
+    from warpSPHBoundaries.scene.cone_area import cone_area_scene
     H = 0.5
     sc, ps, pos, _ = make(device, constant_support=H)
     N = len(pos)

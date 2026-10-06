@@ -18,9 +18,9 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.sim.deltasph2d import DeltaSPHConfig
-from edgebound.sim.cases import hydrostatic_tank
-from edgebound.scene.scene import Scene
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
+from warpSPHBoundaries.sim.cases import hydrostatic_tank
+from warpSPHBoundaries.scene.scene import Scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
@@ -43,7 +43,7 @@ def _disable_cache(sim):
 def _counting_adjacency():
     """a (counter, restore) pair: counter[0] counts Scene.adjacency and fixed_adjacency calls, counter[1] Scene.precompute calls, counter[2] the stage-1 launches of the fused wall evaluation
     (`FusedWall` constructions) (class-level, restored by calling restore())."""
-    from edgebound.scene import fused as F
+    from warpSPHBoundaries.scene import fused as F
     counter = [0, 0, 0]
     orig_a, orig_p, orig_f = Scene.adjacency, Scene.precompute, F.FusedWall.__init__
 
@@ -59,7 +59,7 @@ def _counting_adjacency():
         counter[2] += 1
         return orig_f(self, *a, **k)
 
-    from edgebound.scene import provider as D
+    from warpSPHBoundaries.scene import provider as D
     orig_x = D.fixed_adjacency                                          # the boundary provider builds the fused path adjacency with the fixed-capacity builder (cfg.fixedAdjacency)
 
     def counting_x(*a, **k):
@@ -244,7 +244,7 @@ def test_reuse_invalidation(device):
 def test_box_domain_fused_equals_scene_operation_path(device, case):
     """the `box` domain (BoxRep: corner tables, the exact polygon for the cone group) runs the fused wall evaluation and gives the state of the `sceneOperation` path (cfg.fusedWall = False) to round-off
     after 60 steps: positions 1e-12, velocities 1e-10 (stated before looking; the two paths evaluate the same tables and differ in summation order)."""
-    from edgebound.sim import cases
+    from warpSPHBoundaries.sim import cases
     res = {}
     for fused in (False, True):
         kw = dict(nx=30, shifting=True, noPen="impulse") if case == "dambreak" else dict(nx=40)

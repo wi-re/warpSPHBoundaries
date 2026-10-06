@@ -3,7 +3,7 @@
 **Status:** [V] Maple (symbolic, `maple/10_edge_primitives.mpl`) + mpmath (`tests/edge/test_primitives.py`)
 **Tier(s):** 1, 2, 4 · **Dimension:** 2D (3D adds a new family: `tet-face-edge-chain.md`)
 **Depends on:** `../notation.md`
-**Implemented in:** `src/edgebound/edge/primitives.py` (mpmath stage 1); the unverified `scripts/derivation_checks/monomial_edge_forms.py` is superseded
+**Implemented in:** `src/warpSPHBoundaries/edge/primitives.py` (mpmath stage 1); the unverified `scripts/derivation_checks/monomial_edge_forms.py` is superseded
 **Verified by:** `maple/10_edge_primitives.mpl`, `tests/edge/test_primitives.py`
 
 ## 1. Statement

@@ -10,8 +10,8 @@ from fractions import Fraction as F
 
 import mpmath as mp
 
-from edgebound.edge import core, fixtures as fx, geometry
-from edgebound.edge.mpq import mpq
+from warpSPHBoundaries.edge import core, fixtures as fx, geometry
+from warpSPHBoundaries.edge.mpq import mpq
 
 
 def probe(verbose=True):

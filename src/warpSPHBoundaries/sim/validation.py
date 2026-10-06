@@ -11,8 +11,8 @@ import time
 
 import numpy as np
 
-from edgebound.sim.cases import english_wedge, hydrostatic_tank, marrone_dambreak, sloshing_tank, triangle_distance
-from edgebound.sim.probes import sloshing_probes, wall_probes
+from warpSPHBoundaries.sim.cases import english_wedge, hydrostatic_tank, marrone_dambreak, sloshing_tank, triangle_distance
+from warpSPHBoundaries.sim.probes import sloshing_probes, wall_probes
 
 
 def score_tank(sim, info, dp, L=2.4, t=None, ke=None):

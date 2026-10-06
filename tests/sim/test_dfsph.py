@@ -10,8 +10,8 @@ import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation, DomainDescription
 import warpSPHCore as core
-from edgebound.sim import dfsph2d as D
-from edgebound import paths
+from warpSPHBoundaries.sim import dfsph2d as D
+from warpSPHBoundaries import paths
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
@@ -40,7 +40,7 @@ def test_pair_sums_match_warpoperation(device):
     acc = sim._fluid_accel(t(p))
     # warpSPHCore reference
     from warpSPHCore.type_config import get_torch_precision
-    t32 = lambda a: torch.as_tensor(a, dtype=get_torch_precision(), device=device)     # warpOperation computes in warpSPHCore's precision (float64 under edgebound's default, float32 otherwise)
+    t32 = lambda a: torch.as_tensor(a, dtype=get_torch_precision(), device=device)     # warpOperation computes in warpSPHCore's precision (float64 under warpSPHBoundaries's default, float32 otherwise)
     ps = ParticleState(positions=t32(pos), supports=t32(np.full(n, h)), masses=t32(V), kinds=torch.zeros(n, dtype=torch.int32, device=device), densities=rho.to(get_torch_precision()))
     lo, hi = pos.min(0) - 2 * h, pos.max(0) + 2 * h
     domain = DomainDescription(t32(lo), t32(hi), torch.zeros(2, dtype=torch.bool, device=device), 2)
@@ -110,7 +110,7 @@ def test_agrees_with_omnisph_reference():
     old = os.getcwd()
     os.chdir(scratch)
     try:
-        from edgebound.sim import dfsph_ref as R
+        from warpSPHBoundaries.sim import dfsph_ref as R
         r = 0.005
         fmin, fmax = (0.02, 0.02), (0.5, 0.15)
         c = R.omni_case(r, fmin, fmax, top=0.4)
@@ -138,8 +138,8 @@ def test_agrees_with_omnisph_reference():
 
 
 # ----------------------------------------------------------------------------------------------------------------------------- force tracking
-from edgebound.sim import dfsph_cases as C
-from edgebound.scene.scene import BodyField, sceneOperation, Body, SurfaceRep, Scene
+from warpSPHBoundaries.sim import dfsph_cases as C
+from warpSPHBoundaries.scene.scene import BodyField, sceneOperation, Body, SurfaceRep, Scene
 
 
 @pytest.mark.parametrize("device", DEVICES)

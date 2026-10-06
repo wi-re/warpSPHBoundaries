@@ -5,9 +5,9 @@ import sys, math
 sys.path.insert(0, "python"); sys.path.insert(0, "docs/work/refs")
 import numpy as np, torch
 from cone_area_probe import cone_area
-from edgebound.sim.cases import hydrostatic_tank, marrone_dambreak
-from edgebound.sim.pairs import F64, neighbor_pairs
-from edgebound.scene.scene import SurfaceRep
+from warpSPHBoundaries.sim.cases import hydrostatic_tank, marrone_dambreak
+from warpSPHBoundaries.sim.pairs import F64, neighbor_pairs
+from warpSPHBoundaries.scene.scene import SurfaceRep
 
 def world_loops(sim):
     out = []

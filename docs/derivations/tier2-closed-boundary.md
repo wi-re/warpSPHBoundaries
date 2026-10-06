@@ -3,7 +3,7 @@
 **Status:** [V] (non-convex polygons in numpy; polygon → exact disk convergence; closed-boundary additivity)
 **Tier(s):** 2 · **Dimension:** 2D
 **Depends on:** `edge-value-identity.md`, `edge-gradient-identity.md`, `moments-recursion.md`, `fem-nodal-weights.md`
-**Implemented in:** `src/edgebound/edge/np2d.py` (general simple-polygon indicator), `core.py` (stage 1), `oracle.py::polar_disk_*` (exact disk oracle)
+**Implemented in:** `src/warpSPHBoundaries/edge/np2d.py` (general simple-polygon indicator), `core.py` (stage 1), `oracle.py::polar_disk_*` (exact disk oracle)
 **Verified by:** `tests/edge/test_tier2.py`
 
 ## 1. Statement

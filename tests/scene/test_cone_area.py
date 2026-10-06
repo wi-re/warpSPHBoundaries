@@ -14,7 +14,7 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.scene.cone_area import cone_area, cone_area_scalar
+from warpSPHBoundaries.scene.cone_area import cone_area, cone_area_scalar
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64

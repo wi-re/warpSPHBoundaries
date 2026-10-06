@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from edgebound.scene import boundaryOps as B
+from warpSPHBoundaries.scene import boundaryOps as B
 
 
 def tank_mesh(L=1.0, thick=0.2, ds=0.05, dev="cuda:0"):

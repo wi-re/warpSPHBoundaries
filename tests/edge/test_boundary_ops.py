@@ -8,8 +8,8 @@ import torch
 import warp as wp
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from edgebound.scene import boundaryOps as B
-from edgebound.edge import np_fem
+from warpSPHBoundaries.scene import boundaryOps as B
+from warpSPHBoundaries.edge import np_fem
 
 DEVICES = ["cpu"] + (["cuda:0"] if wp.is_cuda_available() else [])
 TD = torch.float64

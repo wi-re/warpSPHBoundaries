@@ -19,10 +19,10 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.scene.cone_area import cone_area_scene
-from edgebound.sim.deltasph2d import DeltaSPHConfig
-from edgebound.sim.cases import hydrostatic_tank
-from edgebound.sim.pairs import F64, neighbor_pairs
+from warpSPHBoundaries.scene.cone_area import cone_area_scene
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
+from warpSPHBoundaries.sim.cases import hydrostatic_tank
+from warpSPHBoundaries.sim.pairs import F64, neighbor_pairs
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 

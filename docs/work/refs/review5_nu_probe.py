@@ -1,7 +1,7 @@
 # reviewer probe: does the SOLVER's own bulk viscous term equal (fac/8)(lap v + 2 grad div v)?
 import torch, numpy as np
-from edgebound.sim.deltasph2d import DeltaSPHConfig
-from edgebound.sim.cases import hydrostatic_tank
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
+from warpSPHBoundaries.sim.cases import hydrostatic_tank
 sim,_ = hydrostatic_tank(dp=0.04, domain="surface", device="cuda:0", cfg=DeltaSPHConfig())
 x = sim.x; fac = sim.cfg.alpha*sim.cfg.c0*sim.H/sim.xi
 def visc(v):

@@ -1,6 +1,6 @@
 """2D tier-selection study: ordering of the models vs R/h for a disk obstacle (records the regime map used in docs/tier-selection-2d.md)."""
 
-from edgebound.edge import tier_select
+from warpSPHBoundaries.edge import tier_select
 
 
 def test_regime_map():

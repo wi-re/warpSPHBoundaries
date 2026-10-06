@@ -4,7 +4,7 @@ import pytest
 import torch
 import warp as wp
 
-from edgebound.edge import np2d, torch2d, warp2d
+from warpSPHBoundaries.edge import np2d, torch2d, warp2d
 from .test_np2d import ELEMENTS, KERNELS, ref, rel_geometry
 
 DEVICES = ["cpu"] + (["cuda:0"] if wp.is_cuda_available() else [])

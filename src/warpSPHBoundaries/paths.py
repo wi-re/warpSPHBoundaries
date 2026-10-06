@@ -2,7 +2,7 @@
 
 `REPO_ROOT` is the checkout (found by walking up from this file to `pyproject.toml`); it is `None` when the package is installed
 without the checkout, in which case the cache of tabulated kernels goes to the user cache directory and the repo-only locations raise.
-Environment: `OMNISPH_HOME` (default `~/dev/omniSPH`) is the live DFSPH reference, `EDGEBOUND_TMP` overrides the scratch directory.
+Environment: `OMNISPH_HOME` (default `~/dev/omniSPH`) is the live DFSPH reference, `WARPSPHBOUNDARIES_TMP` overrides the scratch directory.
 """
 import os
 from pathlib import Path
@@ -21,7 +21,7 @@ OMNISPH_HOME = Path(os.environ.get("OMNISPH_HOME", "~/dev/omniSPH")).expanduser(
 
 def _need_repo(sub):
     if REPO_ROOT is None:
-        raise RuntimeError("edgebound.paths: %r needs the repository checkout (pyproject.toml not found above %s)" % (sub, Path(__file__).parent))
+        raise RuntimeError("warpSPHBoundaries.paths: %r needs the repository checkout (pyproject.toml not found above %s)" % (sub, Path(__file__).parent))
     return REPO_ROOT / sub
 
 
@@ -35,7 +35,7 @@ def fixtures_dir():
 
 def tmp_dir():
     """scratch (untracked): snapshots, videos, reference runs"""
-    return Path(os.environ["EDGEBOUND_TMP"]) if "EDGEBOUND_TMP" in os.environ else _need_repo(".tmp")
+    return Path(os.environ["WARPSPHBOUNDARIES_TMP"]) if "WARPSPHBOUNDARIES_TMP" in os.environ else _need_repo(".tmp")
 
 
 def packaged_tables_dir():
@@ -47,4 +47,4 @@ def tables_dir():
     """where newly tabulated tier-3 functions are written: the packaged directory in a checkout, the user cache directory when installed"""
     if REPO_ROOT is not None:
         return packaged_tables_dir()
-    return Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "edgebound" / "tables"
+    return Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "warpSPHBoundaries" / "tables"

@@ -14,11 +14,11 @@ import torch
 import warp as wp
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
-from edgebound.edge.warpfused import FusedGroup
-from edgebound.scene.fixedadj import fixed_adjacency
-from edgebound.scene.fused import FusedWall, WallOutput
-from edgebound.scene.implicitBodies import DiskBody, HalfPlaneBody
-from edgebound.scene.scene import Body, ImplicitRep, Scene, SdfRep, SurfaceRep, sceneOperation, BodyField
+from warpSPHBoundaries.edge.warpfused import FusedGroup
+from warpSPHBoundaries.scene.fixedadj import fixed_adjacency
+from warpSPHBoundaries.scene.fused import FusedWall, WallOutput
+from warpSPHBoundaries.scene.implicitBodies import DiskBody, HalfPlaneBody
+from warpSPHBoundaries.scene.scene import Body, ImplicitRep, Scene, SdfRep, SurfaceRep, sceneOperation, BodyField
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64

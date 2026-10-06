@@ -3,7 +3,7 @@
 **Status:** [V] Maple (half-plane symbolic, per block and per kernel) + mpmath (polar quadrature, finite differences)
 **Tier(s):** 1, 2 · **Dimension:** 2D
 **Depends on:** `edge-value-identity.md`
-**Implemented in:** `src/edgebound/edge/core.py::gradient`, `::moment_gradient` (stage 1); `scripts/derivation_checks/edge_identity_check.py` [V, quadrature edges]
+**Implemented in:** `src/warpSPHBoundaries/edge/core.py::gradient`, `::moment_gradient` (stage 1); `scripts/derivation_checks/edge_identity_check.py` [V, quadrature edges]
 **Verified by:** `maple/11_truncated_monomials.mpl`, `maple/13_halfplane.mpl`, `tests/edge/test_gradient.py`, `tests/edge/test_moments.py`
 
 ## 1. Statement

@@ -1,6 +1,6 @@
 # Scene architecture: bodies, representations, per-type adjacency (2D)
 
-**Status:** [V] — `src/edgebound/scene/scene.py`, `warpbc.edge_channels`, tests `tests/scene/test_scene.py` (44), benchmark `python scripts/bench/scene_bench.py`; used by the DFSPH solver of `dfsph-validation.md`.
+**Status:** [V] — `src/warpSPHBoundaries/scene/scene.py`, `warpbc.edge_channels`, tests `tests/scene/test_scene.py` (44), benchmark `python scripts/bench/scene_bench.py`; used by the DFSPH solver of `dfsph-validation.md`.
 Supersedes the "one global element grid" structure of `boundaryOps.py` for scenes (`boundaryOps` stays the volume-element engine).
 
 ## 1. Why

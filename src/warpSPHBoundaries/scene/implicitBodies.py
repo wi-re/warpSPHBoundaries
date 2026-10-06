@@ -307,7 +307,7 @@ def evaluateBody(body, positions, supports, kernel_name, device, policy: TierPol
     return lam, grad, tier, active
 
 
-if __name__ == "__main__":      # python -m edgebound.scene.implicitBodies : build/cache the tier-3 tables of all supported kernels (~30 s each)
+if __name__ == "__main__":      # python -m warpSPHBoundaries.scene.implicitBodies : build/cache the tier-3 tables of all supported kernels (~30 s each)
     import time
     for name in ["cubic", "quartic", "quintic", "b7", "b8", "poly6", "w2", "w4", "w6"]:
         t = time.time()

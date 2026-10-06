@@ -1,9 +1,9 @@
-"""edgebound -- exact 2D SPH boundary integrals via divergence-theorem edge reductions.
+"""warpSPHBoundaries -- exact 2D SPH boundary integrals via divergence-theorem edge reductions.
 
 Sub-packages: `edge` (the edge machinery), `scene` (bodies, boundary operations, wall operators), `sim` (DFSPH / delta+-SPH solvers); `paths`.
 Derivations: docs/derivations/*.md.  Do not confuse with `curvbound` (PLAN track).
 """
-from .edge.precision import ensure_default as _ensure_default      # warpSPHCore precision: edgebound defaults to float64 unless configured (edge/precision.py); before any warpSPHCore import
+from .edge.precision import ensure_default as _ensure_default      # warpSPHCore precision: warpSPHBoundaries defaults to float64 unless configured (edge/precision.py); before any warpSPHCore import
 _ensure_default()
 
 from .edge.core import gradient, moment, moment_gradient, value

@@ -1,10 +1,10 @@
 """Regenerate the golden fixtures (mpmath reference values, tens of seconds):
-    python scripts/make_fixtures.py edge [out.json]    -> tests/fixtures/edge2d_golden.json      (edgebound.edge.fixtures)
-    python scripts/make_fixtures.py fem                -> tests/fixtures/edge2d_fem_golden.json  (edgebound.edge.fem_fixtures)
+    python scripts/make_fixtures.py edge [out.json]    -> tests/fixtures/edge2d_golden.json      (warpSPHBoundaries.edge.fixtures)
+    python scripts/make_fixtures.py fem                -> tests/fixtures/edge2d_fem_golden.json  (warpSPHBoundaries.edge.fem_fixtures)
 """
 import sys
 
-from edgebound.edge import fem_fixtures, fixtures
+from warpSPHBoundaries.edge import fem_fixtures, fixtures
 
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "edge"

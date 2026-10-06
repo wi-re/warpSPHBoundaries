@@ -1,6 +1,6 @@
 # Stages 4 and 5: torch autodiff, explicit adjoints, Warp kernels (2D)
 
-**Status:** [V] — `src/edgebound/edge/torch2d.py`, `warp2d.py`, `np2d.shape_gradient`; tests `tests/edge/test_torch2d.py`, `test_warp2d.py`, `test_shape_gradient.py`
+**Status:** [V] — `src/warpSPHBoundaries/edge/torch2d.py`, `warp2d.py`, `np2d.shape_gradient`; tests `tests/edge/test_torch2d.py`, `test_warp2d.py`, `test_shape_gradient.py`
 
 ## 1. The analytic derivatives (the primary implementation)
 

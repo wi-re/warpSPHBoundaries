@@ -16,12 +16,12 @@ import time
 import numpy as np
 import torch
 
-import edgebound.sim.deltasph2d as d2d
-from edgebound.sim.deltasph2d import DeltaSPH2D
-from edgebound.sim.cases import marrone_dambreak, sloshing_tank
-from edgebound.scene.scene import Scene, SceneAdjacency
-from edgebound.scene.fused import FusedWall
-from edgebound import paths
+import warpSPHBoundaries.sim.deltasph2d as d2d
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPH2D
+from warpSPHBoundaries.sim.cases import marrone_dambreak, sloshing_tank
+from warpSPHBoundaries.scene.scene import Scene, SceneAdjacency
+from warpSPHBoundaries.scene.fused import FusedWall
+from warpSPHBoundaries import paths
 
 # --------------------------------------------------------------------------- stack-based timer
 _STATS = {"calls": {}, "inclusive": {}, "self": {}}

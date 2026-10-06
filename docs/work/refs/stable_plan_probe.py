@@ -19,10 +19,10 @@ from fractions import Fraction
 sys.path.insert(0, "python")
 import numpy as np, torch, warp as wp, mpmath as mp
 
-from edgebound.edge import kernels, warpbc, np2d, geometry as G
-from edgebound.edge.core import GUARD, block_grad
-from edgebound.edge.kernels import power_terms as terms
-from edgebound.edge.warp2d import _dangle, f64
+from warpSPHBoundaries.edge import kernels, warpbc, np2d, geometry as G
+from warpSPHBoundaries.edge.core import GUARD, block_grad
+from warpSPHBoundaries.edge.kernels import power_terms as terms
+from warpSPHBoundaries.edge.warp2d import _dangle, f64
 
 NODES, PANELS = 16, 8
 

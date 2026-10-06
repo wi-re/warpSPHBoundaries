@@ -1,4 +1,4 @@
-"""The analytic boundary as a PROVIDER for an SPH scheme (docs/audit-warpsph-boundary-hooks.md; the future `warpSPHBoundaries` public surface).
+"""The analytic boundary as a PROVIDER for an SPH scheme (docs/audit-warpsph-boundary-hooks.md; the public surface of `warpSPHBoundaries`).
 
 A scheme (the warpSPH weakly-compressible delta+ scheme, or `sim.DeltaSPH2D` here) asks a provider for the geometry of its bodies at the fluid particles and keeps the boundary-condition physics (pressure
 extrapolation and clamp, free-slip mirror, no-slip flux, the no-penetration law, particle shifting) to itself.  Nothing is called when there are no analytic bodies.  The contract, structural (`BoundaryProvider`):

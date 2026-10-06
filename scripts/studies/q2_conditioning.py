@@ -23,14 +23,14 @@ from fractions import Fraction as F
 
 import numpy as np
 
-from edgebound.edge import geometry as G
-from edgebound.edge import kernels, np2d, warpbc
-from edgebound.edge.core import GUARD, block_grad
+from warpSPHBoundaries.edge import geometry as G
+from warpSPHBoundaries.edge import kernels, np2d, warpbc
+from warpSPHBoundaries.edge.core import GUARD, block_grad
 
 POLY = [(0, 0), (1, 0), (1, 1), (0, 1)]
 PTS6 = [(0.3, 0.4), (1.02, 0.5), (0.5, -0.3), (0.97, 0.03), (1.3, 0.5), (0.5, -0.9)]
 # (base coeffs in the u = 1-q basis, p0, degree per k)
-from edgebound.edge.kernels import POWER_FAMILIES as FAM, power_monomials as ref_coeffs, power_terms as terms      # library code (tensile.py needs it)
+from warpSPHBoundaries.edge.kernels import POWER_FAMILIES as FAM, power_monomials as ref_coeffs, power_terms as terms      # library code (tensile.py needs it)
 KS = (1, 2, 3, 4, 5)
 DEGMAX = 40                                     # w4 k = 5
 ROUTES = [("A warp", None), ("B np plain", None), ("C np stable(8,6)", (8, 6)), ("D np stable(16,8)", (16, 8))]

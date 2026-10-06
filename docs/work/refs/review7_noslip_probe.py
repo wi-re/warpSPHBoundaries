@@ -5,9 +5,9 @@
 import math, sys, os
 import torch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "python"))
-from edgebound.sim import cases, deltasph2d as D
-from edgebound.sim.deltasph2d import DeltaSPHConfig
-from edgebound.sim.cases import hydrostatic_tank
+from warpSPHBoundaries.sim import cases, deltasph2d as D
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
+from warpSPHBoundaries.sim.cases import hydrostatic_tank
 dev = "cuda:0" if torch.cuda.is_available() else "cpu"
 F64 = torch.float64
 sim, info = hydrostatic_tank(dp=0.04, domain="surface", device=dev, cfg=DeltaSPHConfig())

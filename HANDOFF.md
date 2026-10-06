@@ -116,7 +116,7 @@ Parallel track (does not block 1–5): the 3D derivations (face → edge chain, 
 * `PLAN.md` (tier 3 / oracle track, paused for review since 2026-10-01) still says "do not edit `HANDOFF.md`" — that was an instruction to the local model executing it at the time; this file was updated on the user's request.
 
 ## A7. Reading order for a new session
-`HANDOFF.md` Part A → `docs/deltasph-resume.md` (reproduce commands, artefacts) → `docs/deltasph-porting-notes.md` (term map, §4b status, change log) → `docs/deltasph-plan.md §3b` (3D / port strategy, quadrature argument) → `docs/scene-architecture.md` → `src/edgebound/sim/deltasph2d.py` and `scene.py`. Theory only when deriving: Part B and `docs/derivations/`.
+`HANDOFF.md` Part A → `docs/deltasph-resume.md` (reproduce commands, artefacts) → `docs/deltasph-porting-notes.md` (term map, §4b status, change log) → `docs/deltasph-plan.md §3b` (3D / port strategy, quadrature argument) → `docs/scene-architecture.md` → `src/warpSPHBoundaries/sim/deltasph2d.py` and `scene.py`. Theory only when deriving: Part B and `docs/derivations/`.
 
 ---
 
@@ -379,7 +379,7 @@ Original (2026-10-01):
 - `scripts/derivation_checks/monomial_edge_forms.py` — [D] closed-form primitives + §4/§6(b); brute-force reference timed out
   (discontinuity at $r=R$); swap in a polar reference (radial breakpoint at $R$) or Maple.
 
-Since: the package `src/edgebound/` (module map in Part A §A1 and `docs/README.md`), `maple/` (`run_edge.sh`), `tests/edge/`, `tests/fixtures/` (golden fixtures), `docs/` (index in `docs/README.md`), `notebooks/edge2d_demo.ipynb`, `results/deltasph/` (tracked δ⁺ series and figures), `src/edgebound/data/tables/` (tier-3 Hermite tables), `results/symbolic/`.
+Since: the package `src/warpSPHBoundaries/` (module map in Part A §A1 and `docs/README.md`), `maple/` (`run_edge.sh`), `tests/edge/`, `tests/fixtures/` (golden fixtures), `docs/` (index in `docs/README.md`), `notebooks/edge2d_demo.ipynb`, `results/deltasph/` (tracked δ⁺ series and figures), `src/warpSPHBoundaries/data/tables/` (tier-3 Hermite tables), `results/symbolic/`.
 
 ## 15. References
 

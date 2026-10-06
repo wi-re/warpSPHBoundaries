@@ -10,9 +10,9 @@ from fractions import Fraction as F
 import mpmath as mp
 import pytest
 
-import edgebound as eb
-from edgebound.edge import fixtures as fx
-from edgebound.edge.mpq import mpq
+import warpSPHBoundaries as eb
+from warpSPHBoundaries.edge import fixtures as fx
+from warpSPHBoundaries.edge.mpq import mpq
 
 DATA = fx.load()
 CASES = DATA["cases"]

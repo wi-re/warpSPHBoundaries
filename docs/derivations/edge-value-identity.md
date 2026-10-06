@@ -3,7 +3,7 @@
 **Status:** [V] Maple (divergence step, half-plane equality with `λ_2(d)` symbolic) + mpmath vs polar quadrature, tiling, subdivision, continuity
 **Tier(s):** 1, 2 · **Dimension:** 2D (3D version: `tet-face-edge-chain.md`)
 **Depends on:** `../notation.md`, `edge-primitives.md`, `truncated-monomials.md`
-**Implemented in:** `src/edgebound/edge/core.py::value` (stage 1, mpmath); `scripts/derivation_checks/edge_identity_check.py` (original quadrature-edge check, [V])
+**Implemented in:** `src/warpSPHBoundaries/edge/core.py::value` (stage 1, mpmath); `scripts/derivation_checks/edge_identity_check.py` (original quadrature-edge check, [V])
 **Verified by:** `maple/11_truncated_monomials.mpl`, `maple/13_halfplane.mpl`, `tests/edge/test_value.py`, `tests/edge/test_degenerate.py`, `tests/edge/test_fixtures.py`
 
 ## 1. Statement

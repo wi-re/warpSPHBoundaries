@@ -4,12 +4,12 @@
 import sys, math
 sys.path.insert(0, "python"); sys.path.insert(0, "docs/work/refs")
 import numpy as np, torch
-from edgebound.edge import kernels, warpbc, np2d
-from edgebound.edge.kernels import power_terms as terms
-from edgebound.sim.deltasph2d import DeltaSPHConfig
-from edgebound.sim.cases import hydrostatic_tank, sloshing_tank
-from edgebound.sim.pairs import F64
-from edgebound.scene.scene import Body, BodyField, Scene, SurfaceRep, sceneOperation
+from warpSPHBoundaries.edge import kernels, warpbc, np2d
+from warpSPHBoundaries.edge.kernels import power_terms as terms
+from warpSPHBoundaries.sim.deltasph2d import DeltaSPHConfig
+from warpSPHBoundaries.sim.cases import hydrostatic_tank, sloshing_tank
+from warpSPHBoundaries.sim.pairs import F64
+from warpSPHBoundaries.scene.scene import Body, BodyField, Scene, SurfaceRep, sceneOperation
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 import stable_plan_probe as sp
 
@@ -81,13 +81,13 @@ print("    prefactor wallMass*shiftR/w0^4 = %.4e" % (sim.cfg.wallMass * sim.cfg.
 
 # (4) effect on shift() of the exact C4 tensile term: a patched copy of deltasph2d (guard removed, T from the scene route)
 import types
-src = open("src/edgebound/sim/deltasph2d.py").read()
+src = open("src/warpSPHBoundaries/sim/deltasph2d.py").read()
 src = src.replace('                    if cfg.kernel != KernelFunctions.Wendland2:  raise NotImplementedError("tensileExact: Wendland C2 only (C4 needs the Chebyshev plan)")\n', "")
 src = src.replace("T = tensile_vector_scene(self.scene, x[near], H)", "T = _TE(self.scene, x[near], H)")
 assert "_TE(" in src and "Wendland2:  raise" not in src
-mod = types.ModuleType("edgebound.deltasph2d_probe"); mod.__package__ = "edgebound"; mod.__dict__["_TE"] = T_scene
+mod = types.ModuleType("warpSPHBoundaries.deltasph2d_probe"); mod.__package__ = "warpSPHBoundaries"; mod.__dict__["_TE"] = T_scene
 exec(compile(src, "deltasph2d_probe", "exec"), mod.__dict__)
-import edgebound.sim.deltasph2d as orig
+import warpSPHBoundaries.sim.deltasph2d as orig
 def shift_effect(sim, label):
     dt = sim.dt
     u_q = sim.shift(dt)

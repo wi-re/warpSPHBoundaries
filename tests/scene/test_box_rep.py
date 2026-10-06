@@ -14,11 +14,11 @@ import torch
 import warp as wp
 from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
-from edgebound.scene import tensile
-from edgebound.scene.cover import cover_vector_scene
-from edgebound.scene.scene import Body, BodyField, BoxRep, Scene, SurfaceRep, sceneOperation
-from edgebound.scene.tensile import tensile_vector_scene
-from edgebound.scene.viscosity import lap_factor, lap_lambda_scene
+from warpSPHBoundaries.scene import tensile
+from warpSPHBoundaries.scene.cover import cover_vector_scene
+from warpSPHBoundaries.scene.scene import Body, BodyField, BoxRep, Scene, SurfaceRep, sceneOperation
+from warpSPHBoundaries.scene.tensile import tensile_vector_scene
+from warpSPHBoundaries.scene.viscosity import lap_factor, lap_lambda_scene
 
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 F64 = torch.float64
@@ -167,7 +167,7 @@ def test_geometry_queries_and_wall_operations(device, solid):
 def test_warp_block_equals_torch_channels(device, kernel):
     """`BoxTables.block` (the Warp lookup of the fused wall path: one thread per (row, corner, table) + a combine per row) equals the torch `channels` for the nine channels: both are float64 evaluations of
     the same Chebyshev tensors, 1e-13 of the scale (stated before looking; they differ in summation order and the FMA contraction), including queries exactly on the wall lines, on the corners and far away."""
-    from edgebound.scene.scene import boxTables
+    from warpSPHBoundaries.scene.scene import boxTables
     register()
     t = boxTables(kernel, device)
     pos, sup = queries(device)

@@ -96,7 +96,7 @@
   ],
   "conventions": "y = x' - x; value = int_T W dA; grad = grad_x value; moments[a,b] = int_T y1^a y2^b W dA; moment_grad[a,b] = grad_x moments[a,b]; indicator at an edge = 1/2, at a vertex = interior angle/2pi; values in physical units for support radius h",
   "tolerance_hint": "reference accurate to ~1e-35 absolute; independent polar oracle agrees to <1e-30 (tests/edge)",
-  "generator": "python -m edgebound.fixtures"
+  "generator": "python -m warpSPHBoundaries.fixtures"
  },
  "cases": [
   {

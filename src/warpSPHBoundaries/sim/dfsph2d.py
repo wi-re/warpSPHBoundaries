@@ -14,7 +14,7 @@ Wall pressure: p_b(x') = p_i^+ + G_i . (x' - x_i), G_i the kernel-weighted least
 fluid pressure to the wall by an MLS fit; this is the same idea but gives a field over the boundary, so it enters as `BodyField(perQuery=True)` with a per-query
 gradient and works for every representation, including SDF and primitives).  For the hydrostatic pressure field p = rho g (H - y) the reconstruction is exact.
 
-All fluid-fluid sums are plain torch pair sums (cell list neighbours, `edgebound.scene.buildCellList`) and are checked against `warpSPHCore.warpOperation`.
+All fluid-fluid sums are plain torch pair sums (cell list neighbours, `warpSPHBoundaries.scene.buildCellList`) and are checked against `warpSPHCore.warpOperation`.
 """
 from dataclasses import dataclass
 from typing import Optional

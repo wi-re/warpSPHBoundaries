@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 import torch
 
-import edgebound
-from edgebound import scene as scene_pkg
+import warpSPHBoundaries
+from warpSPHBoundaries import scene as scene_pkg
 
-SRC = Path(edgebound.__file__).parent
+SRC = Path(warpSPHBoundaries.__file__).parent
 
 
 def imports(path):
@@ -23,18 +23,18 @@ def imports(path):
         elif isinstance(node, ast.ImportFrom):
             if node.level:
                 base = list(pkg[:len(pkg) - (node.level - 1)]) if node.level > 1 else list(pkg)
-                out.append("edgebound." + ".".join(base + ([node.module] if node.module else [])))
+                out.append("warpSPHBoundaries." + ".".join(base + ([node.module] if node.module else [])))
             else:
                 out.append(node.module or "")
     return out
 
 
-@pytest.mark.parametrize("layer,forbidden", [("edge", ("edgebound.scene", "edgebound.sim", "warpSPH.", "warpSPH")), ("scene", ("edgebound.sim", "warpSPH.", "warpSPH"))])
+@pytest.mark.parametrize("layer,forbidden", [("edge", ("warpSPHBoundaries.scene", "warpSPHBoundaries.sim", "warpSPH.", "warpSPH")), ("scene", ("warpSPHBoundaries.sim", "warpSPH.", "warpSPH"))])
 def test_no_upward_imports(layer, forbidden):
     bad = []
     for f in sorted((SRC / layer).glob("*.py")):
         for m in imports(f):
-            if m == "warpSPH" or m.startswith("warpSPH.") or any(m == fb.rstrip(".") or m.startswith(fb.rstrip(".") + ".") for fb in forbidden if fb.startswith("edgebound")):
+            if m == "warpSPH" or m.startswith("warpSPH.") or any(m == fb.rstrip(".") or m.startswith(fb.rstrip(".") + ".") for fb in forbidden if fb.startswith("warpSPHBoundaries")):
                 bad.append((f.name, m))
     assert not bad, bad
 
@@ -42,7 +42,7 @@ def test_no_upward_imports(layer, forbidden):
 def test_public_scene_surface_and_provider_protocol():
     for name in scene_pkg.__all__:
         assert getattr(scene_pkg, name) is not None, name
-    from edgebound.scene import AnalyticBoundary, BoundaryProvider, Body, DiskBody, ImplicitRep, Scene
+    from warpSPHBoundaries.scene import AnalyticBoundary, BoundaryProvider, Body, DiskBody, ImplicitRep, Scene
     assert {"Scene", "Body", "AnalyticBoundary", "BoundaryProvider", "WallAggregate", "SdfRep", "ImplicitRep"} <= set(scene_pkg.__all__)
     dev = "cuda:0" if torch.cuda.is_available() else "cpu"
     sc = Scene([Body(bodyId=0, reps=[ImplicitRep(DiskBody(center=(0.0, 0.0), radius=0.3))])], dev)
@@ -54,9 +54,9 @@ def test_public_scene_surface_and_provider_protocol():
 
 def test_tabulated_kernels_ship_with_the_package():
     """the tier-3 tables are package data (an installed wheel does not rebuild them: ~20 s per kernel with mpmath), and the build configuration lists them."""
-    from edgebound import paths
+    from warpSPHBoundaries import paths
     names = {p.name for p in paths.packaged_tables_dir().glob("tier3_*.npz")}
     assert {"tier3_w2.npz", "tier3_w4.npz"} <= names
     pyproject = (SRC.parents[1] / "pyproject.toml").read_text() if (SRC.parents[1] / "pyproject.toml").exists() else None
     if pyproject is not None:
-        assert 'edgebound = ["data/tables/*.npz"]' in pyproject
+        assert 'warpSPHBoundaries = ["data/tables/*.npz"]' in pyproject

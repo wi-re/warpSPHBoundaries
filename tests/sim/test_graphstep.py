@@ -10,8 +10,8 @@ import pytest
 import torch
 import warp as wp
 
-import edgebound  # noqa: F401
-from edgebound.sim import cases
+import warpSPHBoundaries  # noqa: F401
+from warpSPHBoundaries.sim import cases
 
 pytestmark = pytest.mark.skipif(not wp.is_cuda_available(), reason="CUDA graphs")
 DEV = "cuda:0"

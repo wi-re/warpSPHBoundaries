@@ -10,8 +10,8 @@ import sys
 from fractions import Fraction as F
 sys.path.insert(0, "python")
 import numpy as np, torch, math, mpmath as mp
-from edgebound.edge import kernels, warpbc, geometry as G
-from edgebound.edge.core import GUARD, block_grad
+from warpSPHBoundaries.edge import kernels, warpbc, geometry as G
+from warpSPHBoundaries.edge.core import GUARD, block_grad
 
 fam = sys.argv[1] if len(sys.argv) > 1 else "w2"
 dev = "cuda:0"

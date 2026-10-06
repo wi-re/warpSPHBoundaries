@@ -11,9 +11,9 @@ import time
 
 import numpy as np
 
-from edgebound.sim import dfsph_ref as R
-from edgebound import paths
-from edgebound.sim.dfsph2d import DFSPH2D, DFSPHConfig, domain_scene, lattice_calibration
+from warpSPHBoundaries.sim import dfsph_ref as R
+from warpSPHBoundaries import paths
+from warpSPHBoundaries.sim.dfsph2d import DFSPH2D, DFSPHConfig, domain_scene, lattice_calibration
 
 
 def _series(sim, rows):
@@ -111,7 +111,7 @@ def _forces(sim):
 
 def obstacle(dev="cuda:0", out_png=None):
     """forces on a submerged hexagon: Archimedes for a fixed body, a spinning body, momentum bookkeeping, and a dam break running into a spinning hexagon."""
-    from edgebound.sim.dfsph_cases import tank_with_obstacle
+    from warpSPHBoundaries.sim.dfsph_cases import tank_with_obstacle
     print("\n### submerged hexagon (R = 0.06 m, A = %.5f m^2) in a tank at rest, r = 0.005, 0.6 s\n" % (1.5 * np.sqrt(3) * 0.06 ** 2))
     print("| case | rep | mean F_y on the body (t > 0.2) | buoyancy rho g A | mean F_x | sum of forces on all bodies / (-weight) | max momentum-balance residual |")
     print("|---|---|---|---|---|---|---|")
@@ -149,7 +149,7 @@ def obstacle(dev="cuda:0", out_png=None):
 def closure_study(dev="cuda:0", repeats=2):
     """effect of the zeroth-order wall closure on a submerged fixed hexagon in a tank at rest (0.6 s, statistics over t > 0.2): bias and noise of the force on the body, noise of the
     total wall force, rms speed.  Three solver settings; GPU atomics make each run a different realisation of the chaotic flow, hence `repeats` runs per row (values separated by '/')."""
-    from edgebound.sim.dfsph_cases import tank_with_obstacle
+    from warpSPHBoundaries.sim.dfsph_cases import tank_with_obstacle
     settings = (("omniSPH tolerances", {}),
                 ("tight, divergence unclamped", dict(densityEta=1e-5, divergenceEta=1e-5, divergenceMaxIterations=200, maxIterations=2000)),
                 ("tight, divergence clamped", dict(densityEta=1e-5, divergenceEta=1e-5, divergenceMaxIterations=200, maxIterations=2000, divergenceClamp=True)))
