@@ -41,7 +41,7 @@ def _disable_cache(sim):
 
 
 def _counting_adjacency():
-    """a (counter, restore) pair: counter[0] counts Scene.adjacency calls, counter[1] Scene.precompute calls, counter[2] the stage-1 launches of the fused wall evaluation
+    """a (counter, restore) pair: counter[0] counts Scene.adjacency and fixed_adjacency calls, counter[1] Scene.precompute calls, counter[2] the stage-1 launches of the fused wall evaluation
     (`FusedWall` constructions) (class-level, restored by calling restore())."""
     from edgebound.scene import fused as F
     counter = [0, 0, 0]
@@ -59,10 +59,17 @@ def _counting_adjacency():
         counter[2] += 1
         return orig_f(self, *a, **k)
 
-    Scene.adjacency, Scene.precompute, F.FusedWall.__init__ = counting_a, counting_p, counting_f
+    from edgebound.sim import deltasph2d as D
+    orig_x = D.fixed_adjacency                                          # the fused path builds its adjacency with the fixed-capacity builder (cfg.fixedAdjacency)
+
+    def counting_x(*a, **k):
+        counter[0] += 1
+        return orig_x(*a, **k)
+
+    Scene.adjacency, Scene.precompute, F.FusedWall.__init__, D.fixed_adjacency = counting_a, counting_p, counting_f, counting_x
 
     def restore():
-        Scene.adjacency, Scene.precompute, F.FusedWall.__init__ = orig_a, orig_p, orig_f
+        Scene.adjacency, Scene.precompute, F.FusedWall.__init__, D.fixed_adjacency = orig_a, orig_p, orig_f, orig_x
 
     return counter, restore
 

@@ -38,6 +38,9 @@ F64 = torch.float64
 
 
 # ----------------------------------------------------------------------------------------------------------------------- frames
+_R_CACHE = {}                                                      # (angle, device) -> rotation matrix
+
+
 @dataclass
 class Pose:
     center: torch.Tensor            # [2] world position of the body origin (centre of mass)
@@ -45,8 +48,14 @@ class Pose:
 
     @property
     def R(self):
-        c, s = float(np.cos(self.angle)), float(np.sin(self.angle))
-        return torch.tensor([[c, -s], [s, c]], dtype=F64, device=self.center.device)
+        key = (float(self.angle), str(self.center.device))
+        R = _R_CACHE.get(key)
+        if R is None:                                              # a static body builds its rotation once (a host-to-device copy synchronises and cannot be graph-captured)
+            if len(_R_CACHE) > 4096:                               # a rotating body makes a new angle every step
+                _R_CACHE.clear()
+            c, s = float(np.cos(key[0])), float(np.sin(key[0]))
+            R = _R_CACHE[key] = torch.tensor([[c, -s], [s, c]], dtype=F64, device=self.center.device)
+        return R
 
     def toLocal(self, p):
         return (p - self.center) @ self.R
@@ -626,6 +635,7 @@ class BodyAdjacency:
     lpos: torch.Tensor              # [C,2] body frame
     lsup: torch.Tensor              # [C]
     reps: list
+    valid: Optional[torch.Tensor] = None     # [C] bool, fixed-capacity adjacency only (`fixedadj`): rows are all queries, `valid` marks the candidates
 
 
 @dataclass

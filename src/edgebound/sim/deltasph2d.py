@@ -28,6 +28,7 @@ import torch
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
 from ..scene.cone_area import cone_area_scene
+from ..scene.fixedadj import fixed_adjacency
 from ..scene.boundaryOps import kernelName
 from ..scene.cover import cover_vector_scene
 from ..scene.fused import FusedWall, WallOutput
@@ -73,6 +74,7 @@ class DeltaSPHConfig:
     wallViscosity: bool = True          # wall term of the alpha-viscosity (free-slip mirror), form: wallViscosityForm
     wallViscosityForm: str = "laplacian"   # "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples) | "noslip": no-slip wall (v_w = body velocity): Chiron-style flux term -2 nu_eff (v - v_w) |G| / (rho d), nu_eff = alpha c0 H/(8 xi), d = max(distance to the wall, 0.25 dx)
     fusedWall: bool = True              # step 3 of docs/plan-wall-evaluation.md: lam, G, Cov, A, the cover vector, the wall Laplacian and the tensile term of one position set from ONE fused kernel launch family (scene/fused.py); surface-loop walls with one support only, else the sceneOperation path is used
+    fixedAdjacency: bool = True         # step 5 of the plan: the wall adjacency of the fused path in ONE Warp launch per (body, rep) with fixed shapes and no host sync (scene/fixedadj.py); False = Scene.adjacency (torch.nonzero / cell-list pair search), the oracle
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
     barecascoThreshold: float = math.pi / 3
@@ -104,6 +106,7 @@ class DeltaSPH2D:
         self.surface = torch.zeros(n, dtype=torch.bool, device=device)
         self.surfaceDilated = self.surface
         self.history = []
+        self._hc = None                                        # (Hvec tensor, all supports == H) cache of _constSupport
         self._fgroups = None                                   # (FusedGroup tuple, {output role: group index}, config key) of the fused wall evaluation
         self._wallCache = None                                 # (x, body poses, adjacency, pair moments, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
 
@@ -131,7 +134,7 @@ class DeltaSPH2D:
         fused = self.cfg.fusedWall and FusedWall.supported(self.scene)
         if c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[6], self.Hvec) and torch.equal(c[7], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)) and isinstance(c[2], FusedWall) == fused and (not fused or c[2].key == self._fused_key()):
             adj, pm, lam, G = c[2], c[3], c[4], c[5]            # same positions, same poses: lam and G do not depend on the densities or the gravity
-        elif fused and bool((self.Hvec == self.H).all()):
+        elif fused and self._constSupport():
             adj = self._fused_state(ps)
             pm, lam, G = None, self.cfg.wallMass * adj.out["lam"], self.cfg.wallMass * adj.out["G"]
             self._wallCache = (x.clone(), poses, adj, pm, lam, G, self.Hvec.clone(), self.kinds.clone())
@@ -151,8 +154,14 @@ class DeltaSPH2D:
         A = self._wall_op(ps, pm, WarpOperation.Gradient, flds)
         return lam, G, A, adj
 
+    def _constSupport(self):
+        """every support equals H (the fused wall path serves one support only); the device comparison is made once per `Hvec` tensor object, not per call (a host sync)."""
+        if self._hc is None or self._hc[0] is not self.Hvec:
+            self._hc = (self.Hvec, bool((self.Hvec == self.H).all()))
+        return self._hc[1]
+
     def _fused_key(self):
-        return (self.cfg.kernel, bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian"))
+        return (self.cfg.kernel, bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian"), bool(self.cfg.fixedAdjacency))
 
     def _fused_state(self, ps):
         """the fused wall evaluation at the positions of `ps`: adjacency, one stage-1 launch family for the kernels the step needs, and every static output of this position set in `.out`
@@ -168,7 +177,8 @@ class DeltaSPH2D:
             idx["tens"] = len(groups); groups.append(FusedGroup(fam + "p5", (3, 4)))
             self._fgroups = (tuple(groups), idx, key)
         groups, idx, _ = self._fgroups
-        fw = FusedWall(self.scene, self.scene.adjacency(ps, self._props(WarpOperation.Density)), groups)
+        adj = fixed_adjacency(self.scene, ps, self._props(WarpOperation.Density), self.H) if self.cfg.fixedAdjacency else self.scene.adjacency(ps, self._props(WarpOperation.Density))
+        fw = FusedWall(self.scene, adj, groups)
         outs = [WallOutput("lam", 0, "lam"), WallOutput("G", 0, "g0"), WallOutput("Cov", 0, "cov"), WallOutput("cover", idx["cone"], "g0")]
         if "lap" in idx: outs.append(WallOutput("lap", idx["lap"], "lap"))
         if "tens" in idx: outs.append(WallOutput("tens", idx["tens"], "g0"))
@@ -342,7 +352,7 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None:
             ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
-            if self.cfg.fusedWall and FusedWall.supported(self.scene) and bool((self.Hvec == self.H).all()):
+            if self.cfg.fusedWall and FusedWall.supported(self.scene) and self._constSupport():
                 adj = self._fused_state(ps)
                 lam, G, Mw = self.cfg.wallMass * adj.out["lam"], self.cfg.wallMass * adj.out["G"], self.cfg.wallMass * adj.out["Cov"]
             else:

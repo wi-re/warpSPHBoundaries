@@ -22,6 +22,7 @@ import warp as wp
 
 from ..edge import warpfused
 from ..edge.precision import real, torch_real
+from .fixedadj import fixed_topology
 from .scene import BOX_EXACT_KERNELS, BoxRep, SurfaceRep, boxTables
 
 F64 = torch.float64
@@ -148,6 +149,8 @@ def _cone_area_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int),
     a_full = wp.float64(0.0)
     for i in range(row_start[row], row_start[row + 1]):
         e = pe[perm[i]]
+        if e < 0:                                                         # an empty slot of a fixed-capacity adjacency
+            continue
         v0 = edges[2 * e]
         v1 = edges[2 * e + 1]
         Ax = verts[2 * v0] - px
@@ -278,6 +281,8 @@ class FusedWall:
                         L, M, G0, G1 = t.channels(-big, big, -big, big)
                         t._plane = torch.cat([L[:, None], M, G0, G1.flatten(1)], 1)
                     blk = t._plane - blk
+                if ba.valid is not None:                                    # fixed-capacity adjacency: every query is a row, only the candidates see the box
+                    blk = blk * ba.valid[:, None]
                 blk = blk.to(torch_real)
                 for g in tab:
                     if self.groups[g].kernel == kern:
@@ -285,7 +290,7 @@ class FusedWall:
             ar = torch.arange(rows, dtype=torch.int32, device=dev)
             self._item(bi, ba, None, None, c, ar, torch.arange(rows + 1, dtype=torch.int32, device=dev), True)
         surf = rep.surface()
-        topo = surf.topology(ba.lpos, ba.lsup)
+        topo = surf.topology(ba.lpos, ba.lsup) if ba.valid is None else fixed_topology(surf, ba.lpos, ba.lsup, ba.valid, self.adj.supportMax)
         if topo is not None:
             exact = [g for g in range(len(self.groups)) if g not in tab]
             self._add_item(bi, ba, surf, topo, exact, ind0=True)
@@ -360,7 +365,10 @@ class FusedWall:
                 wl, ws, wi, wv, we, axis, wp.float64(float(ba.body.angle)), wp.float64(float(half_angle)), N, wout])
             if rep.background:
                 out_of = torch.ones(N, dtype=F64, device=dev)
-                out_of[ba.cand.long()] = 0.0
+                if ba.valid is None:
+                    out_of[ba.cand.long()] = 0.0
+                else:
+                    out_of = (~ba.valid).to(F64)
                 sup = self.adj.queryParticles.supports.to(dev, F64)
                 wedge = 2.0 * float(half_angle) if float(half_angle) < math.pi else 2.0 * math.pi
                 out[:N] += out_of * 0.5 * sup * sup * wedge

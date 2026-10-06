@@ -121,6 +121,8 @@ def _fused_terms_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int)
     t = tid - pr * nT
     if (t_var[t] == 1) or (t_gate[t] == 2):
         return
+    if pair_e[pr] < 0:                                   # an empty slot of a fixed-capacity adjacency
+        return
     qi = pair_q[pr]
     ed = edges[pair_e[pr]]
     h = sup[qi]
