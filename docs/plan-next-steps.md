@@ -85,7 +85,7 @@ This is also the case the fibre-permeability studies need.
 * The Dirichlet frame pins a region that is also a shifting / density-diffusion neighbour; edge effects at the frame feed the wake through the periodic image.  Rung 5 quantifies this.
 * The wall viscosity under the relative no-penetration law is not yet exercised at Re ≪ 1; rung 4 is the first test (a stronger gate than the dam break).
 * Periodic + `fixedAdjacency`: the slot capacity K is unchanged (one image per fibre per query within the support); the slot builder reports overflow in the existing check.
-* Unwrapped positions grow with time: float32 resolution degrades far from the origin; the minimum image is computed from the difference of two large numbers.  Measure it (position range of a long run) and, if needed, compute the image shift in float64 and the displacement as a difference of the wrapped remainders; the stored state still stays raw.
+* Unwrapped positions grow with time, which costs float32 resolution in the minimum image.  Not a risk in practice (user, 2026-10-06): runs last a few domain-passing times; only very long runs or fast flow in a small domain would see it, and neither is used.  No mitigation planned.
 * Time step at Re ≪ 1 is viscous-limited; the graph step handles a constant dt, an adaptive dt is item 7.
 
 ## Remaining items (short notes)
