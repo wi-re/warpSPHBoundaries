@@ -173,6 +173,27 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
 * **Open**: (1) the 6 % slip at the convex rotating wall, independent of H; the tables are for a flat half-plane, a convex wall has less solid (the true moments of S need the curved region); (2) the double wall counting; (3) the neighbour-based fit
   (Mayrhofer et al. section 6) to absorb the lattice quadrature of the fluid sum.
 
+### Curved-wall closure results after the fix (2026-10-06): the tangential closure is right; the pressure level and the layout consistency are the limit
+
+* **Curved moment tables** (`CurvedWallMoments`, `curved_moments`): the moments `T_k` of the pair weight over the actual circular solid (convex disk / cavity, any signed curvature `kappa_w H` in [-0.7, 0.7]) by a polar quadrature of the real region,
+  with the (n, t) frame turning with the position as in a flow along the wall; tabulated once over (d / H, kappa_w H), bilinear lookup at run time (no quadrature per step, nothing that grows in 3D beyond the table dimension); verified against a
+  brute-force 2D integral to 5-6 digits for convex and concave walls and against the plane table at kappa = 0.  Curvature matters: tt, k = 0 at d = 0.125 H: -154 plane, -122 convex (R = H/0.6), -192 concave.
+* **Bug found and fixed**: the closure needs the velocity relative to the RIGID motion of the wall AT THE PARTICLE, `v - b.velocityAt(x)`, not at the contact point (the difference omega d is ~45 % of the relative velocity at the first row); only the
+  rotating wall was affected.  This was the 6 % slip at the convex rotating wall.
+* **Operator test on the exact Couette flow** (true viscous acceleration 0, units of nu u''): `noslipMoment` with wall-fitted ring packing: inner rows 0-1 -0.23, +0.10, outer +0.21, -0.50 (n = 32); the flux form: -3.0, -0.1 / +3.0, -2.0.
+* **Taylor-Couette dynamics** (r1 = 0.2, r2 = 0.5, n = 32, H = 4 dx): square lattice cut at dx/2: profile amplitude 0.995, wall speed reached 0.1988 / 0.2000 (slip gone), outer 0.0002; ring packing (concentric rings tiling both walls, `--ring`): profile 0.9993,
+  wall speed 0.2000, outer -0.0001.  The booked torque is 0.81 (lattice) and 1.09 (ring) of the exact value although the profile is exact: the discrete pair operator transmits a packing-dependent torque (the bulk viscosity of the pair form is
+  anisotropic, below).  Ring packing is the case-specific optimum for Taylor-Couette (user: acceptable).
+* **Bulk anisotropy of the pair viscosity** (shear-wave decay, n = 48): nu_eff / nominal = 0.957 for waves along the lattice axes and 1.031 along the diagonal at H = 4 dx; 0.984 / 0.994 at H = 6 dx.  Calibrating nu on one direction is good to ~4 % at H = 4 dx.
+* **Cylinder array (n = 48, nu = 0.0185, noslipMoment)**: K = 27.9 at the natural mean pressure (0.92 of the reference), and K DEPENDS ON THE MEAN PRESSURE LEVEL: initial density 1.00 / 1.02 / 1.05 gives K = 27.9 / 30.2 / 32.8 (n = 32, 64 at 1.02: 30.9 / 29.9).
+  The physical answer cannot depend on the absolute pressure.  Cause (measured: uniform density 1 + delta at rest around the cylinder, `uniform_p`): a uniform pressure P exerts the force -2 P S_i / rho_i with S_i = sum_j V_j grad W_ij + mu grad lambda,
+  the static wall-consistency residual of the layout; with the cut lattice the spurious acceleration is 18.7 at P = 2 (|a_phys| ~ 0.03), packed (`pack`, 400-4000 iterations, which stalls at |a| ~ 1.25) it is 1.2.  At the natural P ~ 0.03 the spurious force
+  is ~0.3, 10x the physical one, and the sign of the pressure fluctuations switches the Antuono switch and the clamp of the wall pressure (negative pressure: no wall pressure term), which is why the unbiased run (27.9) and the biased runs differ.
+  K = 30.2 at rho = 1.02 matches the reference (0.997, 1.021, 0.986 at n = 48, 32, 64) but that is two errors cancelling, not a result.
+* **Open decision** (model): make the pressure force exact for a uniform pressure near a wall.  The difference form of the pressure gradient (`sum V_j (P_j - P_i) grad W + (P_w - P_i) G`) is exact for uniform P and loses the exact pairwise
+  momentum conservation by O(S_i); a corrected symmetric form `... - 2 P_i S_i` is the same thing.  Alternatively a particle layout / volumes with S_i = 0 (not reachable for a curved wall by `pack`), or per-particle volumes.
+* Also tried and dropped: a normal-component closure with `a_n = 0` (unstable: the polynomial over-extrapolates), the viscous term in the wall pressure condition (`wallPressureViscous`: -0.4 % on K, left as an option).
+
 ### Risks
 
 * The Dirichlet frame pins a region that is also a shifting / density-diffusion neighbour; edge effects at the frame feed the wake through the periodic image.  Rung 5 quantifies this.

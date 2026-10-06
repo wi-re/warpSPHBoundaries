@@ -40,7 +40,7 @@ from ..scene.tensile import tensile_factor, tensile_vector_scene
 from ..scene.viscosity import lap_factor, lap_lambda_scene
 from ..scene.periodic import Periodic, min_image
 from .pinned import Pinned
-from .wallmoments import WallPairMoments
+from .wallmoments import CurvedWallMoments
 from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
@@ -85,6 +85,7 @@ class DeltaSPHConfig:
     periodic: Optional[Periodic] = None   # periodic box (pairs.py): minimum-image pair geometry on the raw positions, which are never wrapped; fluid-fluid terms only (the wall integrals take their own image shifts, step 1b of docs/plan-next-steps.md)
     bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
     wallFrictionLever: str = "particle"  # where the no-slip wall friction acts for the TORQUE on the body: "particle" (where the fluid loses the momentum: the fluid angular momentum balance, torque conserved between walls: measured 1.000 on Taylor-Couette) or "contact" (the wall point: 0.83 to 1.2 off)
+    wallPressureViscous: bool = False    # the wall pressure condition carries the viscous term, grad p = rho (g + f - a_wall) + rho nu lap u (the particle's own viscous acceleration extends the ghost pressure): matters where the pressure is viscous-dominated (flow past a curved wall at low Re)
     bodyForceAtWall: bool = True        # the body force enters the wall pressure condition dp/dn = rho (g + f - a_wall) . n (a uniform force acts on the fluid at a wall like gravity; it is not hydrostatic in the density diffusion)
     pinned: Optional[Pinned] = None     # a prescribed-velocity band of fluid particles (pinned.py): the free stream of a periodic flow past a body
     fluidWarp: bool = True              # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
@@ -392,6 +393,7 @@ class DeltaSPH2D:
                 fac = cfg.alpha * cfg.c0 * H / self.xi
                 acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
         visc = lever = None
+        vsum = torch.zeros_like(v)                                                                  # the wall viscous acceleration summed over the bodies (fused branch)
         if want_forces and self.nb and cfg.viscosity and cfg.wallViscosity:
             visc = torch.zeros((self.nb, len(x), 2), dtype=F64, device=self.dev)                    # per body acceleration of the wall viscous term, for the load of the fluid on the body
             lever = x[None].repeat(self.nb, 1, 1)                                                   # where the reaction acts: the particle, or the contact point for the tangential no-slip friction
@@ -413,7 +415,7 @@ class DeltaSPH2D:
                     dd = dsd.clamp(min=0.25 * self.dx)
                     cp = x - dsd[:, None] * nsd
                     on = (hit & (nearm > 0))[:, None]
-                    term = torch.where(on, self._moment_wall_term(bi, x, v - b.velocityAt(cp), nsd, dd, viscf, rho, fac), torch.zeros_like(v))
+                    term = torch.where(on, self._moment_wall_term(bi, x, v - b.velocityAt(x), nsd, dd, viscf, rho, fac), torch.zeros_like(v))      # relative to the RIGID motion of the wall at the particle (the rigid part is annihilated by the pair weight; w = 0 on the wall)
                     if lever is not None and cfg.wallFrictionLever == "contact":
                         lever[bi] = cp
                 else:
@@ -430,6 +432,7 @@ class DeltaSPH2D:
                     if lever is not None and cfg.wallFrictionLever == "contact":
                         lever[bi] = cp
                 acc = acc + term
+                vsum = vsum + term
                 if visc is not None:
                     visc[bi] = term
         elif cfg.viscosity and cfg.wallViscosity and len(near):
@@ -463,6 +466,16 @@ class DeltaSPH2D:
                 acc = acc.index_add(0, near, accv)
                 if visc is not None:
                     visc[bi].index_add_(0, near, accv)
+        if cfg.wallPressureViscous and self.nb and cfg.viscosity and isinstance(adj, WallAggregate):
+            # the wall pressure condition with the viscous term: at a no-slip wall the momentum balance gives  grad p = rho (g + f - a_wall) + rho nu lap u , so the ghost pressure extends with the gradient of the
+            # hydrostatic one PLUS the particle's own viscous acceleration (fluid pairs + wall term); the hydrostatic part is already in A.
+            av = (viscf if viscf is not None else 0.0) + vsum
+            a1v = (cfg.rho0 * av)[None].expand(self.nb, -1, -1).contiguous()
+            Av = cfg.wallMass * adj.evaluate((WallOutput("A", 0, "a1g1"),), a1=a1v)["A"]
+            accv_p = -Av / rho[None, :, None]
+            acc = acc + accv_p.sum(0)
+            if forces is not None:
+                forces = forces + self._load(accv_p, x[None].expand(self.nb, -1, -1))
         acc = acc + self.g[None]
         if cfg.bodyForce != (0.0, 0.0):
             acc = acc + self._const(cfg.bodyForce)[None]
@@ -477,10 +490,10 @@ class DeltaSPH2D:
         w(s) = a s + (L / 2) s^2 (a, L per component in the frame (n, t)), with  w(d) = w_i  and the viscous balance of the particle (the fluid pair sum `viscf` plus this wall term = nu_p (lap w [+ 2 grad div w]),
         nu_p = fac / 8; the normal component carries the factor 3 of the pair form, the tangential one the curvature terms of the wall kappa = div n: lap w_t = w_t'' + kappa w_t' - kappa^2 w_t)."""
         if getattr(self, "_wpm", None) is None:
-            self._wpm = WallPairMoments(self.dW, self.H, self.dev)
-        T = self._wpm.eval(d)                                                                    # [2 (nn, tt), 3, N]
+            self._wpm = CurvedWallMoments(self.dW, self.H, self.dev)
         t = torch.stack([-n[:, 1], n[:, 0]], 1)
-        kap = self._curvature(bi, x, n, t)
+        kap = self._curvature(bi, x, n, t)                                                       # div n at the particle: 1 / (R + d) convex, -1 / (R - d) concave
+        T = self._wpm.eval(d, kap / (1.0 - kap * d))                                             # [2 (n, t), 3, N]: moments over the actual circular solid of curvature kappa_w = 1 / R (signed)
         bn = 8.0 * self.cfg.wallMass / rho                                                       # beta / nu_p
         beta = fac * self.cfg.wallMass / rho
         wn, wt = (w * n).sum(1), (w * t).sum(1)

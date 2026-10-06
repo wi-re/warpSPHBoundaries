@@ -55,3 +55,110 @@ class WallPairMoments:
         w = (f - i0)
         t = self.table[:, :, i0] * (1.0 - w) + self.table[:, :, i0 + 1] * w
         return t * (d < self.H).to(F64)
+
+
+# ------------------------------------------------------------------------------------------------------------------------ curved walls
+def _gl(n, device):
+    import numpy as np
+    x, w = np.polynomial.legendre.leggauss(n)
+    return torch.as_tensor(x, dtype=F64, device=device), torch.as_tensor(w, dtype=F64, device=device)
+
+
+def curved_moments(dW, H, d, kw, nth=160, nr=48):
+    """T_k^{c' c}(d, kappa_w) for a circular wall of signed curvature `kw` (> 0: solid disk of radius 1/kw, fluid outside; < 0: cavity of radius 1/|kw|, fluid inside; 0: the plane) at the distance `d` of the particle, by a
+    polar quadrature of the actual solid region about the particle.  The continuation of the velocity relative to the wall is  w_ext(x') = sum_c (a_c s' + L_c s'^2 / 2) e_c(x')  with s' the signed distance and e_c(x') the (n, t) frame AT x'
+    (the frame turns with the position, as in a flow along the wall); the tensor entries are  T_k^{c'c} = int_S L(r) (e_c' . y_hat)(y_hat . e_c(x')) s'^k dA'  with the fixed frame of the particle on the left;  k = 0 uses the fixed frame
+    on both sides (the particle's own velocity).  Diagonal by the mirror symmetry t -> -t.  Returns [B, 3 (k), 2 (n, t)].  `d`, `kw` are [B] tensors, d in [0, H)."""
+    dev = d.device
+    B = d.shape[0]
+    out = torch.zeros((B, 3, 2), dtype=F64, device=dev)
+    xr, wr = _gl(nr, dev)
+    xt, wt = _gl(nth, dev)
+    flat = kw.abs() * H < 1e-6
+    for sign in (1, -1, 0):
+        sel = (flat if sign == 0 else (~flat & (kw * sign > 0))) & (d < H)
+        if not bool(sel.any()):
+            continue
+        dd, kk = d[sel], kw[sel]
+        nb = dd.shape[0]
+        if sign == 0:
+            R = torch.full_like(dd, 1e9)
+        else:
+            R = 1.0 / kk.abs()
+        if sign >= 0:                                                            # convex (or plane): a solid disk
+            cm2 = dd * (2 * R + dd) / (R + dd) ** 2                               # cos^2 of the tangent angle
+            thmax = torch.acos(torch.sqrt(cm2.clamp(max=1.0)))
+            v = 0.5 * (xt + 1.0)                                                  # theta = thmax (1 - v^2), v in [0, 1]
+            th = thmax[:, None] * (1.0 - v[None, :] ** 2)                         # [nb, nth]
+            jac = 2.0 * thmax[:, None] * v[None, :] * (0.5 * wt)[None, :] * 2.0   # |dtheta| = 2 thmax v dv, dv = 0.5 dx, times 2 (theta < 0 symmetric)
+            Rp = (R + dd)[:, None]
+            disc = (Rp * torch.cos(th)) ** 2 - (dd * (2 * R + dd))[:, None]
+            sq = torch.sqrt(disc.clamp(min=0.0))
+            r_lo = Rp * torch.cos(th) - sq
+            r_hi = torch.minimum(Rp * torch.cos(th) + sq, torch.full_like(th, H))
+            ok = r_lo < H
+        else:                                                                       # cavity: the solid is outside the circle of radius R, centre at distance R - d along n
+            th = 0.5 * math.pi * (xt + 1.0)[None, :].expand(nb, -1)                  # theta in [0, pi], symmetric in the sign of sin(theta)
+            jac = (0.5 * math.pi * wt)[None, :].expand(nb, -1) * 2.0
+            Rd = (R - dd)[:, None]
+            b = Rd * torch.cos(th)
+            r_lo = b + torch.sqrt(b ** 2 + (dd * (2 * R - dd))[:, None])
+            r_hi = torch.full_like(th, H)
+            ok = r_lo < H
+        r = r_lo[:, :, None] + 0.5 * (r_hi - r_lo).clamp(min=0.0)[:, :, None] * (xr[None, None, :] + 1.0)      # [nb, nth, nr]
+        wrr = 0.5 * (r_hi - r_lo).clamp(min=0.0)[:, :, None] * wr[None, None, :]
+        L = dW(r.reshape(-1), H).reshape(r.shape) / r
+        ct, st = torch.cos(th)[:, :, None], torch.sin(th)[:, :, None]
+        if sign >= 0:                                                               # y = r (-cos, -sin) (towards the solid); c = -(R + d) n; frame at x': n' = (y - c) / |y - c|
+            yx, yy = -r * ct, -r * st
+            cx = -(R + dd)[:, None, None]
+            ux, uy = yx - cx, yy
+            rho = torch.sqrt(ux * ux + uy * uy)
+            sp = rho - R[:, None, None]
+            nn_x, nn_y = ux / rho, uy / rho
+        else:
+            yx, yy = r * ct, r * st                                                 # y = r (cos, sin); centre c = (R - d) n
+            cx = (R - dd)[:, None, None]
+            ux, uy = yx - cx, yy
+            rho = torch.sqrt(ux * ux + uy * uy)
+            sp = R[:, None, None] - rho
+            nn_x, nn_y = -ux / rho, -uy / rho                                       # towards the centre = into the fluid
+        yh_x, yh_y = yx / r, yy / r
+        tt_x, tt_y = -nn_y, nn_x                                                    # tau' = J n'
+        enn = yh_x * (yh_x * nn_x + yh_y * nn_y)                                    # (e_n . y_hat)(y_hat . n')
+        ett = yh_y * (yh_x * tt_x + yh_y * tt_y)                                    # (e_t . y_hat)(y_hat . tau')
+        f0n, f0t = yh_x * yh_x, yh_y * yh_y                                         # fixed frame (k = 0)
+        w = (jac[:, :, None] * wrr * L * r) * ok[:, :, None]
+        for k in range(3):
+            sk = sp ** k
+            if k == 0:
+                out[sel, 0, 0] = (w * f0n).sum((1, 2))
+                out[sel, 0, 1] = (w * f0t).sum((1, 2))
+            else:
+                out[sel, k, 0] = (w * enn * sk).sum((1, 2))
+                out[sel, k, 1] = (w * ett * sk).sum((1, 2))
+    return out
+
+
+class CurvedWallMoments:
+    """`curved_moments` on a grid (d / H, kappa_w H) built once, bilinear lookup; kappa_w H in [-kmax, kmax] (R / H >= 1 / kmax)."""
+
+    def __init__(self, dW, H, device, nd=65, nk=29, kmax=0.7):
+        self.H, self.kmax, self.nd, self.nk = float(H), float(kmax), nd, nk
+        dg = torch.linspace(0.0, 1.0, nd, dtype=F64, device=device) * H
+        kg = torch.linspace(-kmax, kmax, nk, dtype=F64, device=device) / H
+        D, K = torch.meshgrid(dg, kg, indexing="ij")
+        tab = curved_moments(dW, H, D.reshape(-1), K.reshape(-1)).reshape(nd, nk, 3, 2)
+        self.table = tab.permute(3, 2, 0, 1).contiguous()                            # [2 (n, t), 3 (k), nd, nk]
+        self.table[:, :, -1, :] = 0.0                                                # d = H: no solid within the support
+
+    def eval(self, d, kw):
+        """[2, 3, N] at distances `d` and wall curvatures `kw` (clamped to the grid)."""
+        fd = (d / self.H).clamp(0.0, 1.0) * (self.nd - 1)
+        fk = ((kw * self.H).clamp(-self.kmax, self.kmax) + self.kmax) / (2 * self.kmax) * (self.nk - 1)
+        i0 = fd.floor().long().clamp(max=self.nd - 2)
+        j0 = fk.floor().long().clamp(max=self.nk - 2)
+        a, b = fd - i0, fk - j0
+        t = self.table
+        v = (t[:, :, i0, j0] * ((1 - a) * (1 - b)) + t[:, :, i0 + 1, j0] * (a * (1 - b)) + t[:, :, i0, j0 + 1] * ((1 - a) * b) + t[:, :, i0 + 1, j0 + 1] * (a * b))
+        return v * (d < self.H).to(F64)

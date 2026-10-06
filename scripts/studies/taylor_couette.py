@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--time", type=float, default=25.0)
     ap.add_argument("--wall", default="noslipCurv")
     ap.add_argument("--lever", default="particle", help="wallFrictionLever: contact | particle")
+    ap.add_argument("--ring", action="store_true", help="wall-fitted packing: concentric rings at r1 + (k + 1/2) dr, tiling the annulus up to both walls (default: the square lattice cut at distance dx/2)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -43,6 +44,15 @@ def main():
     P = np.stack([X.ravel(), Y.ravel()], 1)
     r = np.linalg.norm(P, axis=1)
     pos = P[(r >= a.r1 + 0.5 * dx) & (r <= a.r2 - 0.5 * dx)]
+    if a.ring:
+        K = int(round((a.r2 - a.r1) / dx))
+        rings = []
+        for k in range(K):
+            rk = a.r1 + (k + 0.5) * (a.r2 - a.r1) / K
+            Nk = int(round(2 * np.pi * rk / dx))
+            th = 2 * np.pi * (np.arange(Nk) + 0.5 * (k % 2)) / Nk
+            rings.append(np.stack([rk * np.cos(th), rk * np.sin(th)], 1))
+        pos = np.concatenate(rings)
     nu = shear_nu(a.n, alpha, a.c0, a.device, a.H)
     inner = Body(bodyId=0, center=(0.0, 0.0), angularVelocity=a.omega, reps=[DiskArrayRep([(0.0, 0.0)], [a.r1])])
     outer = Body(bodyId=1, center=(0.0, 0.0), reps=[ImplicitRep(DiskBody(center=(0.0, 0.0), radius=a.r2, solid="outside"))])
