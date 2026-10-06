@@ -1,6 +1,6 @@
 # The disk (fibre) element: any radius, no polygon, no mesh
 
-**Status 2026-10-06:** [V] reference (`edge/disk.py`, `tests/edge/test_disk.py`); [P] the fused-path element (tables + Warp lookup + a batched `DiskArrayRep`) is the next step.
+**Status 2026-10-06:** [V] reference (`edge/disk.py`, `tests/edge/test_disk.py`), tables (`edge/disktables.py`), Warp lookup (`edge/warpdisk.py`), the batched `DiskArrayRep` on the fused / graph path with closed-form cone areas (`scene/`), tests (`tests/scene/test_disk_array.py`, `tests/sim/test_fibre_bundle_solver.py`); [P] 3D (sphere / cylinder).
 
 ## Why
 
@@ -51,3 +51,28 @@ angle), so the reference cuts the angle at the knot radii and refines geometrica
 5. **3D:** the same identities with the sphere (two-angle Gauss on the cap inside the support, same near-singular refinement) and the projected 2D kernel for infinite cylinders; finite cylinders need the end caps.
 
 Open decisions: the table resolution per kernel (build time vs size), whether `cone_area` of a disk is tabulated or closed-form, and whether the per-fibre-body case should also use the element (probably yes: a one-disk rep).
+
+
+## Result (2026-10-06): tables + `DiskArrayRep`
+
+**Tables** (`edge/disktables.py`, shipped as `data/tables/disk_<kernel>_*.npz`, ~100 KB per kernel, built by the reference in about a second each): the channels (lam, m1x, g0x, g1xx, g1yy) as tensor-Chebyshev panels in
+delta = D - R, with panel boundaries on the three lines where the functions are not analytic (the surface delta = 0: Wendland's r^3 term gives an eps^4 ln|eps| term, which is what limited a first uniform-panel
+version to 1e-4; the tangency lines D = |1 - R| and D = 1 + R).  R <= 1: two radius branches x three delta intervals, tabulated f / R^2 (regular point limit) with the interval mapped through w = (2/pi) asin(sqrt(u)); R > 1:
+(v, s = 1 / R), s -> 0 the planar half plane.  Resolution (S: 3 x 3 panels of 12 x 12, L: 6 x 3 panels of 12 x 12): `w2` 5e-8, `w4` 3e-8, `lw2` 5e-7 on lam / g1 (the Laplacian), `w2p5` (tensile) 2e-6, `cone` (cover
+vector) 8e-5 (the cusp of 1 - r at r = 0 limits it; the detector only thresholds it); float32 against float64: 1e-6.  Evaluated at one (query, disk) slot per thread, all kernel groups in one launch.
+
+**`DiskArrayRep`** (centres [M, 2], radii [M], one rigid body; disjoint disks): a static cell list over the centres (cell = support + largest radius, 3 x 3 cells, fixed capacity K = the most disks of any block),
+one slot launch for the whole bundle, the channels in the BODY frame summed per query row in slot order by the existing contraction kernel; `ImplicitRep(DiskBody)` of a solid disk lowers to a one-disk bundle (a cavity
+keeps the polygon).  The cone areas (detector) are closed form (antiderivatives of t^2 along the rays, segments cut at the tangent rays and the rays through the circle / support-circle intersections).
+
+**Cost** (6000 queries, H = 4 dx, all fused groups, ms): one disk 0.7 - 0.8 f64 / 0.6 f32 at EVERY radius R/H = 0.25 ... 4 (polygon: 4 -> 40 f64); 16 fibres as one bundle 0.8 f64 / 0.6 - 0.7 f32 (16 bodies with
+polygons: 62 -> 403 f64, 14 -> 30 f32; 16 one-disk bodies with the element: 9 f64 / 7.5 f32, the per-body launch overhead remains); 100 fibres as one bundle 0.9 - 2.5 f64 / 0.7 - 1.1 f32.
+
+**Accuracy against the polygon path** (edges <= h/16): lam, G, Cov, A, lap 1e-6, tens 1e-5, cover 4e-5, cone areas 1e-5; a closed-form cone area against an independent numerical angular integral 1e-7 of H^2.
+
+**Solver** (hydrostatic tank, three fibres of radii 0.08 / 0.10 / 0.12 as one body, conforming particle layers): the bundle equals the same fibres as separate bodies to 1e-9 in continuity, pressure force and loads (the
+free-slip wall VISCOSITY normalises the wall direction per body, so it differs, by design, only for particles that see two fibres at once); total buoyancy within 3 % of rho g pi sum R^2; a translating bundle replays
+bit-for-bit as a CUDA graph; the bundle is ONE `FusedWall` item.
+
+**Not covered:** overlapping disks (the integrals add), per-fibre kinematics inside one bundle (separate bodies, at the per-body launch cost), cavities of circular shape (polygon), the 3D sphere / cylinder (same identities
+with M(r) = int s^2 W; a two-angle cap quadrature builds the tables, a lookup in (D, R) again; infinite cylinders: the projected 2D kernel; finite cylinders need the end caps).

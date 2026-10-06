@@ -20,10 +20,10 @@ import numpy as np
 import torch
 import warp as wp
 
-from ..edge import warpfused
+from ..edge import warpdisk, warpfused
 from ..edge.precision import real, sync as _sync, torch_real
 from .fixedadj import fixed_topology
-from .scene import BOX_EXACT_KERNELS, BoxRep, SurfaceRep, boxTables
+from .scene import BOX_EXACT_KERNELS, BoxRep, DiskArrayRep, SurfaceRep, boxTables
 
 F64 = torch.float64
 KINDS = {"lam": (0, 1), "g0": (1, 2), "cov": (2, 4), "a1g1": (3, 2), "lap": (4, 1)}
@@ -201,6 +201,129 @@ def _cone_area_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int),
     out[N + q] = out[N + q] + wp.float64(0.5) * H * H * two_pi * idv - a_full
 
 
+@wp.func
+def _disk_cum(D: wp.float64, R: wp.float64, psi: wp.float64):
+    """I(psi) = int_0^psi (1/2)(hi^2 - lo^2) dpsi' for the solid disk (centre at distance D from the origin of the rays, radius R, support 1): the area of disk cap ball swept by the rays at angles in [0, psi] from the
+    direction of the centre (psi in [0, pi]); closed form per segment (antiderivatives of t^2, t = D cos(psi) -+ sqrt(R^2 - D^2 sin^2(psi)): R^2 psi + (D^2 / 2) sin 2 psi -+ (s sqrt(R^2 - s^2) + R^2 asin(s / R)),
+    s = D sin psi), the segments cut at the tangent rays and at the rays through the intersections of the circle with the support circle."""
+    pi = wp.float64(3.1415926535897932384626433832795)
+    a1 = wp.float64(-1.0)
+    a2 = wp.float64(-1.0)
+    if D > R:
+        a1 = wp.asin(wp.min(R / D, wp.float64(1.0)))
+    if D > wp.float64(1.0e-12):
+        arg = (D * D + wp.float64(1.0) - R * R) / (wp.float64(2.0) * D)
+        if wp.abs(arg) <= wp.float64(1.0):
+            a2 = wp.acos(arg)
+    # the cut angles inside (0, psi), ascending
+    c1 = wp.float64(-1.0)
+    c2 = wp.float64(-1.0)
+    if a1 > wp.float64(0.0) and a1 < psi:
+        c1 = a1
+    if a2 > wp.float64(0.0) and a2 < psi:
+        c2 = a2
+    if c1 > wp.float64(0.0) and c2 > wp.float64(0.0) and c2 < c1:
+        t = c1
+        c1 = c2
+        c2 = t
+    if c1 < wp.float64(0.0):
+        c1 = c2
+        c2 = wp.float64(-1.0)
+    total = wp.float64(0.0)
+    lo = wp.float64(0.0)
+    for k in range(3):
+        hi = psi
+        if k == 0 and c1 > wp.float64(0.0):
+            hi = c1
+        elif k == 1:
+            if c1 > wp.float64(0.0) and c2 > wp.float64(0.0):
+                lo = c1
+                hi = c2
+            elif c1 > wp.float64(0.0):
+                lo = c1
+            else:
+                continue
+        elif k == 2:
+            if c2 > wp.float64(0.0):
+                lo = c2
+            else:
+                continue
+        if hi > lo:
+            m = wp.float64(0.5) * (lo + hi)
+            sm = D * wp.sin(m)
+            if wp.abs(sm) < R:
+                q = wp.sqrt(R * R - sm * sm)
+                t1 = D * wp.cos(m) - q
+                t2 = D * wp.cos(m) + q
+                if t2 > wp.float64(0.0):
+                    # hi
+                    seg_hi = wp.float64(0.0)
+                    if t2 >= wp.float64(1.0):
+                        seg_hi = hi - lo
+                    else:
+                        sa = wp.clamp(D * wp.sin(lo), -R, R)
+                        sb = wp.clamp(D * wp.sin(hi), -R, R)
+                        fa = R * R * lo + wp.float64(0.5) * D * D * wp.sin(wp.float64(2.0) * lo) + (sa * wp.sqrt(wp.max(R * R - sa * sa, wp.float64(0.0))) + R * R * wp.asin(sa / R))
+                        fb = R * R * hi + wp.float64(0.5) * D * D * wp.sin(wp.float64(2.0) * hi) + (sb * wp.sqrt(wp.max(R * R - sb * sb, wp.float64(0.0))) + R * R * wp.asin(sb / R))
+                        seg_hi = fb - fa
+                    seg_lo = wp.float64(0.0)
+                    if t1 >= wp.float64(1.0):
+                        seg_lo = hi - lo
+                    elif t1 > wp.float64(0.0):
+                        sa = wp.clamp(D * wp.sin(lo), -R, R)
+                        sb = wp.clamp(D * wp.sin(hi), -R, R)
+                        fa = R * R * lo + wp.float64(0.5) * D * D * wp.sin(wp.float64(2.0) * lo) - (sa * wp.sqrt(wp.max(R * R - sa * sa, wp.float64(0.0))) + R * R * wp.asin(sa / R))
+                        fb = R * R * hi + wp.float64(0.5) * D * D * wp.sin(wp.float64(2.0) * hi) - (sb * wp.sqrt(wp.max(R * R - sb * sb, wp.float64(0.0))) + R * R * wp.asin(sb / R))
+                        seg_lo = fb - fa
+                    total += wp.float64(0.5) * (seg_hi - seg_lo)
+    return total
+
+
+@wp.func
+def _disk_cum_any(D: wp.float64, R: wp.float64, psi: wp.float64, T: wp.float64):
+    """the cumulative area I at any real angle (odd in psi, 2 pi periodic up to the full area T)."""
+    two_pi = wp.float64(6.283185307179586476925286766559)
+    p0 = _wrap_pi(psi)
+    k = wp.floor((psi - p0) / two_pi + wp.float64(0.5))
+    v = _disk_cum(D, R, wp.abs(p0))
+    if p0 < wp.float64(0.0):
+        v = -v
+    return k * T + v
+
+
+@wp.kernel
+def _disk_cone_area_kernel(slots: wp.array(dtype=int), K: int, cand: wp.array(dtype=int), lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64),
+                           centres: wp.array(dtype=wp.float64), radii: wp.array(dtype=wp.float64), axis: wp.array(dtype=wp.float64), Rm: wp.array(dtype=wp.float64), al: wp.float64,
+                           N: int, out: wp.array(dtype=wp.float64)):
+    """per query row: area(disks cap disk(p, H) cap wedge(p, axis, al)) -> out[q] and the full disk cap ball -> out[N + q] (added), over the disks of the slots of the row (they do not overlap)."""
+    row = wp.tid()
+    q = cand[row]
+    H = lsup[row]
+    px = lpos[2 * row]
+    py = lpos[2 * row + 1]
+    th = wp.atan2((-Rm[2] * axis[2 * q] + Rm[0] * axis[2 * q + 1]), Rm[0] * axis[2 * q] + Rm[2] * axis[2 * q + 1])
+    pi = wp.float64(3.1415926535897932384626433832795)
+    a_wedge = wp.float64(0.0)
+    a_full = wp.float64(0.0)
+    for s in range(K):
+        m = slots[row * K + s]
+        if m < 0:
+            continue
+        cx = centres[2 * m] - px
+        cy = centres[2 * m + 1] - py
+        D = wp.sqrt(cx * cx + cy * cy) / H
+        R = radii[m] / H
+        T = wp.float64(2.0) * _disk_cum(D, R, pi)
+        a_full += T * H * H
+        if al < pi:
+            g = _wrap_pi(th - wp.atan2(cy, cx))
+            a_wedge += (_disk_cum_any(D, R, g + al, T) - _disk_cum_any(D, R, g - al, T)) * H * H
+        else:
+            a_wedge += T * H * H
+    out[q] = out[q] + a_wedge
+    out[N + q] = out[N + q] + a_full
+
+
 _SPEC_CACHE = {}
 
 
@@ -245,6 +368,8 @@ class FusedWall(WallAggregate):
                         self._add_item(bi, ba, rep, topo, range(len(self.groups)))
                 elif isinstance(rep, BoxRep):
                     self._add_box(bi, ba, rep)
+                elif isinstance(rep, DiskArrayRep):
+                    self._add_disks(bi, ba, rep, topo)
                 else:
                     raise NotImplementedError("FusedWall: surface and box representations only (got %s; implicit / SDF bodies need the fixed-capacity adjacency, `fixedadj`)" % type(rep).__name__)
 
@@ -273,6 +398,14 @@ class FusedWall(WallAggregate):
         rows = len(ba.cand)
         perm, start = topo.csr(rows)
         self._item(bi, ba, rep, topo, c, perm, start, ind0)
+
+    def _add_disks(self, bi, ba, rep, topo):
+        """a bundle of disks: the channels of every (query, disk) slot of every group from the tables in one launch (`warpdisk`), complete (the indicator is inside lam / g1: `ind0`), summed per row in slot order."""
+        if topo is None:
+            raise NotImplementedError("FusedWall: a DiskArrayRep needs the fixed-capacity adjacency (`fixedadj`)")
+        c = warpdisk.disk_channels_device(topo.qi, topo.e, ba.lpos, ba.lsup, rep.centres, rep.radii, self.groups, device=self.dev)
+        perm, start = topo.csr(len(ba.cand))
+        self._item(bi, ba, rep, topo, c, perm, start, True)
 
     def _add_box(self, bi, ba, rep):
         """a box: the groups of tabulated kernels are four corner lookups per query row (no pairs, one row = one 'pair', the indicator is inside the channels); the kinked kernels of `BOX_EXACT_KERNELS` (`cone`)
@@ -400,6 +533,18 @@ class FusedWall(WallAggregate):
                 continue
             ba, rep = it["ba"], it["rep"]
             _, perm, start, cand32, _ = it["keep"]
+            if isinstance(rep, DiskArrayRep):
+                if it.get("cone") is None:
+                    lpos = ba.lpos.to(F64).contiguous().reshape(-1)
+                    lsup = ba.lsup.to(F64).contiguous()
+                    cen = rep.centres.to(dev, F64).contiguous().reshape(-1)
+                    rad = rep.radii.to(dev, F64).contiguous()
+                    sl = it["topo"].e.to(torch.int32).contiguous()
+                    it["cone"] = (lpos, lsup, cen, rad, sl, tuple(wp.from_torch(t, dtype=dt) for t, dt in ((lpos, wp.float64), (lsup, wp.float64), (cen, wp.float64), (rad, wp.float64), (sl, wp.int32))))
+                wl, ws, wc, wr, wsl = it["cone"][5]
+                wp.launch(_disk_cone_area_kernel, dim=it["rows"], device=dev, inputs=[wsl, it["topo"].K, wp.from_torch(cand32, dtype=wp.int32), wl, ws, wc, wr, axis, it["R"][3],
+                                                                                       wp.float64(float(half_angle)), N, wout])
+                continue
             if it.get("cone") is None:
                 lpos = ba.lpos.to(F64).contiguous().reshape(-1)
                 lsup = ba.lsup.to(F64).contiguous()

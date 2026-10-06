@@ -14,7 +14,7 @@ import torch
 import warp as wp
 
 from .boundaryOps import queryAllowed
-from .scene import BodyAdjacency, SceneAdjacency, SurfaceRep
+from .scene import BodyAdjacency, DiskArrayRep, SceneAdjacency, SurfaceRep
 
 F64 = torch.float64
 wf = wp.float64
@@ -131,6 +131,70 @@ def fixed_topology(rep, lpos, lsup, valid, supportMax):
     return FixedTopology(e, torch.arange(N * K, device=lpos.device, dtype=torch.int32) // K, K, ind)
 
 
+@dataclass
+class FixedDiskTopology:
+    """duck-types `FixedTopology` for a `DiskArrayRep`: K slots per row, `e[r * K + s]` = the disk of slot s (-1: empty), `qi` the row of a slot; no indicator (the disk channels are complete)."""
+    e: torch.Tensor
+    qi: torch.Tensor
+    K: int
+    _csr: tuple = None
+
+    def csr(self, rows):
+        if self._csr is None:
+            self._csr = (torch.arange(rows * self.K, dtype=torch.int32, device=self.e.device), torch.arange(rows + 1, dtype=torch.int32, device=self.e.device) * self.K)
+        return self._csr
+
+
+@wp.kernel
+def _disk_slots_kernel(lpos: wp.array(dtype=wf), lsup: wp.array(dtype=wf), valid: wp.array(dtype=int), centres: wp.array(dtype=wf), radii: wp.array(dtype=wf),
+                       clo0: wf, clo1: wf, cell: wf, nx: int, ny: int, cstart: wp.array(dtype=int), citems: wp.array(dtype=int), K: int, e_out: wp.array(dtype=int)):
+    r = wp.tid()
+    if valid[r] == 0:
+        return
+    px = lpos[2 * r]
+    py = lpos[2 * r + 1]
+    h = lsup[r]
+    cx = int(wp.floor((px - clo0) / cell))
+    cy = int(wp.floor((py - clo1) / cell))
+    n = int(0)
+    for ddx in range(-1, 2):
+        for ddy in range(-1, 2):
+            ix = cx + ddx
+            iy = cy + ddy
+            if ix >= 0 and ix < nx and iy >= 0 and iy < ny:
+                cid = ix * ny + iy
+                for i in range(cstart[cid], cstart[cid + 1]):
+                    m = citems[i]
+                    ex = px - centres[2 * m]
+                    ey = py - centres[2 * m + 1]
+                    if wp.sqrt(ex * ex + ey * ey) < h + radii[m]:
+                        if n < K:
+                            e_out[r * K + n] = m
+                            n += 1
+
+
+def fixed_disk_topology(rep, lpos, lsup, valid, supportMax):
+    """`FixedDiskTopology` of the rows `lpos` [N, 2] (supports `lsup`, `valid` [N] bool) against the disks of `rep`: one launch, fixed shapes, no host synchronisation (the static cell list is built once)."""
+    wp.init()
+    dev = str(lpos.device)
+    lo, cell, nx, ny, start, items, K = rep.cells(float(supportMax))
+    N = len(lpos)
+    e = torch.full((N * K,), -1, dtype=torch.int32, device=lpos.device)
+    cache = rep.__dict__.setdefault("_slotArrays", {})
+    key = (float(supportMax), dev)
+    if key not in cache:
+        cen = rep.centres.to(F64).contiguous().reshape(-1)
+        rad = rep.radii.to(F64).contiguous()
+        cache[key] = (cen, rad, wp.from_torch(cen, dtype=wf), wp.from_torch(rad, dtype=wf), wp.from_torch(start, dtype=wp.int32), wp.from_torch(items, dtype=wp.int32), float(lo[0]), float(lo[1]))
+    cen, rad, wc, wr, wst, wit, lo0, lo1 = cache[key]
+    lp = lpos.to(F64).contiguous().reshape(-1)
+    ls = lsup.to(F64).contiguous()
+    vi = valid.to(torch.int32).contiguous()
+    wp.launch(_disk_slots_kernel, dim=N, device=dev, inputs=[wp.from_torch(lp, dtype=wf), wp.from_torch(ls, dtype=wf), wp.from_torch(vi, dtype=wp.int32), wc, wr, wf(lo0), wf(lo1), wf(cell), nx, ny,
+                                                              wst, wit, K, wp.from_torch(e, dtype=wp.int32)])
+    return FixedDiskTopology(e, torch.arange(N * K, device=lpos.device, dtype=torch.int32) // K, K)
+
+
 def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
     """the `SceneAdjacency` of every query against every body with fixed shapes (see the module docstring); `supportMax` host float >= every query support."""
     dev = scene.device
@@ -147,7 +211,7 @@ def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
         d = (lo - lpos).clamp(min=0) + (lpos - hi).clamp(min=0)
         valid = (d.norm(dim=1) < sup) & allowed
         replist = body.fusedReps(supportMax, dev) or body.reps                  # implicit / SDF bodies as their exact polygon
-        reps = [fixed_topology(rep, lpos, sup, valid, supportMax) if isinstance(rep, SurfaceRep) else None for rep in replist]
+        reps = [fixed_topology(rep, lpos, sup, valid, supportMax) if isinstance(rep, SurfaceRep) else (fixed_disk_topology(rep, lpos, sup, valid, supportMax) if isinstance(rep, DiskArrayRep) else None) for rep in replist]
         bodies.append(BodyAdjacency(body, cand, lpos, sup, reps, valid, replist))
     adj = SceneAdjacency(N, bodies, {"candidates": None}, queryParticles)
     adj.supportMax = float(supportMax)

@@ -1,6 +1,6 @@
 """Implicit and SDF bodies in the solver on the fused / graph path (`Body.fusedReps`: the exact tier-2 polygon of a disk resp. the contour of a sampled distance): a disk in a hydrostatic tank.
 
-(a) parity: the right-hand side of the disk as `ImplicitRep` equals the one of the same disk as the polygon `SurfaceRep` (a, drho, the loads) to round-off (the plumbing is exact), the `SdfRep` of the disk to the
+(a) parity: the right-hand side of the disk as `ImplicitRep` (the disk element) equals the one of the same disk as the polygon `SurfaceRep` (a, drho, the loads) to 2e-5, the `SdfRep` of the disk to the
     contour accuracy;
 (b) absolute: the pressure load of the fluid on the submerged disk is the buoyancy rho g pi R^2 upwards to 3 % (measured 1 %; the horizontal load vanishes by symmetry), and it is booked on the disk body (the sampling of the
     fluid around the disk conforms to it, see `make`);
@@ -75,7 +75,7 @@ def test_implicit_equals_the_polygon_and_sdf_is_close():
         out[kind] = sim.rhs(sim.x, v, sim.rho, want_forces=True)
         assert sim.scene.bodies[1].fusedReps(sim.H, DEV) is not None and sim._wall_state(sim.x, sim.rho)[3].__class__.__name__ == "FusedWall"
     for k in range(3):
-        assert rel(out["implicit"][k], out["polygon"][k]) < 1e-9, k
+        assert rel(out["implicit"][k], out["polygon"][k]) < 2e-5, k                                   # the disk element (tables ~1e-7) against the polygon (~1e-6)
         assert rel(out["sdf"][k], out["polygon"][k]) < 5e-3, k
 
 

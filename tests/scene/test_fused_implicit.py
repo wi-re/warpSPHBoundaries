@@ -1,7 +1,7 @@
 """`ImplicitRep` (disks) and `SdfRep` bodies on the fused wall path (`Body.fusedReps`, scene/fused.py): the fixed-capacity adjacency builds the exact tier-2 polygon of the body (a disk: area-preserving polygon
 with edges <= h/16; an SDF: the marching-squares contour of the sampled distance, or its `fallback` surface) and the fused kernels integrate that.
 
-(a) the lowered disk equals the high-resolution polygon `SurfaceRep` on the same queries: lam, G, Cov, the hydrostatic A, to 1e-12 (plumbing), for a solid disk and a cavity, with a rotated / translated body;
+(a) the lowered disk equals the high-resolution polygon `SurfaceRep` on the same queries: lam, G, Cov, the hydrostatic A: a solid disk is the disk element (`DiskArrayRep`, table lookup, any radius) to 5e-6, a cavity the polygon itself to 1e-12, with a rotated / translated body;
 (b) against the tier-3 / tier-4 models of the same disk (`sceneOperation`, curvature expansion R/h >= 2, small-obstacle series R/h <= 0.2) lam and G agree to the tier accuracy (3e-4 of the scale; 5e-4 for the series, whose polygon has the minimum of 24 edges);
 (c) the contour of a sampled distance: the loops are oriented (solid on the left) and closed -- the winding number of random points equals `d < 0` except within one grid spacing of the surface -- for an obstacle
     (all border nodes fluid, `background = 0`), a tank (all border solid, `background = 1`), two merging disks and a ring (a hole inside the solid) including the saddle cells; a grid with a mixed border is refused;
@@ -62,8 +62,9 @@ def test_lowered_disk_equals_the_polygon_surface(device, solid):
     a1 = torch.as_tensor(np.random.default_rng(1).normal(size=(1, len(pos), 2)), dtype=F64, device=device)
     got = fused_outputs(Scene([Body(bodyId=0, center=c, angle=0.6, reps=[rep])], device), ps, a1)
     exp = fused_outputs(Scene([Body(bodyId=0, center=c, angle=0.6, reps=[ref])], device), ps, a1)
+    tol = 5e-6 if solid == "inside" else 1e-12                                              # a solid disk is the disk element (tables, ~1e-7, against a polygon with its own 1e-6); a cavity is the polygon itself
     for k in got:
-        assert float((got[k] - exp[k]).abs().max()) <= 1e-12 * scale(exp[k]), k
+        assert float((got[k] - exp[k]).abs().max()) <= tol * scale(exp[k]), k
     assert scale(got["lam"]) > 0.1 and scale(got["Cov"]) > 0.1
 
 

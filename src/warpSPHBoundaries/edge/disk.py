@@ -19,7 +19,7 @@ import numpy as np
 from .kernels import kernel as get_kernel
 
 NODES = 24
-MAXPANELS = 22
+MAXPANELS = 26
 
 
 def _pieces(kname):
@@ -66,7 +66,7 @@ def disk_channels(kname, D, R, nodes=NODES):
     gx, gw = np.polynomial.legendre.leggauss(nodes)
     # panel breakpoints in phi in [0, pi]: the angles of the knot radii, and a geometric refinement towards pi (the closest approach)
     edges = [np.full(M, np.pi)]
-    w = np.maximum(np.abs(D - R) / np.sqrt(D * R), 1e-4)
+    w = np.maximum(np.abs(D - R) / np.sqrt(D * R), 1e-12)
     for k in range(MAXPANELS):
         edges.append(np.maximum(np.pi - w * 4.0 ** k, 0.0))
     for kn in knots:
@@ -82,7 +82,7 @@ def disk_channels(kname, D, R, nodes=NODES):
     nx, ny = np.cos(phi), np.sin(phi)
     W, Phi, _ = kernel_profiles(kname, r)
     ndoty = nx * yx + ny * yy
-    ind = (D < R).astype(float)
+    ind = (D < R).astype(float) * 2.0 * Ms                         # the indicator of x in the disk times the total mass of the kernel, 2 M(1) (= 1 for a normalised kernel)
     # lam: (1/pi) oint (n . y)(M - Ms) / r^2 dl = oint (n . y) Phi / r^2 dl   (Phi already carries 1/pi)
     lam = ind + 2.0 * (wt * ndoty * Phi / (r * r) * Rm).sum((1, 2))
     m1x = 2.0 * (wt * nx * Phi * Rm).sum((1, 2))

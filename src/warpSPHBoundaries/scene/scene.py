@@ -505,9 +505,18 @@ class ImplicitRep:
         big = 1e8
         return torch.full((2,), -big, dtype=F64), torch.full((2,), big, dtype=F64)
 
+    def disks(self):
+        """a solid disk as a one-disk `DiskArrayRep` (cached)."""
+        if getattr(self, "_disks", None) is None:
+            self._disks = DiskArrayRep([self.shape.center], [self.shape.radius])
+        return self._disks
+
     def lowered(self, hmin, device):
-        """the exact-integral form of this body for the fused wall evaluation (scene/fused.py): the tier-2 polygon of a disk (area preserving, edges <= h/16), None for primitives without one (half plane)."""
-        return self.fallbackSurface(hmin, device) if isinstance(self.shape, DiskBody) else None
+        """the exact-integral form of this body for the fused wall evaluation (scene/fused.py): a solid disk is a `DiskArrayRep` (table lookup, any radius), a cavity the tier-2 polygon (area preserving,
+        edges <= h/16), None for primitives without one (half plane)."""
+        if not isinstance(self.shape, DiskBody):
+            return None
+        return self.disks().to(device) if self.shape.solid == "inside" else self.fallbackSurface(hmin, device)
 
     def fallbackSurface(self, hmin, device):
         s = self.shape
@@ -645,6 +654,71 @@ def _marching_squares(d, origin, spacing):
     return SurfaceRep(np.asarray(verts, dtype=float), np.asarray(edges, dtype=np.int32), background=background)
 
 
+class DiskArrayRep:
+    """a set of solid DISKS (fibres) in the body frame: centres [M, 2], radii [M] (a bundle is one body that moves rigidly; the disks must not overlap: the solid of the body is their union and the
+    integrals add).  Every kernel integral of a disk of ANY radius is one table lookup (`edge/disktables.py`, `edge/warpdisk.py`: no polygon, no mesh; the cost does not depend on the radius), the disks near a
+    query come from a cell list over the centres with a fixed capacity (`fixedadj.fixed_disk_topology`), so a whole bundle is ONE launch family, not one per body.  `signed` is the distance to the nearest
+    circle (cell-free, chunked: for bundles of a few hundred fibres)."""
+    kind = "disks"
+
+    def __init__(self, centres, radii):
+        self.centres = torch.as_tensor(centres, dtype=F64).reshape(-1, 2)
+        self.radii = torch.as_tensor(radii, dtype=F64).reshape(-1)
+        if len(self.centres) != len(self.radii):
+            raise ValueError("DiskArrayRep: centres and radii differ in length")
+        self._cl = {}
+        self._bounds = None
+
+    def to(self, device):
+        self.centres, self.radii = self.centres.to(device), self.radii.to(device)
+        self._cl, self._bounds = {}, None
+        return self
+
+    def bounds(self):
+        if self._bounds is None:
+            r = self.radii[:, None]
+            self._bounds = ((self.centres - r).amin(0), (self.centres + r).amax(0))
+        return self._bounds
+
+    def signed(self, pos):
+        """(d, n): signed distance (positive in the fluid) to the nearest disk and the unit normal into the fluid there, at body-frame points `pos` [N, 2]; no host synchronisation."""
+        N = len(pos)
+        out_d = torch.full((N,), float("inf"), dtype=F64, device=pos.device)
+        out_n = torch.zeros((N, 2), dtype=F64, device=pos.device)
+        for lo in range(0, N, 4096):
+            v = pos[lo:lo + 4096, None, :] - self.centres[None]                 # [n, M, 2]
+            dist = v.norm(dim=2)
+            d = dist - self.radii[None]
+            k = d.argmin(1)
+            ar = torch.arange(len(d), device=pos.device)
+            dm = d[ar, k]
+            nv = v[ar, k] / dist[ar, k].clamp(min=1e-300)[:, None]
+            out_d[lo:lo + 4096], out_n[lo:lo + 4096] = dm, nv
+        return out_d, out_n
+
+    def cells(self, supportMax):
+        """the static cell list of the centres for the support `supportMax`: cell = supportMax + the largest radius, so every disk within reach of a query is in the 3 x 3 cells around it.  Returns
+        (lo [2], cell, nx, ny, start [nx ny + 1] int32, items [M] int32 (disk indices by cell), K): K = the most disks any 3 x 3 block holds (the slots of a row cannot overflow)."""
+        key = float(supportMax)
+        if key not in self._cl:
+            dev = self.centres.device
+            cell = key + float(self.radii.max())
+            lo = self.centres.amin(0) - cell
+            hi = self.centres.amax(0) + cell
+            dims = torch.clamp(torch.floor((hi - lo) / cell).long() + 1, min=1)
+            nx, ny = int(dims[0]), int(dims[1])
+            c = torch.floor((self.centres - lo) / cell).long()
+            cid = c[:, 0] * ny + c[:, 1]
+            order = torch.argsort(cid, stable=True)
+            counts = torch.bincount(cid, minlength=nx * ny).reshape(nx, ny)
+            pad = torch.nn.functional.pad(counts[None, None].to(torch.float32), (1, 1, 1, 1))
+            block = torch.nn.functional.avg_pool2d(pad, 3, stride=1)[0, 0] * 9.0            # the disks of the 3 x 3 block around every cell
+            K = max(1, int(block.max().round()))
+            start = torch.cat([torch.zeros(1, dtype=torch.long, device=dev), torch.cumsum(counts.reshape(-1), 0)])
+            self._cl[key] = (lo, cell, nx, ny, start.to(torch.int32), order.to(torch.int32), K)
+        return self._cl[key]
+
+
 # ----------------------------------------------------------------------------------------------------------------------- bodies, scene
 @dataclass
 class BodyField:
@@ -707,8 +781,10 @@ class Body:
         if key not in cache:
             out = []
             for r in self.reps:
-                if isinstance(r, (SurfaceRep, BoxRep)):
+                if isinstance(r, (SurfaceRep, BoxRep, DiskArrayRep)):
                     out.append(r)
+                elif isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody) and r.shape.solid == "inside":
+                    out.append(r.disks().to(device))                                      # a solid disk: one table lookup per query (any radius), no polygon
                 elif isinstance(r, (ImplicitRep, SdfRep)):
                     low = r.lowered(hmin, device)
                     if low is None:
@@ -723,7 +799,7 @@ class Body:
 
     def fusable(self):
         """True when `fusedReps` exists (whatever the support: the tier-2 polygon of a disk needs a size only for its resolution)."""
-        return all(isinstance(r, (SurfaceRep, BoxRep, SdfRep)) or (isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody)) for r in self.reps)
+        return all(isinstance(r, (SurfaceRep, BoxRep, SdfRep, DiskArrayRep)) or (isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody)) for r in self.reps)
 
     def obb(self):
         """the bounding box of the representations in the body frame; the representations are static, so it is computed once per device (reading it may synchronise)."""
@@ -857,6 +933,8 @@ class Scene:
                     out |= rep.signed(lp)[0] < 0
                 elif isinstance(rep, SdfRep):
                     out |= rep.signed(lp)[0] < 0
+                elif isinstance(rep, DiskArrayRep):
+                    out |= rep.signed(lp)[0] < 0
                 elif isinstance(rep, ImplicitRep):
                     out |= rep.shape.signed(lp)[0] < 0
                 elif isinstance(rep, VolumeRep):
@@ -916,6 +994,9 @@ class Scene:
                     n = bd.pose.vecToWorld(n_loc)
                 elif isinstance(rep, SdfRep):
                     d, n_loc, _, _ = rep.signed(lp)
+                    n = bd.pose.vecToWorld(n_loc)
+                elif isinstance(rep, DiskArrayRep):
+                    d, n_loc = rep.signed(lp)
                     n = bd.pose.vecToWorld(n_loc)
                 elif isinstance(rep, ImplicitRep):
                     d, n_loc, _ = rep.shape.signed(lp)

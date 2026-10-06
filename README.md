@@ -34,7 +34,7 @@ src/warpSPHBoundaries/scene/        bodies and representations, boundary operati
 src/warpSPHBoundaries/data/tables/  pre-tabulated tier-3 kernel tables (package data)
 src/warpSPHBoundaries/sim/          DFSPH2D and DeltaSPH2D solvers, cases, validation runners
 scripts/                    command-line runners (regression harness, profiler, validation, videos), scripts/studies, scripts/bench
-tests/                      pytest suite: tests/{edge,scene,sim,curvbound} (910 tests)
+tests/                      pytest suite: tests/{edge,scene,sim,curvbound} (940 tests)
 notebooks/demo.ipynb        executed demo: geometry, curves, validation
 docs/derivation.md          full mathematical write-up
 PLAN.md                     project status & roadmap
