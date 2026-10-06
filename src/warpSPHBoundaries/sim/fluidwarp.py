@@ -42,7 +42,14 @@ class FluidWarp:
             pts.append(b.pose.toWorld(torch.stack([lo, hi])))
         P = torch.cat(pts)
         lo, hi = P.amin(0) - 20.0 * H, P.amax(0) + 20.0 * H
-        self.domain = DomainDescription(lo.to(self.tp), hi.to(self.tp), torch.zeros(2, dtype=torch.bool, device=dev), 2)
+        per = sim.cfg.periodic
+        flags = torch.zeros(2, dtype=torch.bool, device=dev)
+        if per is not None:                                                         # a periodic axis: the box itself (warpSPHCore wraps the cell index and takes the minimum image, any number of box lengths out; the positions are not touched)
+            per.checkSupport(H)
+            for a, f in enumerate(per.flags):
+                if f:
+                    lo[a], hi[a], flags[a] = per.lo[a], per.hi[a], True
+        self.domain = DomainDescription(lo.to(self.tp), hi.to(self.tp), flags, 2)
         self.config = SimpleNamespace(kernel=sim.cfg.kernel, domain=self.domain)
         self.xiWarp = float(sphKernel_xi(sim.cfg.kernel.value, 2))
         self._prior = None

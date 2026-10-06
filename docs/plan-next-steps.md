@@ -47,6 +47,13 @@ This is also the case the fibre-permeability studies need.
     particle that crosses the border keeps its raw coordinate continuous (x(t + dt) - x(t) = v dt exactly, no jump of L) and its sums are continuous; the stored positions are
     bit-identical before and after `rhs` (the arrays are not written).
 
+    **DONE (2026-10-06, `main`).**  `sim/pairs.py`: `Periodic(lo, hi, flags)`, `min_image`, `pair_delta`, `neighbor_pairs(pos, h, periodic)` (hash on a temporary wrapped copy, images as shifted queries, pairs de-duplicated);
+    `DeltaSPHConfig.periodic`; the four torch pair sites of `DeltaSPH2D` use `pair_delta`; `FluidWarp` hands the box to warpSPHCore as a periodic `DomainDescription`.  Finding: warpSPHCore's Verlet list and the warpSPH modules
+    (`computeDistanceVec`, `wrapCellComponentPeriodic`) already take the minimum image of raw positions for any integer box offset per particle (probe: sums equal to 1e-12 for offsets up to +-3 box lengths and
+    translations up to 5 L; the solver's own `wp_*` modules use the same `computeDistanceVec`), so the Warp path needed only the flags.  `tests/sim/test_periodic_fluid.py` (10 tests: pairs against brute force incl. a < 3-cell box,
+    invariance under translation / per-particle box offsets, positions not written, warp modules = torch oracle, steps keep the raw trajectory, uniform stream through the seam); suite 952 passed, harness PASS unchanged.
+    The DFSPH solver does not take `periodic` yet (item 2).
+
 1b. **Periodic wall integrals, one real body (user, 2026-10-06).**  Per-slot shift, no image bodies.  The slot builder of `fixedadj.py` (polygon and disk) takes the raw
     query position, forms the integer image shift of the body (`round((x - c_body) / L)`, valid for any drift), tests the shifted query against the static cell list of the
     body, and stores the shift in the slot; the contraction evaluates the wall geometry with the shifted query position of that slot (a local value; the raw position is never

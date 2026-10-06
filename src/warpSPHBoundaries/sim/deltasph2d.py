@@ -38,7 +38,7 @@ from ..scene.provider import AnalyticBoundary
 from ..scene.scene import BodyField, Scene, sceneOperation
 from ..scene.tensile import tensile_factor, tensile_vector_scene
 from ..scene.viscosity import lap_factor, lap_lambda_scene
-from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, wendland2, wendland4
+from .pairs import F64, Periodic, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
 KSCALE = 1.897367                       # warpSPHCore sphKernelScale(Wendland2, 2D): support / smoothing length
@@ -79,6 +79,7 @@ class DeltaSPHConfig:
     fixedAdjacency: bool = True         # step 5 of the plan: the wall adjacency of the fused path in ONE Warp launch per (body, rep) with fixed shapes and no host sync (scene/fixedadj.py); False = Scene.adjacency (torch.nonzero / cell-list pair search), the oracle
     graphStep: bool = True              # step 5b of the plan: replay the whole step as a CUDA graph (graphstep.py; needs fluidWarp, fusedWall, static surface-loop walls, else eager)
     wallParticleSpacing: float = 0.0    # > 0: the wall as a lattice of wall particles of this spacing (in dx) summed pairwise (scene/particles.py, the particle representation of the boundary provider; eager only), 0 = the analytic bodies (exact integrals)
+    periodic: Optional[Periodic] = None   # periodic box (pairs.py): minimum-image pair geometry on the raw positions, which are never wrapped; fluid-fluid terms only (the wall integrals take their own image shifts, step 1b of docs/plan-next-steps.md)
     fluidWarp: bool = True              # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
@@ -269,7 +270,7 @@ class DeltaSPH2D:
         else:
             nz = i != j
             ii, jj, rr = i[nz], j[nz], r[nz]
-            d = x[ii] - x[jj]
+            d = pair_delta(x, ii, jj, self.cfg.periodic)
             unit = d / rr.clamp(min=1e-300)[:, None]
             C = self._sum(unit, ii)
         fused = isinstance(adj, WallAggregate)
@@ -311,9 +312,9 @@ class DeltaSPH2D:
             fps, fadj = fw.state(x, v, rho)
             fk = fw.kernels(fps, fadj)
         else:
-            i, j, r = neighbor_pairs(x, self.Hvec)
+            i, j, r = neighbor_pairs(x, self.Hvec, self.cfg.periodic)
             nz = i != j
-            d = x[i] - x[j]
+            d = pair_delta(x, i, j, self.cfg.periodic)
             gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))      # grad_i W_ij
             fk = None
         P = cfg.c0 ** 2 * (rho - cfg.rho0)
@@ -463,9 +464,9 @@ class DeltaSPH2D:
             fk = self._fluidwarp.kernels(fps, fadj)
             i = j = r = d = gW = None
         else:
-            i, j, r = neighbor_pairs(x, self.Hvec)
+            i, j, r = neighbor_pairs(x, self.Hvec, self.cfg.periodic)
             nz = i != j
-            d = x[i] - x[j]
+            d = pair_delta(x, i, j, self.cfg.periodic)
             gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         V = self.m / rho
         lam, G, Mw, adj = torch.zeros((0, len(x)), dtype=F64, device=self.dev), None, None, None
@@ -613,9 +614,9 @@ class DeltaSPH2D:
         """static wall consistency residual S_i = sum_j V_j grad_i W_ij + sum_b mu grad lambda_b: a uniform pressure exerts the force -2 P S_i / rho_i on particle i, so S_i = 0 is the condition for
         a particle layout that fits the wall (zero on the interior of a lattice and on a flat wall at dp/2; not zero where a regular lattice meets a smooth sloped wall)."""
         x = self.x if x is None else x
-        i, j, r = neighbor_pairs(x, self.Hvec)
+        i, j, r = neighbor_pairs(x, self.Hvec, self.cfg.periodic)
         nz = i != j
-        d = x[i] - x[j]
+        d = pair_delta(x, i, j, self.cfg.periodic)
         gW = torch.where(nz[:, None], self.dW(r, self.H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         S = self._sum((self.m / self.rho)[j][:, None] * gW, i)
         if self.scene is not None:
