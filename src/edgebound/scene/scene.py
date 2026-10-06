@@ -45,6 +45,13 @@ _R_CACHE = {}                                                      # (angle, dev
 class Pose:
     center: torch.Tensor            # [2] world position of the body origin (centre of mass)
     angle: float = 0.0
+    cs: Optional[tuple] = None      # (cos, sin) as 0-d device tensors: set while a CUDA graph is captured / replayed (the pose is then a device input, not a baked host float)
+
+    def _cs(self):
+        if self.cs is not None:
+            return self.cs
+        a = float(self.angle)
+        return float(np.cos(a)), float(np.sin(a))
 
     @property
     def R(self):
@@ -57,18 +64,25 @@ class Pose:
             R = _R_CACHE[key] = torch.tensor([[c, -s], [s, c]], dtype=F64, device=self.center.device)
         return R
 
+    def Rflat(self):
+        """(c, -s, s, c) as a device tensor [4] (the kernels read the rotation from memory so that a graph replay sees the pose of its stage)."""
+        if self.cs is not None:
+            return torch.stack([self.cs[0], -self.cs[1], self.cs[1], self.cs[0]])
+        return self.R.reshape(-1)
+
     def toLocal(self, p):
         """(p - center) R with the 2 x 2 rotation written out: a [N,2] x [2,2] float64 GEMM is a 0.27 ms cutlass launch on this class of GPU, the elementwise form is four tiny kernels."""
-        c, s = float(np.cos(self.angle)), float(np.sin(self.angle))
+        c, s = self._cs()
         d = p - self.center
         return torch.stack([d[:, 0] * c + d[:, 1] * s, d[:, 1] * c - d[:, 0] * s], 1)
 
     def toWorld(self, p):
-        c, s = float(np.cos(self.angle)), float(np.sin(self.angle))
+        c, s = self._cs()
         return torch.stack([p[:, 0] * c - p[:, 1] * s + self.center[0], p[:, 0] * s + p[:, 1] * c + self.center[1]], 1)
 
     def vecToWorld(self, v):
-        return v @ self.R.T
+        c, s = self._cs()
+        return torch.stack([v[:, 0] * c - v[:, 1] * s, v[:, 0] * s + v[:, 1] * c], 1)
 
 
 # ----------------------------------------------------------------------------------------------------------------------- cell lists
@@ -385,6 +399,8 @@ class BoxRep:
     def __init__(self, lo, hi, solid: str = "inside"):
         self.lo = torch.as_tensor(lo, dtype=F64)
         self.hi = torch.as_tensor(hi, dtype=F64)
+        self.lo_h = tuple(float(v) for v in self.lo)                          # host copies: reading a device tensor is a synchronisation, and a graph capture forbids it
+        self.hi_h = tuple(float(v) for v in self.hi)
         if solid not in ("inside", "outside"):
             raise ValueError("solid must be 'inside' or 'outside'")
         self.solid = solid
@@ -605,12 +621,12 @@ class Body:
     def accelerationAt(self, world):
         """acceleration of the material points of the body at world positions: a + alpha J s - omega^2 s (s = x - centre)."""
         s = world - self.center
-        w, al = float(self.angularVelocity), float(self.angularAcceleration)
+        w, al = self.angularVelocity, self.angularAcceleration                 # floats, or 0-d device tensors while a graph is captured (graphstep.py)
         return self.linearAcceleration.to(world.device) + al * torch.stack([-s[:, 1], s[:, 0]], 1) - w * w * s
 
     @property
     def pose(self):
-        return Pose(self.center, float(self.angle))
+        return Pose(self.center, self.angle if getattr(self, "_cs", None) is not None else float(self.angle), getattr(self, "_cs", None))
 
     def move(self, dt: float):
         """explicit Euler pose update (as `warpSPH.rigidBody.integrateRigidBody`); nothing else is rebuilt."""
@@ -625,7 +641,7 @@ class Body:
         return torch.stack([a.to(dev) for a in los]).amin(0), torch.stack([a.to(dev) for a in his]).amax(0)
 
     def velocityAt(self, world):
-        w = float(self.angularVelocity)
+        w = self.angularVelocity
         r = world - self.center
         return self.linearVelocity + w * torch.stack([-r[:, 1], r[:, 0]], 1)
 

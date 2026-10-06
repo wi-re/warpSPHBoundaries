@@ -248,7 +248,7 @@ def test_box_domain_fused_equals_scene_operation_path(device, case):
     res = {}
     for fused in (False, True):
         kw = dict(nx=30, shifting=True, noPen="impulse") if case == "dambreak" else dict(nx=40)
-        sim = (cases.marrone_dambreak if case == "dambreak" else cases.sloshing_tank)(domain="box", device=device, fusedWall=fused, **kw)[0]
+        sim = (cases.marrone_dambreak if case == "dambreak" else cases.sloshing_tank)(domain="box", device=device, fusedWall=fused, graphStep=False, **kw)[0]
         for _ in range(60):
             sim.step()
         res[fused] = (sim.x.clone(), sim.v.clone(), sim._wallCache is not None and type(sim._wallCache[2]).__name__)

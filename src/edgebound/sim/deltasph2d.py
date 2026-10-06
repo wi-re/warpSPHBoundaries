@@ -138,6 +138,10 @@ class DeltaSPH2D:
         self._fluidwarp = None                                 # FluidWarp of cfg.fluidWarp (lazy)
         self._graphCfg = None
         self._graphed = None                                   # GraphedStep (or False when the configuration does not allow it), lazy
+        self._carry = None                                     # FusedWall of the last no-penetration evaluation, persistent buffers (graph step only)
+        self._carryNext = False
+        self._carryEnabled = False
+        self._graphBind = None                                 # graph capture: binds the bodies to the device pose of stage k (graphstep.py)
         self._graphMode = False                                # True while the step is captured / replayed as a CUDA graph: no host-side caches or reads (graphstep.py)
         self._hc = None                                        # (Hvec tensor, all supports == H) cache of _constSupport
         self._fgroups = None                                   # (FusedGroup tuple, {output role: group index}, config key) of the fused wall evaluation
@@ -165,7 +169,11 @@ class DeltaSPH2D:
         poses = [(b.center.clone(), float(b.angle)) for b in self.scene.bodies]
         c = self._wallCache
         fused = self.cfg.fusedWall and FusedWall.supported(self.scene)
-        if not self._graphMode and c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[6], self.Hvec) and torch.equal(c[7], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)) and isinstance(c[2], FusedWall) == fused and (not fused or c[2].key == self._fused_key()):
+        if self._carryNext:                                     # graph step, first RHS: the wall evaluation the previous step's no-penetration law made at these very positions (graphstep.py)
+            self._carryNext = False
+            adj = self._carry
+            pm, lam, G = None, self.cfg.wallMass * adj.out["lam"], self.cfg.wallMass * adj.out["G"]
+        elif not self._graphMode and c is not None and c[0].shape == x.shape and len(c[1]) == len(poses) and torch.equal(c[0], x) and torch.equal(c[6], self.Hvec) and torch.equal(c[7], self.kinds) and all(float(p[1]) == q[1] and torch.equal(p[0], q[0]) for p, q in zip(c[1], poses)) and isinstance(c[2], FusedWall) == fused and (not fused or c[2].key == self._fused_key()):
             adj, pm, lam, G = c[2], c[3], c[4], c[5]            # same positions, same poses: lam and G do not depend on the densities or the gravity
         elif fused and self._constSupport():
             adj = self._fused_state(ps)
@@ -518,6 +526,11 @@ class DeltaSPH2D:
             return 0
         ws = self._wall_state(self.x, self.rho)
         lam = ws[0]
+        if self._graphMode and self._carryEnabled and isinstance(ws[3], FusedWall):          # the next step's first RHS evaluates the wall at these positions again: keep it
+            if self._carry is None:
+                self._carry = ws[3]
+            else:
+                self._carry.copy_from(ws[3])
         if isinstance(ws[3], FusedWall):                                                           # full-length form: the near-wall rows are a mask (no host sync); a device count of the corrections
             d, n, hit = self.scene.signed_distance(self.x, supportMax=self.H)
             vn = (self.v * n).sum(1)                                                               # static walls (moving bodies: velocityAt of the nearest body, not needed yet)
@@ -623,11 +636,17 @@ class DeltaSPH2D:
     def _step_core(self):
         """DualSPHysics symplectic Euler with time-centred continuity, shifting and the no-penetration impulse on the device state (x, v, rho, g, dt_t); returns (forces, no-penetration count)."""
         dt = self.dt_t
+        self._carryNext = self._graphMode and self._carry is not None
+        if self._graphMode and self._graphBind is not None:
+            self._graphBind(0)                                     # the bodies at their pose of stage 0 (device inputs of the graph)
         a0, d0, _ = self.rhs(self.x, self.v, self.rho)
         xh, vh, rh = self.x + 0.5 * dt * self.v, self.v + 0.5 * dt * a0, self.rho + 0.5 * dt * d0
-        if self.scene is not None and not self._graphMode:
-            for b in self.scene.bodies:
-                b.move(0.5 * self.dt)
+        if self.scene is not None:
+            if self._graphMode:
+                self._graphBind(1)
+            else:
+                for b in self.scene.bodies:
+                    b.move(0.5 * self.dt)
         a1, d1, forces = self.rhs(xh, vh, rh, want_forces=True)
         vn = self.v + dt * a1
         self.x = self.x + 0.5 * dt * (self.v + vn)
@@ -638,9 +657,12 @@ class DeltaSPH2D:
             rho_new = rho_new + dt * (K - self._kinematic(vh))
         self.v = vn
         self.rho = rho_new
-        if self.scene is not None and not self._graphMode:
-            for b in self.scene.bodies:
-                b.move(0.5 * self.dt)
+        if self.scene is not None:
+            if self._graphMode:
+                self._graphBind(2)
+            else:
+                for b in self.scene.bodies:
+                    b.move(0.5 * self.dt)
         if self.cfg.shifting:
             self.x = self.x + self.shift(dt)
         nopen = self.no_penetration()

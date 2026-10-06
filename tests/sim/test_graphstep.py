@@ -3,7 +3,7 @@
 (a) dam break and sloshing (rolling gravity = a static input updated every call), 40 steps: positions, velocities, densities, the wall force, the host time and dt are torch.equal to the eager run with
     the same cfg (the graph replays the very kernels of the eager step: a bit-level contract, not a tolerance), one capture and 40 replays;
 (b) a run long enough for the Verlet list to become invalid: the step that finds the flag set is run eagerly, the next one captures against the new list, and the state stays equal to the eager run;
-(c) a configuration the graph cannot take (box domain, moving body) uses the eager step silently: `_graphed` is False and the state equals the eager run.
+(c) the box domain and bodies with prescribed motion are captured (the stage poses are device inputs); (d) a configuration the graph cannot take (pairwise wall viscosity) uses the eager step silently.
 CUDA only.
 """
 import pytest
@@ -47,8 +47,38 @@ def test_verlet_rebuild_falls_back_to_one_eager_step_and_recaptures():
     assert st["eager"] >= 1 and st["captures"] >= 2 and st["captures"] + st["replays"] + st["eager"] >= 400, st
 
 
-def test_unsupported_configurations_run_eagerly():
+@pytest.mark.parametrize("domain", ["box", "surface"])
+def test_box_domain_is_captured(domain):
     kw = dict(nx=30, shifting=True, noPen="impulse")
-    a, b = run(cases.marrone_dambreak, 20, False, domain="box", **kw), run(cases.marrone_dambreak, 20, True, domain="box", **kw)
+    a, b = run(cases.marrone_dambreak, 30, False, domain=domain, **kw), run(cases.marrone_dambreak, 30, True, domain=domain, **kw)
+    same(a, b)
+    assert b._graphed and b._graphed.stats["captures"] == 1 and b._graphed.stats["replays"] == 30
+
+
+@pytest.mark.parametrize("domain", ["box", "surface"])
+def test_moving_body_poses_are_graph_inputs(domain):
+    """a tank body with a prescribed motion (velocity, acceleration, rotation, angular acceleration): the three stage poses of every step come from the host and the replay equals the eager step bit for bit
+    (the pose changes every step, so a baked pose would be wrong from the second step on); the host bodies end where the eager bodies end."""
+    def go(graph):
+        sim = cases.marrone_dambreak(nx=24, shifting=True, noPen="impulse", domain=domain, device=DEV, fluidWarp=True, graphStep=graph)[0]
+        b = sim.scene.bodies[0]
+        b.linearVelocity = torch.tensor([0.05, -0.02], dtype=torch.float64, device=DEV)
+        b.linearAcceleration = torch.tensor([0.01, 0.0], dtype=torch.float64, device=DEV)
+        b.angularVelocity, b.angularAcceleration = 0.02, 0.005
+        for _ in range(25):
+            sim.step()
+        return sim
+    a, b = go(False), go(True)
+    same(a, b)
+    ba, bb = a.scene.bodies[0], b.scene.bodies[0]
+    assert b._graphed and b._graphed.stats["replays"] >= 20
+    assert torch.equal(ba.center, bb.center) and torch.equal(ba.linearVelocity, bb.linearVelocity) and float(ba.angle) == float(bb.angle) and float(ba.angularVelocity) == float(bb.angularVelocity)
+    assert float(ba.angle) > 0.0 and float(ba.center.abs().max()) > 0.0
+
+
+def test_unsupported_configurations_run_eagerly():
+    """a configuration the graph cannot take (the pairwise wall viscosity builds index lists) uses the eager step silently."""
+    kw = dict(nx=30, shifting=True, noPen="impulse", wallViscosityForm="pairwise")
+    a, b = run(cases.marrone_dambreak, 10, False, **kw), run(cases.marrone_dambreak, 10, True, **kw)
     assert b._graphed is False
     same(a, b)

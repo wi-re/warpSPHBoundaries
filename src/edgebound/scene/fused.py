@@ -39,7 +39,7 @@ class WallOutput:
 @wp.kernel
 def _wall_contract_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int), c: wp.array2d(dtype=real),
                           cand: wp.array(dtype=int), lsup: wp.array(dtype=real), ind: wp.array(dtype=real),
-                          R00: real, R01: real, R10: real, R11: real,
+                          Rm: wp.array(dtype=real),
                           n_out: int, o_group: wp.array(dtype=int), o_kind: wp.array(dtype=int), o_base: wp.array(dtype=int), o_dim: wp.array(dtype=int), o_ind: wp.array(dtype=int),
                           a1: wp.array(dtype=real), a1_base: int, bidx: int, N: int, pool: wp.array(dtype=real)):
     row = wp.tid()
@@ -48,6 +48,10 @@ def _wall_contract_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=i
     i0 = row_start[row]
     i1 = row_start[row + 1]
     idv = ind[row]
+    R00 = Rm[0]                                                           # the pose rotation (c, -s, s, c) read from device memory: a graph replay sees the pose of its stage
+    R01 = Rm[1]
+    R10 = Rm[2]
+    R11 = Rm[3]
     for k in range(n_out):
         g = o_group[k] * 9
         kind = o_kind[k]
@@ -132,7 +136,7 @@ def _chord_deficit(l: wp.float64, h: wp.float64, z: wp.float64, H: wp.float64, b
 @wp.kernel
 def _cone_area_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int), pe: wp.array(dtype=int), cand: wp.array(dtype=int),
                       lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64), ind: wp.array(dtype=wp.float64),
-                      verts: wp.array(dtype=wp.float64), edges: wp.array(dtype=int), axis: wp.array(dtype=wp.float64), dth: wp.float64, al: wp.float64,
+                      verts: wp.array(dtype=wp.float64), edges: wp.array(dtype=int), axis: wp.array(dtype=wp.float64), Rm: wp.array(dtype=wp.float64), al: wp.float64,
                       N: int, out: wp.array(dtype=wp.float64)):
     """per query row: the areas area(solid cap disk(p, H) cap wedge(p, axis, al)) -> out[q] and the full disk -> out[N + q] (added), H = lsup[row].  Local form of cone_area.py: the far edges' sector parts of the
     per-edge formula sum to (1/2) H^2 W (indicator - background) along every ray (signed crossings), so  area = (1/2) H^2 W indicator - sum_{edges within H} s_e (chord deficit);  edges at segment distance >= H have an empty chord."""
@@ -141,7 +145,7 @@ def _cone_area_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int),
     H = lsup[row]
     px = lpos[2 * row]
     py = lpos[2 * row + 1]
-    th = wp.atan2(axis[2 * q + 1], axis[2 * q]) - dth                     # the world axis in the body frame
+    th = wp.atan2((-Rm[2] * axis[2 * q] + Rm[0] * axis[2 * q + 1]), Rm[0] * axis[2 * q] + Rm[2] * axis[2 * q + 1])      # the world axis in the body frame: atan2 of R^T axis (R = (c, -s, s, c))
     pi = wp.float64(3.1415926535897932384626433832795)
     two_pi = wp.float64(6.283185307179586476925286766559)
     wedge_on = al < pi
@@ -242,15 +246,15 @@ class FusedWall:
     def _item(self, bi, ba, rep, topo, c, perm, start, ind0):
         rows = len(ba.cand)
         cand32, lsup = ba.cand.to(torch.int32).contiguous(), ba.lsup.to(torch_real).contiguous()
-        ang = float(ba.body.angle)
-        cs, sn = float(np.cos(ang)), float(np.sin(ang))                 # Pose.R = [[c, -s], [s, c]]
+        Rf = ba.body.pose.Rflat().clone()                                # Pose.R = [[c, -s], [s, c]] flat, on the device (own memory: `copy_from` writes it)
+        Rt = Rf.to(torch_real).contiguous()
         w = None if c is None else (wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wp.from_torch(c, dtype=real),
                                     wp.from_torch(cand32, dtype=wp.int32), wp.from_torch(lsup, dtype=real))
         ind = None
         if ind0:                                                         # the indicator is part of the channels (box tables) or belongs to another item: add nothing in the contraction
             z = torch.zeros(rows, dtype=torch_real, device=self.dev)
             ind = (z, wp.from_torch(z, dtype=real))
-        self.items.append(dict(bi=bi, rep=rep, topo=topo, ba=ba, rows=rows, keep=(c, perm, start, cand32, lsup), ind=ind, w=w, R=(cs, -sn, sn, cs)))
+        self.items.append(dict(bi=bi, rep=rep, topo=topo, ba=ba, rows=rows, keep=(c, perm, start, cand32, lsup), ind=ind, fixed_ind=bool(ind0), w=w, R=(Rt, Rf, wp.from_torch(Rt, dtype=real), wp.from_torch(Rf.contiguous(), dtype=wp.float64))))
 
     def _add_item(self, bi, ba, rep, topo, gidx, ind0=False):
         """a polygon item: the pair channels of the groups `gidx` (zero-padded to the full layout), pairs of a row summed in a fixed order."""
@@ -274,7 +278,7 @@ class FusedWall:
             c = torch.zeros((rows, 9 * len(self.groups)), dtype=torch_real, device=dev)
             for kern in dict.fromkeys(self.groups[g].kernel for g in tab):
                 t = boxTables(kern, dev)
-                blk = t.block(ba.lpos, ba.lsup, (float(rep.lo[0]), float(rep.lo[1])), (float(rep.hi[0]), float(rep.hi[1])))      # [rows, 9] units of h, the library convention of warpbc.edge_channels
+                blk = t.block(ba.lpos, ba.lsup, rep.lo_h, rep.hi_h)      # [rows, 9] units of h, the library convention of warpbc.edge_channels
                 if rep.solid == "outside":                                  # the solid is the plane minus the box
                     if getattr(t, "_plane", None) is None:
                         big = torch.full((1,), 1e3, dtype=F64, device=dev)
@@ -324,9 +328,9 @@ class FusedWall:
                     it["ind0"] = (z, wp.from_torch(z, dtype=real))
                 windv = it["ind0"][1]
             wstart, wperm, wc, wcand, wlsup = it["w"]
-            R00, R01, R10, R11 = it["R"]
+            wR = it["R"][2]
             wp.launch(_wall_contract_kernel, dim=it["rows"], device=dev, inputs=[
-                wstart, wperm, wc, wcand, wlsup, windv, real(R00), real(R01), real(R10), real(R11),
+                wstart, wperm, wc, wcand, wlsup, windv, wR,
                 len(outputs), o_group, o_kind, o_base, o_dim, o_ind, wa1, it["bi"] * N * 2, it["bi"], N, wpool])
         _sync(dev)
         res = {}
@@ -336,6 +340,44 @@ class FusedWall:
             shape = {"lam": (B, N), "lap": (B, N), "g0": (B, N, 2), "a1g1": (B, N, 2), "cov": (B, N, 2, 2)}[o.kind]
             res[o.name] = t.reshape(shape)
         return res
+
+    def _tensors(self):
+        """every persistent input of the contraction / cone-area kernels of this FusedWall, in a fixed order: (name, item index, tensor)."""
+        out = []
+        for k, it in enumerate(self.items):
+            keep, topo, ba = it["keep"], it["topo"], it["ba"]
+            if keep[0] is not None:
+                out.append(("c", k, keep[0]))
+            out.append(("lsup", k, keep[4]))
+            if topo is not None:
+                out.append(("e", k, topo.e))
+                if hasattr(topo, "ind"):
+                    out.append(("ind", k, topo.ind))
+            out.append(("lpos", k, ba.lpos))
+            out.append(("blsup", k, ba.lsup))
+            if ba.valid is not None:
+                out.append(("valid", k, ba.valid))
+            out.append(("R0", k, it["R"][0]))
+            out.append(("R1", k, it["R"][1]))
+        for name in sorted(getattr(self, "out", {})):
+            out.append(("out." + name, -1, self.out[name]))
+        return out
+
+    def copy_from(self, other):
+        """overwrite the data of this FusedWall with that of `other` (the same scene, groups and query count) in place, so that kernels / CUDA graphs that read this object's buffers see the new position set;
+        the arrays derived lazily from them are rebuilt by their kernels (call `reset_derived` when this object outlives a graph capture)."""
+        a, b = self._tensors(), other._tensors()
+        assert [(n, k) for n, k, _ in a] == [(n, k) for n, k, _ in b], "FusedWall.copy_from: different structure"
+        for (_, _, ta), (_, _, tb) in zip(a, b):
+            ta.copy_(tb)
+
+    def reset_derived(self):
+        """drop the lazily built arrays (they live in the memory of whatever CUDA graph first used them)."""
+        for it in self.items:
+            if not it["fixed_ind"]:
+                it["ind"] = None
+            it["ind0"] = None
+            it["cone"] = None
 
     def cone_area(self, axes, half_angle):
         """[2, N] float64: area(solid cap disk(x, H) cap wedge(x, axis, half_angle)) (row 0, units length^2; `half_angle >= pi` = the full disk) and the full-disk area (row 1) for the world `axes` [N, 2]
@@ -362,7 +404,7 @@ class FusedWall:
             wl, ws, wi, wv, we, wpe = it["cone"][6]
             wp.launch(_cone_area_kernel, dim=it["rows"], device=dev, inputs=[
                 wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wpe, wp.from_torch(cand32, dtype=wp.int32),
-                wl, ws, wi, wv, we, axis, wp.float64(float(ba.body.angle)), wp.float64(float(half_angle)), N, wout])
+                wl, ws, wi, wv, we, axis, it["R"][3], wp.float64(float(half_angle)), N, wout])
             if rep.background:
                 out_of = torch.ones(N, dtype=F64, device=dev)
                 if ba.valid is None:
