@@ -59,6 +59,8 @@ def main():
     ap.add_argument("--pack", type=int, default=0, help="body-fitted packing: this many iterations of DeltaSPH2D.pack (relax the particles to zero wall-consistency residual) before the run")
     ap.add_argument("--wpv", action="store_true", help="wallPressureViscous: the viscous term in the wall pressure condition")
     ap.add_argument("--rho", type=float, default=1.0, help="initial density (the mean pressure level P = c0^2 (rho - rho0): the Antuono switch and the wall pressure clamp act on its sign)")
+    ap.add_argument("--consistent", action="store_true", help="pressureConsistent: the pressure force exact for a uniform pressure near the wall")
+    ap.add_argument("--Pb", type=float, default=0.0, help="background pressure P_b added to the equation of state (density untouched)")
     ap.add_argument("--noWallForce", action="store_true", help="leave the body force out of the wall pressure condition (the old behaviour)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
@@ -72,7 +74,7 @@ def main():
     nu = shear_nu(a.n, a.alpha, a.c0, a.device, a.H)
     print(f"N={len(pos)} c={c:.4f} nu_eff={nu:.5f} (alpha c0 H / 8 xi = {a.alpha * a.c0 * a.H * dx / (8 * 2.821384729):.5f})  K_SA={sangani_acrivos(c):.3f}")
     scene = Scene([Body(bodyId=0, center=(0.5, 0.5), reps=[DiskArrayRep([(0.0, 0.0)], [a.R])])], a.device)
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(a.f, 0.0), bodyForceAtWall=not a.noWallForce, wallPressureViscous=a.wpv, graphStep=True, shifting=True, wallViscosityForm=a.wall)
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(a.f, 0.0), bodyForceAtWall=not a.noWallForce, wallPressureViscous=a.wpv, pressureConsistent=a.consistent, backgroundPressure=a.Pb, graphStep=True, shifting=True, wallViscosityForm=a.wall)
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=a.H * dx)
     sim.rho = sim.rho * a.rho
     if a.pack:

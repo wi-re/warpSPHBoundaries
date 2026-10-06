@@ -85,6 +85,8 @@ class DeltaSPHConfig:
     periodic: Optional[Periodic] = None   # periodic box (pairs.py): minimum-image pair geometry on the raw positions, which are never wrapped; fluid-fluid terms only (the wall integrals take their own image shifts, step 1b of docs/plan-next-steps.md)
     bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
     wallFrictionLever: str = "particle"  # where the no-slip wall friction acts for the TORQUE on the body: "particle" (where the fluid loses the momentum: the fluid angular momentum balance, torque conserved between walls: measured 1.000 on Taylor-Couette) or "contact" (the wall point: 0.83 to 1.2 off)
+    backgroundPressure: float = 0.0      # P = c0^2 (rho - rho0) + P_b: a uniform pressure offset (the density, hence the volumes and the viscosity, are untouched); with the Antuono switch and the wall clamp the level matters, with `pressureConsistent` it must not
+    pressureConsistent: bool = False     # the pressure force is exact for a uniform pressure near a wall: the part of it a uniform P exerts through the wall-consistency residual S_i of the layout is removed (difference form)
     wallPressureViscous: bool = False    # the wall pressure condition carries the viscous term, grad p = rho (g + f - a_wall) + rho nu lap u (the particle's own viscous acceleration extends the ghost pressure): matters where the pressure is viscous-dominated (flow past a curved wall at low Re)
     bodyForceAtWall: bool = True        # the body force enters the wall pressure condition dp/dn = rho (g + f - a_wall) . n (a uniform force acts on the fluid at a wall like gravity; it is not hydrostatic in the density diffusion)
     pinned: Optional[Pinned] = None     # a prescribed-velocity band of fluid particles (pinned.py): the free stream of a periodic flow past a body
@@ -329,7 +331,7 @@ class DeltaSPH2D:
             d = pair_delta(x, i, j, self.cfg.periodic)
             gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))      # grad_i W_ij
             fk = None
-        P = cfg.c0 ** 2 * (rho - cfg.rho0)
+        P = cfg.c0 ** 2 * (rho - cfg.rho0) + cfg.backgroundPressure
         adj = None
         if self.scene is not None:
             lam, G, A, adj = self._wall_state(x, rho)
@@ -380,7 +382,21 @@ class DeltaSPH2D:
             accw = -wall / rho[None, :, None]
             acc = acc + accw.sum(0)
             if want_forces:
-                forces = self._load(accw, x[None].expand(self.nb, -1, -1))                          # load of the fluid on each body: -m sum a (a pair force is central: its torque about the centre is that of the force at the particle)
+                if cfg.pressureConsistent:                                                          # the load must not depend on the pressure level: only the deviation from the mean pressure of the fluid (a uniform pressure exerts no net force on a closed body)
+                    accw_l = -(2.0 * (P - P.mean())[None, :, None] * G + A) / rho[None, :, None]
+                    forces = self._load(accw_l, x[None].expand(self.nb, -1, -1))
+                else:
+                    forces = self._load(accw, x[None].expand(self.nb, -1, -1))
+        if cfg.pressureConsistent and self.nb:
+            # the force a UNIFORM pressure would exert (fluid pairs with the Antuono switch s, wall with its clamp) is the static wall-consistency residual S_i = sum_j V_j grad W_ij + G_i times 2 P_i: spurious where the layout does not fill up
+            # to the wall (cut lattice on a curved wall).  Removing it leaves the difference form (P_j - P_i), (P_w - P_i): exact for a uniform pressure of any sign and level; the wall then acts through the hydrostatic part A only.  The loads
+            # on the bodies (above) are those of the symmetric wall term.
+            if fw is not None:
+                Sf = -0.5 * rho[:, None] * fw.pressure(fps, fadj, torch.ones_like(P), torch.ones_like(self.surfaceDilated))
+            else:
+                Sf = self._sum(V[j][:, None] * gW, i)
+            interior = (~self.surfaceDilated).to(F64)[:, None]                                       # not at a free surface: there the truncation of the support is physical, not a layout defect
+            acc = acc + interior * (((1.0 + s) * P)[:, None] * Sf + (pp + s * P)[:, None] * G.sum(0)) / rho[:, None]
         # artificial viscosity (fluid only)
         viscf = None                                                                               # the fluid-pair viscous acceleration (the curvature estimate of the second-order no-slip wall)
         if cfg.viscosity:

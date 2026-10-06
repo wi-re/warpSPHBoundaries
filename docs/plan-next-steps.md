@@ -194,6 +194,20 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
   momentum conservation by O(S_i); a corrected symmetric form `... - 2 P_i S_i` is the same thing.  Alternatively a particle layout / volumes with S_i = 0 (not reachable for a curved wall by `pack`), or per-particle volumes.
 * Also tried and dropped: a normal-component closure with `a_n = 0` (unstable: the polynomial over-extrapolates), the viscous term in the wall pressure condition (`wallPressureViscous`: -0.4 % on K, left as an option).
 
+### `pressureConsistent` (option 1, 2026-10-07)
+
+* **What it does**: the force a uniform pressure would exert through the layout residual, `[(1 + s) P S_f + (pp + s P) G] / rho` (`S_f` = the fluid-pair kernel-gradient sum, one extra call of the Antuono module with P = 1), is removed from the particle
+  acceleration: the pressure force becomes the difference form `sum V (P_j - P_i) grad W + (P_w - P_i) G` with the hydrostatic extension A; a uniform pressure of any level and sign gives zero acceleration to round-off (`tests/sim/test_pressure_consistent.py`).  The
+  body loads use `2 (P - mean P) G + A` (a uniform pressure exerts no net force on a closed body; without this the booked force follows the level: F / balance 0.97 / 0.85 / 0.73 at rho = 1 / 1.02 / 1.05).  Not applied at the free surface (the truncation
+  there is physical): with the mask the tank and the dam break run.  `backgroundPressure` (P = c0^2 (rho - rho0) + P_b, density untouched) is the clean way to test the level.
+* **Result (cylinder array, n = 48, noslipMoment)**: plain: K = 27.9 / 32.1 / 39.4 at P_b = 0 / 2 / 5 (the physical answer cannot depend on it); consistent: K = 27.17 and 27.17 at P_b = 0 and 5, F / balance 0.997 at both: the flow and the loads no longer depend on the pressure level.
+  The remaining deficit against the Sangani-Acrivos / Fourier reference (30.3, 29.8-30.3) is 10 % (0.897), now a real discretisation or model error, not the pressure level.
+* **Costs**: the difference form is not exactly momentum conserving (O(S_i P)); in the free-surface cases, with the interior mask, the bit baselines change (as expected) and the hydrostatic tank gets noisier: tank KE at t = 1: 5.4e-5 vs 7.3e-7, rmseBulk 1.9e-3 vs 1.5e-3;
+  dam break KE vs the reference B 2.0 %, P1 arrival 2.478 t* (2.49 reference; the plain baseline 2.474).  Default off.
+* **Wall renormalisation (Kulasegaram gamma, Ferrand / Mayrhofer)** does not remove this inconsistency: gamma is the ZEROTH-order partition of unity (`gamma_i = sum V W + lambda_wall`) and divides the operators; the uniform-pressure force is the FIRST-order
+  consistency `S_i = sum V grad W + mu grad lambda`, which gamma does not enforce.  What does is a renormalised gradient in difference form (`L_i sum V (P_j - P_i) grad W`, `L = (sum V (x_j - x_i) (x) grad W)^{-1}`, the matrix `Mf + Mw` the shifting already assembles): exact for uniform AND linear fields (hydrostatics included),
+  at the cost of non-conservative forces.  Ferrand's gamma form keeps symmetric forces through its boundary term, but needs a layout that satisfies the discrete identity (what `pack` cannot reach on a curved wall).
+
 ### Risks
 
 * The Dirichlet frame pins a region that is also a shifting / density-diffusion neighbour; edge effects at the frame feed the wake through the periodic image.  Rung 5 quantifies this.
