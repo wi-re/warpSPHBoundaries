@@ -83,6 +83,7 @@ class DeltaSPHConfig:
     wallParticleSpacing: float = 0.0    # > 0: the wall as a lattice of wall particles of this spacing (in dx) summed pairwise (scene/particles.py, the particle representation of the boundary provider; eager only), 0 = the analytic bodies (exact integrals)
     periodic: Optional[Periodic] = None   # periodic box (pairs.py): minimum-image pair geometry on the raw positions, which are never wrapped; fluid-fluid terms only (the wall integrals take their own image shifts, step 1b of docs/plan-next-steps.md)
     bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
+    wallFrictionLever: str = "particle"  # where the no-slip wall friction acts for the TORQUE on the body: "particle" (where the fluid loses the momentum: the fluid angular momentum balance, torque conserved between walls: measured 1.000 on Taylor-Couette) or "contact" (the wall point: 0.83 to 1.2 off)
     bodyForceAtWall: bool = True        # the body force enters the wall pressure condition dp/dn = rho (g + f - a_wall) . n (a uniform force acts on the fluid at a wall like gravity; it is not hydrostatic in the density diffusion)
     pinned: Optional[Pinned] = None     # a prescribed-velocity band of fluid particles (pinned.py): the free stream of a periodic flow past a body
     fluidWarp: bool = True              # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
@@ -417,7 +418,7 @@ class DeltaSPH2D:
                     if cfg.wallViscosityForm == "noslipCurv":                                       # second order: the wall gradient is (v_rel / d) - (d / 2) lap v, not v_rel / d (the profile is not linear: v = a s + (lap v / 2) s^2 through the wall point, lap v = the viscous acceleration of the particle / nu)
                         kappa = (gm * dd / rho)[:, None]                                            # c d / (2 nu) with c = 2 nu |G| / rho
                         term = torch.where(on, (term + kappa * viscf) / (1.0 + kappa), torch.zeros_like(v))
-                    if lever is not None:
+                    if lever is not None and cfg.wallFrictionLever == "contact":
                         lever[bi] = cp
                 acc = acc + term
                 if visc is not None:
@@ -442,7 +443,7 @@ class DeltaSPH2D:
                     dd = d.clamp(min=0.25 * self.dx)                                                   # the 1/d floor (the no-penetration law keeps particles at d >= ~0.25 dx)
                     cp = x[near] - d[:, None] * nsd                                                    # the wall velocity of the friction is the one at the wall point
                     accv = torch.where(hit[:, None], -2.0 * (fac / 8.0) * (v[near] - b.velocityAt(cp)) * (gm[near] / (rho[near] * dd))[:, None], torch.zeros_like(v[near]))   # fac/8 = nu_eff; gm = |G_b|; all-components relative velocity (no-slip)
-                    if lever is not None:
+                    if lever is not None and cfg.wallFrictionLever == "contact":
                         lever[bi, near] = cp
                 elif cfg.wallViscosityForm == "laplacian":
                     accv = (-2.0 * (fac / 8.0) * cfg.wallMass * un[near] / rho[near] * dl[bi])[:, None] * nb_[near]   # fac/8 = fac/(2(d+2)), d = 2: moment identity, viscosity.py

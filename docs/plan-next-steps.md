@@ -132,10 +132,19 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
   extrapolated pressure for the wall pressure condition (consistent with `bodyForceAtWall`).  `noslipCurv` (this session, derived locally: gradient `v_rel / d - (d/2) lap v` with `lap v` from the particle's viscous acceleration) is the
   second-order member of the same family obtained from the momentum balance instead of a least-squares fit; no citation for this exact form was found.
 * **Planar wall**: `noslipCurv` brings the plane Poiseuille amplitude to 1.011 / 1.006 / 1.001 at n = 32 / 48 / 64 (flux form 0.95-0.97, mirror 0.90-0.93), momentum balance 0.999.
-* **Curved walls are not yet right**: Taylor-Couette (r1 = 0.2, r2 = 0.5, n = 48, `noslipCurv`): profile amplitude 0.908, torque on the inner cylinder 0.727 of the exact value, torque on the outer 1.127 of minus the inner (angular momentum
-  is not balanced between the walls).  Periodic cylinder array: K = 27.5 vs 30 (the body force in the wall pressure condition changes it by < 0.5 %).  Suspects, to be tested on the annulus: (a) the flux form uses
-  `|G| = |sum_s grad gamma_s|` (the net vector) where the sum of the segment magnitudes `sum_s |grad gamma_s|` (`oint W dl`) belongs for a curved wall; (b) the load bookkeeping applies the tangential wall friction at the contact point
-  (lever = cp) while the fluid loses angular momentum at the particle position, so the torque is not conserved between the two bodies (factor r_cp / r_p ~ 1 - 0.5 dx / r).
+* **Curved walls (Taylor-Couette, r1 = 0.2, r2 = 0.5, `scripts/studies/taylor_couette.py`)**:
+  * *Torque bookkeeping, FIXED*: the tangential wall friction was booked at the contact point while the fluid loses the momentum at the particle position, so the torque was not conserved between the two walls (outer / -inner
+    1.13 at n = 48, 1.21 at n = 32).  `wallFrictionLever="particle"` (now the default) books it where the fluid loses it: outer / -inner = 1.0004, and `tests/sim/test_wall_friction_torque.py` checks
+    `sum torque + sum m x cross acc = 0` to 1e-9 (the contact lever fails it by > 1 %).  The force on a body is unchanged.
+  * *The flow is still not right* (n = 32 / 48, after the lever fix, torque conserved): flux form `noslip`: profile amplitude 0.931 / 0.949, inner torque 0.774 / 0.77 of the exact; `noslipCurv`: 0.908 at n = 48 (the full Laplacian is
+    not the wall-normal second derivative on a curved wall: for Couette flow lap u = 0 but u'' = 2B/r^3 != 0, so the correction must carry the curvature terms; it is exact on flat walls only); `noslipMirror` (exact
+    wall integral): torque 1.031 of the exact and balanced 1.001, but the profile is non-monotone-wrong (u_theta 0.159, 0.163, 0.140 vs exact 0.175, 0.141, 0.114 in the three inner bins) and the outer bin does not vanish.
+    So no closure is right on both walls; the errors are 5-25 % at r1 / H = 2.4 and r2 / H = 6.
+  * Periodic cylinder array: K = 27.5 vs 30 (the body force in the wall pressure condition changes it by < 0.5 %).
+  * Candidate next steps (decision pending): (a) the weighted local least-squares polynomial along the wall normal with the wall value constrained (Mayrhofer et al. section 6; second order for flat and curved
+    walls, needs the fluid neighbour sums of each near-wall particle along its own normal); (b) a curvature-aware version of `noslipCurv` (normal second derivative from the vector Laplacian with the metric terms);
+    (c) first check that the FLUID operator transmits torque in rotational shear correctly (the alpha viscosity is a central pair form; a Couette flow in a periodic annulus-free setting, e.g. rigid-body-subtracted shear, would
+    separate the wall closures from the bulk operator).
 
 ### Risks
 

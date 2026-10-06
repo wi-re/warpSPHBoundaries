@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--H", type=float, default=4.0)
     ap.add_argument("--time", type=float, default=25.0)
     ap.add_argument("--wall", default="noslipCurv")
+    ap.add_argument("--lever", default="particle", help="wallFrictionLever: contact | particle")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -45,7 +46,7 @@ def main():
     nu = shear_nu(a.n, alpha, a.c0, a.device, a.H)
     inner = Body(bodyId=0, center=(0.0, 0.0), angularVelocity=a.omega, reps=[DiskArrayRep([(0.0, 0.0)], [a.r1])])
     outer = Body(bodyId=1, center=(0.0, 0.0), reps=[ImplicitRep(DiskBody(center=(0.0, 0.0), radius=a.r2, solid="outside"))])
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=alpha, graphStep=False, shifting=True, wallViscosityForm=a.wall)
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=alpha, graphStep=False, shifting=True, wallViscosityForm=a.wall, wallFrictionLever=a.lever)
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, Scene([inner, outer], a.device), cfg, a.device, support=a.H * dx)
     hist = LoadHistory()
     while sim.time < a.time:
@@ -63,6 +64,8 @@ def main():
     bins = np.linspace(a.r1, a.r2, 9)
     prof = [ut[(rr >= b0) & (rr < b1)].mean() / ex[(rr >= b0) & (rr < b1)].mean() for b0, b1 in zip(bins[:-1], bins[1:])]
     print(f"n={a.n} N={len(pos)} nu_shear={nu:.5f} wall={a.wall} (Re = {a.omega * a.r1 * (a.r2 - a.r1) / nu:.1f})")
+    absu = [(round(float(ut[(rr >= b0) & (rr < b1)].mean()), 4), round(float(ex[(rr >= b0) & (rr < b1)].mean()), 4)) for b0, b1 in zip(bins[:-1], bins[1:])]
+    print(f"u_theta (measured, exact) by radial bin: {absu}")
     print(f"profile amplitude / exact = {amp:.4f}; by radial bin (inner -> outer): {np.round(prof, 3).tolist()}")
     print(f"torque on the inner cylinder {T1:+.5f}  exact {T_ex:+.5f}  ratio {T1 / T_ex:.4f};  torque on the outer {T2:+.5f} (about its centre; = -inner {-T1:+.5f}: ratio {T2 / -T1:.4f})")
 
