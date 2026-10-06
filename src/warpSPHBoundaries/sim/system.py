@@ -83,6 +83,7 @@ class DeltaSPHSystem(BaseIntegrationSystem):
         if sim.cfg.shifting:
             sim.x = sim.x + sim.shift(dt)
         nopen = sim.no_penetration()
+        sim.apply_pinned()
         st.positions, st.velocities = sim.x, sim.v
         aux = returnValues[1][0]
         sim._finalAux = dict(acc=aux["acc"], forces=aux["forces"], nopen=nopen, nopenLoad=sim._nopenLoad)

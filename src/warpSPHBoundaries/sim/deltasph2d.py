@@ -39,6 +39,7 @@ from ..scene.scene import BodyField, Scene, sceneOperation
 from ..scene.tensile import tensile_factor, tensile_vector_scene
 from ..scene.viscosity import lap_factor, lap_lambda_scene
 from ..scene.periodic import Periodic, min_image
+from .pinned import Pinned
 from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
@@ -81,6 +82,8 @@ class DeltaSPHConfig:
     graphStep: bool = True              # step 5b of the plan: replay the whole step as a CUDA graph (graphstep.py; needs fluidWarp, fusedWall, static surface-loop walls, else eager)
     wallParticleSpacing: float = 0.0    # > 0: the wall as a lattice of wall particles of this spacing (in dx) summed pairwise (scene/particles.py, the particle representation of the boundary provider; eager only), 0 = the analytic bodies (exact integrals)
     periodic: Optional[Periodic] = None   # periodic box (pairs.py): minimum-image pair geometry on the raw positions, which are never wrapped; fluid-fluid terms only (the wall integrals take their own image shifts, step 1b of docs/plan-next-steps.md)
+    bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
+    pinned: Optional[Pinned] = None     # a prescribed-velocity band of fluid particles (pinned.py): the free stream of a periodic flow past a body
     fluidWarp: bool = True              # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
@@ -439,9 +442,28 @@ class DeltaSPH2D:
                 if visc is not None:
                     visc[bi].index_add_(0, near, accv)
         acc = acc + self.g[None]
+        if cfg.bodyForce != (0.0, 0.0):
+            acc = acc + self._const(cfg.bodyForce)[None]
+        if cfg.pinned is not None:
+            acc = acc * (1.0 - cfg.pinned.weight(x, cfg.periodic))[:, None]                    # the band is prescribed, not integrated
         if forces is not None:
             forces = torch.stack([forces, self._load(visc, lever) if visc is not None else torch.zeros_like(forces)])      # [2, B, 3]: pressure, wall viscous; (Fx, Fy, torque about the centre)
         return acc, drho, forces
+
+    def _const(self, values):
+        """a small constant as a device tensor, made once (a host-to-device copy cannot be captured in a CUDA graph; the first use is in the eager warm-up)."""
+        cache = self.__dict__.setdefault("_constCache", {})
+        key = tuple(values)
+        if key not in cache:
+            cache[key] = torch.tensor(key, dtype=F64, device=self.dev)
+        return cache[key]
+
+    def apply_pinned(self):
+        """end of a step: the velocity of the prescribed band is the free stream (weighted by the ramp); the positions are untouched."""
+        pin = self.cfg.pinned
+        if pin is not None:
+            w = pin.weight(self.x, self.cfg.periodic)[:, None]
+            self.v = self.v + w * (self._const(pin.velocity)[None] - self.v)
 
     def loadsAt(self, x, v, rho):
         """POST-HOC wall loads from an exported state: [2, B, 3] = (pressure, wall viscous) x per body (Fx, Fy, torque z about the body centre) of the fluid state (x, v, rho) at the CURRENT body poses of `self.scene`
@@ -558,6 +580,8 @@ class DeltaSPH2D:
         upd = upd * torch.where(cap > 0, (cap / mag.clamp(min=1e-30)).clamp(max=1.0), torch.ones_like(mag))      # no cap while the flow is at rest (cap = 0)
         upd = upd.clamp(-cfg.shiftThreshold * self.dx, cfg.shiftThreshold * self.dx)
         self.surface, self.surfaceDilated = st["surface"], F
+        if cfg.pinned is not None:
+            upd = upd * (1.0 - cfg.pinned.weight(x, cfg.periodic))[:, None]
         return upd
 
     def _wall_velocity(self, x, d, n, bidx):

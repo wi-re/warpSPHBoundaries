@@ -79,6 +79,13 @@ This is also the case the fibre-permeability studies need.
 1d. **Load extraction.**  Drag and lift coefficients from `wallLoads` (pressure + wall viscous + impulse), averaged over a window; a helper that computes C_D, C_L,
     Strouhal number (FFT of the lift) and the booked load history.  `loadsAt` on an exported trajectory gives the same numbers (test).
 
+**1c DONE (2026-10-06, `main`).**  `sim/pinned.py` `Pinned(slabs, velocity, ramp)`: the band is slabs `|min_image(x_axis - c)| < half` of the periodic box (a slab at the seam wraps); inside the momentum equation is replaced
+by the prescription (acceleration weighted away, velocity set to the stream at the end of every step in `finalize`, shift off); the particles remain ordinary fluid particles in every sum.  `cfg.bodyForce` is the momentum-only driver
+(not gravity: outside the hydrostatic density-diffusion term, the wall pressure condition and the no-penetration law).  `tests/sim/test_pinned_frame.py`: uniform stream stationary through the seam, band holds the stream and drives
+the rest, body force gives v = f t with no pressure response, fibre + band + body force graph = eager and offsets do not matter.
+**1d DONE.**  `sim/loads.py`: `LoadHistory` (books `wallLoads` per step), `loads_from_frames` (pressure + viscous from exported raw frames via `loadsAt`, interval means), `coefficients` (C_D along the stream, C_L 90 deg
+counter-clockwise, 1/2 rho U^2 D), `strouhal`, `window_mean`; `tests/sim/test_loads_helpers.py`.
+
 ### Validation ladder (each rung is a script in `scripts/` and a short test)
 
 1. **Rest and invariance.**  Fluid at rest in the periodic box with an obstacle: loads are the hydrostatic buoyancy only (no spurious drag from the periodic wall sums);
