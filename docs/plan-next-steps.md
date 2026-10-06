@@ -25,7 +25,7 @@ This is also the case the fibre-permeability studies need.
 
 ### Setup (the warpSPH `movingObstacle` style, kept)
 
-* Domain periodic in x and y (or only x for a channel with walls).
+* Domain periodic in x and y (or only x for a channel with walls); the particle positions are raw, unwrapped trajectories (see 1a).
 * The fluid is a full periodic box with the body cut out.  A band of fluid particles at the outer border of the box (the wrapping region) has its velocity **prescribed**
   (Dirichlet, free stream U∞).  No inlets or outlets: the particle count and the particle identities are constant, so a trajectory can be exported and the loads recovered
   post-hoc with `loadsAt` (verified, 5e-4 frame mean).
@@ -35,17 +35,27 @@ This is also the case the fibre-permeability studies need.
 
 ### Work packages
 
-1a. **Periodic fluid pairs.**  `neighbor_pairs` (dense and cell-list variants) with the minimum-image displacement; the pair vector `d = x_i - x_j` is then minimum-imaged
-    everywhere it is formed (detection, shifting, density diffusion, no-penetration, wall-adjacent corrections; the sites are `deltasph2d.py:272`, `:356` and the three
-    `sim/modules` kernels, which already carry a periodic term in the generated code to be checked).  Positions are wrapped into the box after each step; indices are unchanged.
-    Test: a translation of the whole configuration by a non-multiple of the box length leaves all fluid sums unchanged to round-off; a particle crossing the border keeps its
-    index and its sums.
-1b. **Periodic wall integrals.**  Two options, decision after a short measurement:
-    * *per-slot shift* (preferred): the slot builder of `fixedadj.py` (polygon and disk) tests the query against the nine images of the body bounding box / disk centre and
-      stores an integer shift in the slot; the contraction subtracts `shift * L` from the query position of that slot.  The body is single, the loads are those of the
-      real body, the cost is one extra slot index.  A disk needs R + support < L/2; an arbitrary body needs the support below half the free gap.
-    * *image bodies*: replicate the body 3x3 (exact, no kernel change) but the loads then count the images and the per-body cost grows 9x; only a fallback.
-    Test: a periodic array evaluated with the shift equals the same body replicated 3x3 with the box clipped, per particle and channel, to the table accuracy.
+1a. **Periodic fluid pairs, raw positions untouched (user, 2026-10-06).**  The stored positions are never wrapped, clipped or modified: `x` is the integrated state, so
+    dx/dt along a trajectory stays exact (ML training on trajectories, exported frames, `loadsAt`).  Periodicity lives only in the pair geometry:
+    * the displacement is minimum-imaged where it is formed, `d = x_i - x_j - L * round((x_i - x_j) / L)` per periodic axis, for any drift (a particle may be many box
+      lengths away from the box);
+    * the neighbour search hashes a **temporary wrapped copy** of the positions for the cell lists (cell ids only) and returns pairs; the distances and vectors of the pairs are
+      then computed from the raw positions with the minimum image; the copy is discarded;
+    * every site that forms a pair vector uses the one helper (`deltasph2d.py:272`, `:356`, the `sim/modules` kernels, which already take a periodic term in the generated
+      code, to be checked), so there is no second convention.
+    Test: a translation of the whole configuration by an arbitrary vector (not a multiple of L), and by several box lengths, leaves all fluid sums unchanged to round-off; a
+    particle that crosses the border keeps its raw coordinate continuous (x(t + dt) - x(t) = v dt exactly, no jump of L) and its sums are continuous; the stored positions are
+    bit-identical before and after `rhs` (the arrays are not written).
+
+1b. **Periodic wall integrals, one real body (user, 2026-10-06).**  Per-slot shift, no image bodies.  The slot builder of `fixedadj.py` (polygon and disk) takes the raw
+    query position, forms the integer image shift of the body (`round((x - c_body) / L)`, valid for any drift), tests the shifted query against the static cell list of the
+    body, and stores the shift in the slot; the contraction evaluates the wall geometry with the shifted query position of that slot (a local value; the raw position is never
+    written).  There is one body: its poses, loads, mass and kinematics are the real ones; the periodic images exist only as shifted queries.  A disk needs R + support < L/2;
+    an arbitrary body needs the support below half the free gap (checked at build, with a clear error).  Fibre bundles: the shift is per fibre slot (each fibre of the bundle has its own
+    nearest image).
+    Test: a periodic array evaluated with the shift equals the same body replicated 3x3 (a test-only construction) with the box clipped, per particle and channel, to the table
+    accuracy; the loads of the single body equal the per-image loads summed over the replicas divided by the number of images.
+
 1c. **Prescribed-velocity frame.**  `cfg.pinned` (bool mask or region callback on the initial positions): velocity set to U∞ at the end of every stage, excluded from
     shifting and no-penetration, still counted as fluid in all sums (density, pressure); the same mask is what the `zeros` / `constant` BC closure of item 4 uses.
     Test: a uniform stream in an empty periodic box is stationary (all rates zero).
@@ -74,7 +84,8 @@ This is also the case the fibre-permeability studies need.
 
 * The Dirichlet frame pins a region that is also a shifting / density-diffusion neighbour; edge effects at the frame feed the wake through the periodic image.  Rung 5 quantifies this.
 * The wall viscosity under the relative no-penetration law is not yet exercised at Re ≪ 1; rung 4 is the first test (a stronger gate than the dam break).
-* Periodic + `fixedAdjacency`: the bounded-slot capacity K must account for images; the slot builder reports overflow in the existing check.
+* Periodic + `fixedAdjacency`: the slot capacity K is unchanged (one image per fibre per query within the support); the slot builder reports overflow in the existing check.
+* Unwrapped positions grow with time: float32 resolution degrades far from the origin; the minimum image is computed from the difference of two large numbers.  Measure it (position range of a long run) and, if needed, compute the image shift in float64 and the displacement as a difference of the wrapped remainders; the stored state still stays raw.
 * Time step at Re ≪ 1 is viscous-limited; the graph step handles a constant dt, an adaptive dt is item 7.
 
 ## Remaining items (short notes)
