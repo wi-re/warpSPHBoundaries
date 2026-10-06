@@ -65,6 +65,10 @@ def main():
     prof = [ut[(rr >= b0) & (rr < b1)].mean() / ex[(rr >= b0) & (rr < b1)].mean() for b0, b1 in zip(bins[:-1], bins[1:])]
     print(f"n={a.n} N={len(pos)} nu_shear={nu:.5f} wall={a.wall} (Re = {a.omega * a.r1 * (a.r2 - a.r1) / nu:.1f})")
     absu = [(round(float(ut[(rr >= b0) & (rr < b1)].mean()), 4), round(float(ex[(rr >= b0) & (rr < b1)].mean()), 4)) for b0, b1 in zip(bins[:-1], bins[1:])]
+    M = np.stack([rr, 1.0 / rr], 1)
+    Ap, Bp = np.linalg.lstsq(M, ut, rcond=None)[0]
+    T_fit = -4 * math.pi * nu * Bp                                      # the torque the measured profile transmits, 2 pi r^2 mu (u' - u / r) = -4 pi mu B'
+    print(f"profile fit u = A' r + B' / r: A' = {Ap:.4f} (exact {-a.omega * a.r1 ** 2 / (a.r2 ** 2 - a.r1 ** 2):.4f}), B' = {Bp:.5f} (exact {a.omega * a.r1 ** 2 * a.r2 ** 2 / (a.r2 ** 2 - a.r1 ** 2):.5f}); torque of the fitted profile {T_fit:+.5f}; u at the inner wall from the fit {Ap * a.r1 + Bp / a.r1:.4f} (wall {a.omega * a.r1:.4f}), at the outer {Ap * a.r2 + Bp / a.r2:+.4f}")
     print(f"u_theta (measured, exact) by radial bin: {absu}")
     print(f"profile amplitude / exact = {amp:.4f}; by radial bin (inner -> outer): {np.round(prof, 3).tolist()}")
     print(f"torque on the inner cylinder {T1:+.5f}  exact {T_ex:+.5f}  ratio {T1 / T_ex:.4f};  torque on the outer {T2:+.5f} (about its centre; = -inner {-T1:+.5f}: ratio {T2 / -T1:.4f})")

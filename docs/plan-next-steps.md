@@ -151,6 +151,28 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
     (c) first check that the FLUID operator transmits torque in rotational shear correctly (the alpha viscosity is a central pair form; a Couette flow in a periodic annulus-free setting, e.g. rigid-body-subtracted shear, would
     separate the wall closures from the bulk operator).
 
+### Exact-moment wall closure `noslipMoment` (2026-10-06, user request: try the exact geometric moment integral first, then Mayrhofer)
+
+* **Derivation** (`sim/wallmoments.py`).  The fluid sum is the pair form `acc_i = fac sum_j V_j / rho_ij P(r_ij) (v_i - v_j)`, `P = (W'/r^3) r (x) r`.  Truncated at the wall, the missing part is the same integral over the solid S with a continuation of the
+  velocity field; for a continuation that is a polynomial of the wall distance, relative to the wall, `w_ext = a s + (L/2) s^2`, it is `A_w = -beta [T1 a + (T2/2) L - T0 w]`, `beta = fac wm / rho`, `Tk = int_S P s'^k dA'` (tabulated
+  for the half-plane, diagonal in (n, t), checked against direct quadrature; a rigid wall motion adds nothing: P annihilates every field with `u_ij . r_ij = 0`).  `a`, `L` from `w(d) = w_i` and the viscous balance of the particle (fluid
+  pair sum + wall term = `nu_p (lap w + 2 grad div w)`, `nu_p = fac / 8`; normal component factor 3; tangential curvature terms `lap w_t = w'' + kappa w' - kappa^2 w`, `kappa = div n` by a central difference of the wall normal).
+* **Plane wall**: operator on the exact Poiseuille parabola: rows next to the wall within 3-16 % (flux form: -0.15 to 2.7 times); channel amplitude 0.967 / 0.981 at n = 32 / 64 (flux 0.950 / 0.966, mirror 0.90 / 0.93), momentum balance 1.001.
+  The remainder is lattice quadrature of the FLUID sum (continuum-exact closure, discrete particle sum): measured fluid sum / continuum prediction for the same quadratic field = 1.00, 0.79-0.87, 1.0-1.06, then the bulk 0.96 for rows 0..4
+  (row 1 depends on n through the linear part `a` of the profile).  Larger H/dx lowers it (0.98 / 1.08 / 1.0 at H/dx = 6) but the channel amplitude falls with H (0.967, 0.967, 0.960, 0.935 at H/dx = 4, 5, 6, 8 for n = 32)
+  because a particle then sees both walls and each wall solves its own profile independently (the double counting needs a joint solve).
+* **Curved walls**: cylinder array K = 28.34 (0.935 of the reference; flux form 0.91); Taylor-Couette (r1 = 0.2, r2 = 0.5, n = 32): profile 0.943 and UNIFORM in radius (every earlier closure had a radius-dependent profile), torque balanced
+  0.9966, inner torque 0.766.  Wide annulus (r2 = 0.7, gap 16 dx so that one particle never sees both walls), H/dx = 4 / 6 / 8: profile 0.939 / 0.934 / 0.939, torque 0.858 / 0.858 / 0.870: independent of H, so NOT the lattice error of the bulk
+  operator (which falls from 10 % to 0.7 % over that range).  Fit of the measured profile `u = A' r + B' / r`: u at the INNER wall 0.1875 for a wall speed 0.2 (6 % slip at the convex rotating wall), at the outer wall +0.0013 (no slip).
+* **Torque accounting** (`tc_balance`, n = 24): the pair-viscous torque into the inner shell and the wall torque on it cancel to 1e-3 at three radii (the discrete system conserves angular momentum), but the torque the discrete operator transmits
+  (0.0077) is 0.81 of the continuum value for the fitted profile, `-4 pi nu B' = 0.0096` (nu = the shear-wave viscosity): the central pair form transmits less torque in rotational shear than in rectilinear shear at H/dx = 4 (and 0.91-0.93 for
+  H/dx = 4 - 8 in the wide annulus).  Together with the slip at the convex wall these two account for the torque ratio 0.77-0.86.
+* **Monaghan switch** (user, 2026-10-06): the solver passes `approachOnly=False` (all pairs, `fluidwarp.py`), which is why the measured bulk viscosity is 0.955 of the nominal `alpha c0 H / (8 xi)`; warpSPH's default applies viscosity to approaching
+  pairs only, which lowers the effective bulk viscosity by roughly 40 % at the same alpha.  Port consequence: the wall closure here (tables, `nu_p = fac / 8`) is the all-pairs form; with the switch the pair weight becomes one-sided and
+  field-dependent, so the wall term would need the same switch (not covered).
+* **Open**: (1) the 6 % slip at the convex rotating wall, independent of H; the tables are for a flat half-plane, a convex wall has less solid (the true moments of S need the curved region); (2) the double wall counting; (3) the neighbour-based fit
+  (Mayrhofer et al. section 6) to absorb the lattice quadrature of the fluid sum.
+
 ### Risks
 
 * The Dirichlet frame pins a region that is also a shifting / density-diffusion neighbour; edge effects at the frame feed the wake through the periodic image.  Rung 5 quantifies this.

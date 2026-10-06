@@ -40,6 +40,7 @@ from ..scene.tensile import tensile_factor, tensile_vector_scene
 from ..scene.viscosity import lap_factor, lap_lambda_scene
 from ..scene.periodic import Periodic, min_image
 from .pinned import Pinned
+from .wallmoments import WallPairMoments
 from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
@@ -338,8 +339,8 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None and (not isinstance(adj, WallAggregate) or not self._graphMode):         # the index list is only needed by the non-fused and the 'pairwise' paths (and diagnostics); a graph capture has none
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
-        if cfg.viscosity and cfg.wallViscosity and cfg.wallViscosityForm not in ("laplacian", "pairwise", "noslip", "noslipMirror", "noslipCurv"):
-            raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise', 'noslip', 'noslipMirror' or 'noslipCurv', got %r" % (cfg.wallViscosityForm,))
+        if cfg.viscosity and cfg.wallViscosity and cfg.wallViscosityForm not in ("laplacian", "pairwise", "noslip", "noslipMirror", "noslipCurv", "noslipMoment"):
+            raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise', 'noslip', 'noslipMirror', 'noslipCurv' or 'noslipMoment', got %r" % (cfg.wallViscosityForm,))
         self.surface = self._detect_surface(x, None if fk else i, None if fk else j, None if fk else r, lam, adj, fk)
         if cfg.dilateSurface:
             self.surfaceDilated = fk.dilate(self.surface) if fk else self._sum(self.surface[j].to(F64), i) > 0.5            # pairs include i = j
@@ -394,7 +395,7 @@ class DeltaSPH2D:
         if want_forces and self.nb and cfg.viscosity and cfg.wallViscosity:
             visc = torch.zeros((self.nb, len(x), 2), dtype=F64, device=self.dev)                    # per body acceleration of the wall viscous term, for the load of the fluid on the body
             lever = x[None].repeat(self.nb, 1, 1)                                                   # where the reaction acts: the particle, or the contact point for the tangential no-slip friction
-        if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip", "noslipMirror", "noslipCurv"):
+        if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip", "noslipMirror", "noslipCurv", "noslipMoment"):
             fac = cfg.alpha * cfg.c0 * H / self.xi                                                  # full-length form: the near-wall rows are a mask, not an index list (no host sync)
             nearm = (lam.sum(0) > 1e-9).to(F64)
             for bi, b in enumerate(self.scene.bodies):
@@ -407,6 +408,14 @@ class DeltaSPH2D:
                 elif cfg.wallViscosityForm == "noslipMirror":                                       # the same exact wall Laplacian with the antisymmetric mirror: the wall continuum moves with 2 v_w - v, the whole relative velocity flips (free slip flips its normal part only)
                     dl = lap_factor(H, self._family()) * adj.out["lap"][bi]
                     term = (-2.0 * (fac / 8.0) * cfg.wallMass / rho * dl * nearm)[:, None] * (v - b.velocityAt(x))
+                elif cfg.wallViscosityForm == "noslipMoment":
+                    dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
+                    dd = dsd.clamp(min=0.25 * self.dx)
+                    cp = x - dsd[:, None] * nsd
+                    on = (hit & (nearm > 0))[:, None]
+                    term = torch.where(on, self._moment_wall_term(bi, x, v - b.velocityAt(cp), nsd, dd, viscf, rho, fac), torch.zeros_like(v))
+                    if lever is not None and cfg.wallFrictionLever == "contact":
+                        lever[bi] = cp
                 else:
                     dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
                     dd = dsd.clamp(min=0.25 * self.dx)
@@ -462,6 +471,44 @@ class DeltaSPH2D:
         if forces is not None:
             forces = torch.stack([forces, self._load(visc, lever) if visc is not None else torch.zeros_like(forces)])      # [2, B, 3]: pressure, wall viscous; (Fx, Fy, torque about the centre)
         return acc, drho, forces
+
+    def _moment_wall_term(self, bi, x, w, n, d, viscf, rho, fac):
+        """the wall part of the viscous acceleration of a no-slip wall from the moments of the pair weight over the solid (sim/wallmoments.py): the velocity relative to the wall is a polynomial of the wall distance,
+        w(s) = a s + (L / 2) s^2 (a, L per component in the frame (n, t)), with  w(d) = w_i  and the viscous balance of the particle (the fluid pair sum `viscf` plus this wall term = nu_p (lap w [+ 2 grad div w]),
+        nu_p = fac / 8; the normal component carries the factor 3 of the pair form, the tangential one the curvature terms of the wall kappa = div n: lap w_t = w_t'' + kappa w_t' - kappa^2 w_t)."""
+        if getattr(self, "_wpm", None) is None:
+            self._wpm = WallPairMoments(self.dW, self.H, self.dev)
+        T = self._wpm.eval(d)                                                                    # [2 (nn, tt), 3, N]
+        t = torch.stack([-n[:, 1], n[:, 0]], 1)
+        kap = self._curvature(bi, x, n, t)
+        bn = 8.0 * self.cfg.wallMass / rho                                                       # beta / nu_p
+        beta = fac * self.cfg.wallMass / rho
+        wn, wt = (w * n).sum(1), (w * t).sum(1)
+        fn, ft = (viscf * n).sum(1), (viscf * t).sum(1)
+        nup = fac / 8.0
+
+        def solve(Tk, f, wc, c, curved):
+            g1 = Tk[1] / d - Tk[0]
+            h = 0.5 * (Tk[2] - d * Tk[1])
+            if curved:
+                den = 1.0 + bn * h + 0.5 * kap * d
+                rhs = f / nup - bn * g1 * wc - kap * wc / d + kap * kap * wc
+            else:
+                den = c + bn * h
+                rhs = f / nup - bn * g1 * wc
+            L = rhs / den
+            return -beta * (g1 * wc + h * L)
+
+        Awn = solve(T[0], fn, wn, 3.0, False)
+        Awt = solve(T[1], ft, wt, 1.0, True)
+        return Awn[:, None] * n + Awt[:, None] * t
+
+    def _curvature(self, bi, x, n, t):
+        """kappa = div n of the signed distance at the particles (tangential derivative of the wall normal, central difference over half a spacing): 1 / r for a convex circle, -1 / r concave, 0 on a plane."""
+        eps = 0.5 * self.dx
+        npl = self.scene.signed_distance(x + eps * t, body=bi, supportMax=self.H)[1]
+        nmi = self.scene.signed_distance(x - eps * t, body=bi, supportMax=self.H)[1]
+        return ((npl - nmi) * t).sum(1) / (2.0 * eps)
 
     def _gWall(self):
         """the body acceleration the wall pressure condition sees, dp/dn = rho (g + f - a_wall) . n: a uniform body force acts on the fluid at a wall like gravity (the wall must carry it), cfg.bodyForceAtWall."""
