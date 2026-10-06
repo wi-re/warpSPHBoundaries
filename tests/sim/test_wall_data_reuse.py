@@ -25,7 +25,7 @@ from edgebound.scene.scene import Scene
 DEVICES = ["cuda:0"] if wp.is_cuda_available() else ["cpu"]
 TD = torch.float64
 
-CFG = lambda device, fused=True: DeltaSPHConfig(noPen="impulse", shifting=True, fusedWall=fused)
+CFG = lambda device, fused=True: DeltaSPHConfig(noPen="impulse", shifting=True, fusedWall=fused, graphStep=False)       # host-call counts: no graph replay
 
 
 def _disable_cache(sim):

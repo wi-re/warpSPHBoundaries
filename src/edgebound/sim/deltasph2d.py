@@ -19,6 +19,7 @@ Units as warpSPH (rest density 1, P* = P / (rho0 g H)); Wendland C2, support H =
 
 Wall pressure: `P_b >= 0` (`clampWallPressure`): the hydrostatic extrapolation is a suction at a ceiling (dfsph-validation.md s.7); warpSPH's mDBC carries the ghost's own (possibly negative) pressure there.
 """
+import dataclasses
 import math
 from dataclasses import dataclass
 from typing import Optional
@@ -76,8 +77,8 @@ class DeltaSPHConfig:
     wallViscosityForm: str = "laplacian"   # "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples) | "noslip": no-slip wall (v_w = body velocity): Chiron-style flux term -2 nu_eff (v - v_w) |G| / (rho d), nu_eff = alpha c0 H/(8 xi), d = max(distance to the wall, 0.25 dx)
     fusedWall: bool = True              # step 3 of docs/plan-wall-evaluation.md: lam, G, Cov, A, the cover vector, the wall Laplacian and the tensile term of one position set from ONE fused kernel launch family (scene/fused.py); surface-loop walls with one support only, else the sceneOperation path is used
     fixedAdjacency: bool = True         # step 5 of the plan: the wall adjacency of the fused path in ONE Warp launch per (body, rep) with fixed shapes and no host sync (scene/fixedadj.py); False = Scene.adjacency (torch.nonzero / cell-list pair search), the oracle
-    graphStep: bool = False             # step 5b of the plan: replay the whole step as a CUDA graph (graphstep.py; needs fluidWarp, fusedWall, static surface-loop walls, else eager)
-    fluidWarp: bool = False             # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
+    graphStep: bool = True              # step 5b of the plan: replay the whole step as a CUDA graph (graphstep.py; needs fluidWarp, fusedWall, static surface-loop walls, else eager)
+    fluidWarp: bool = True              # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
     barecascoThreshold: float = math.pi / 3
@@ -135,6 +136,7 @@ class DeltaSPH2D:
         self.history = []
         self._w0 = float(self.W(torch.tensor([self.dx], dtype=F64, device=device), self.H)[0])          # W(dx): the tensile reference of the shift
         self._fluidwarp = None                                 # FluidWarp of cfg.fluidWarp (lazy)
+        self._graphCfg = None
         self._graphed = None                                   # GraphedStep (or False when the configuration does not allow it), lazy
         self._graphMode = False                                # True while the step is captured / replayed as a CUDA graph: no host-side caches or reads (graphstep.py)
         self._hc = None                                        # (Hvec tensor, all supports == H) cache of _constSupport
@@ -593,6 +595,10 @@ class DeltaSPH2D:
     def step(self):
         """one step: eager, or the replay of the captured CUDA graph when cfg.graphStep is set and the configuration allows it (graphstep.py)."""
         if self.cfg.graphStep:
+            ck = tuple(getattr(self.cfg, f.name) for f in dataclasses.fields(self.cfg))
+            if self._graphed is not None and ck != self._graphCfg:                    # a test or a sweep changed cfg on the live solver: decide (and capture) again
+                self._graphed = None
+            self._graphCfg = ck
             if self._graphed is None:
                 from .graphstep import GraphedStep, graphable
                 self._graphed = GraphedStep(self) if graphable(self) else False

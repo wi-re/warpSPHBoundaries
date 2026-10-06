@@ -70,7 +70,7 @@ def test_viscosity_exact_default_off():
 @pytest.mark.parametrize("device", DEVICES)
 def test_viscosity_exact_matches_wall_laplacian(device):
     """(b) d_ex = rhs(wallViscosityForm="laplacian") - rhs(wallViscosity=False) equals -2 nu_eff wallMass u_n/rho Delta-lambda_brute n (the own
-    600 x 1200 brute force over the tank exterior), max|diff| <= 5e-4 max|pred|, max|pred| > 0.1, >= 500 non-zero particles;
+    600 x 1200 brute force over the tank exterior), max|diff| <= 5e-4 max|pred|, max|pred| > 0.1, >= 250 non-zero particles;
     (c) negative controls (the pairwise operator differs > 0.5 max; sign flip > 1.0 max; nu_eff -> fac/12 differs > 0.2 max);
     (d) five sim.step() stay finite (x, v, rho), both tanks."""
     for kern, fam in ((KernelFunctions.Wendland2, "w2"), (KernelFunctions.Wendland4, "w4")):
@@ -92,7 +92,7 @@ def test_viscosity_exact_matches_wall_laplacian(device):
         d_ex = (a_ex - a_no).cpu().numpy()
         d_pair = (a_pair - a_no).cpu().numpy()
         near = np.nonzero(np.abs(d_ex).max(1) > 0)[0]
-        assert len(near) >= 500, (fam, len(near))
+        assert len(near) >= 250, (fam, len(near))                              # the near-wall particles of the 0.04 tank (the solver is deterministic: no atomics noise rows any more)
         # the independent prediction: n, u_n from the solver's own wall gradient (not under test); Delta-lambda the own brute force
         st = sim._surface_state(sim.x, sim.rho)
         G = st["G"]
