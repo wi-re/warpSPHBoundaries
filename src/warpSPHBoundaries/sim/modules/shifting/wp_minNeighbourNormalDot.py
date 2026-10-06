@@ -1,0 +1,229 @@
+"""Smallest dot product n_i . n_j of the unit surface normals over the neighbours j != i within the support, restricted to particles in the mask (`surfaceMask[i] != 0` and `surfaceMask[j] != 0`); a large number where
+there is none.  The curvature test of the delta+ surface shift (Sun et al. 2019: a shift towards the surface is only tangential where a neighbour's normal differs by more than the threshold angle).
+"""
+
+import warp as wp
+from warp.types import vector, matrix
+from typing import Any
+import torch
+from torch.profiler import profile, ProfilerActivity
+from warpSPHCore.profiling import record_function
+from typing import Optional, Union, Tuple
+from warpSPHCore import *
+
+__all__ = ['computeMinNeighbourNormalDotWarp']
+
+
+@wp.func
+def computeMinNeighbourNormalDot_Func_i(
+    # General Shape Parameters and indices
+    i : wp.int32,  dim: wp.int32,
+
+    # SPH properties for the query set (indexed by i)
+    xi: vector(dtype = scalar_t, length=Any), hi: scalar_t, mi: scalar_t, rhoi: scalar_t, # type: ignore
+
+    # SPH properties for the reference set (indexed by j in the neighbor loop)
+    referenceState: Any, # particleDataSoA with the exact type based on the dimensionality, e.g., particleDataSoA_2 for 2D, particleDataSoA_3 for 3D, etc.
+
+    # Domain and kernel parameters
+    domainState: domainData,
+    kernelProperties: kernelState,
+
+    # Operation specific parameters
+    beginIndex: wp.int32, # type: ignore
+    numIndices: wp.int32, # type: ignore
+    offsetArray: wp.array(dtype = wp.int64), # type: ignore
+
+    # Operation Mode for masking certain kinds of interactions, e.g. for directional operations
+    ki : wp.int32, referenceKinds : wp.array(dtype = wp.int32), # type: ignore
+
+    # Optional Correction Terms:
+    useGradientRenormalization: wp.bool, Li: matrix(shape=(Any, Any), dtype=scalar_t), # type: ignore
+    useGradHTerms: wp.bool, omega_i: scalar_t, referenceOmegas: wp.array(dtype = scalar_t),  # type: ignore
+    useVolume: bool, Vi: scalar_t, referenceVolumes: wp.array(dtype = scalar_t), # type: ignore
+    useCRK: bool, Ai: scalar_t, Bi: vector(length=Any, dtype=scalar_t), gradAi: vector(length=Any, dtype=scalar_t), gradBi: matrix(shape=(Any, Any), dtype=scalar_t), # type: ignore
+
+    # Dummy value to allow allocation
+    outputValue: Any, # type: ignore
+
+    surfaceMask: wp.array(dtype = wp.int32), # type: ignore
+    surfaceNormals: wp.array(dtype = vector(length=Any, dtype=scalar_t)), # type: ignore
+):
+    # Initialize the output value
+    out     = outputValue + scalar_t(1.0e30)
+
+    # Loop over neighbors
+    for neighborIndex in range(numIndices):
+        jj = beginIndex + neighborIndex
+        j  = wp.int32(offsetArray[jj])
+        if kernelProperties.operationMode != wp.static(OperationDirection.TrueAllToToAll.value):
+            if not checkDirectionality_j(referenceKinds[j], kernelProperties.operationMode):
+                continue
+        ##########################################################
+        #   The core particle-particle interaction starts here   #
+        ##########################################################
+
+        xj, hj, mj, rhoj, kj = getParticle(referenceState, j)
+        x_ij = computeDistanceVec(xi, xj, domainState)
+        r_ij = safe_sqrt(wp.dot(x_ij, x_ij))
+        hij = computePairwiseSupport(hi, hj, kernelProperties.supportMode)
+        if surfaceMask[i] == 0:
+            continue
+        if j == i or surfaceMask[j] == 0:
+            continue
+        if r_ij > hij:
+            continue
+        out = wp.min(out, wp.dot(surfaceNormals[i], surfaceNormals[j]))
+
+    return out
+
+
+@wp.func
+def computeMinNeighbourNormalDot_Func_Adjacency(
+    i : wp.int32, dim: wp.int32, lane: wp.int32, lanes: wp.int32,
+
+    queryState: Any, # particleDataSoA with the exact type based on the dimensionality, e.g., particleDataSoA_2 for 2D, particleDataSoA_3 for 3D, etc.
+    referenceState: Any,
+    correctionData: Any, # correctionData_1 or correctionData_2 or correctionData_3, containing all the optional correction terms and their usage flags
+
+    domainState: domainData,
+    useAdjacency: wp.bool,
+    adjacencyState: adjacencyData,
+    gridState: gridData,
+    numOffsets: wp.int32,
+
+    kernelProperties: kernelState,
+
+    outputValue : Any, # type: ignore
+
+    surfaceMask: wp.array(dtype = wp.int32), # type: ignore
+    surfaceNormals: wp.array(dtype = vector(length=Any, dtype=scalar_t)), # type: ignore
+):
+    xi, hi, mi, rhoi, ki = getParticle(queryState, i)
+    if kernelProperties.operationMode != wp.static(OperationDirection.TrueAllToToAll.value):
+        if not checkDirectionality_i(ki, kernelProperties.operationMode):
+            return zero_like_warp(outputValue)
+
+    useGradientRenormalization, Li = getL_i(correctionData, i)
+    useGradHTerms, omega_i = getGradH_i(correctionData, i)
+    useVolume, Vi = getVolume_i(correctionData, i)
+    useCRK, Ai, Bi, gradA_i, gradB_i = getCRK_i(correctionData, i)
+
+    out = outputValue + scalar_t(1.0e30)
+    for o in range(numOffsets):
+        # grid traversal: lanes take whole cells round-robin (no-op for lanes == 1)
+        if not useAdjacency and (o % lanes) != lane:
+            continue
+        beginIndex = wp.int32(0)
+        numIndices = wp.int32(0)
+        if useAdjacency:
+            beginIndex = adjacencyState.neighborOffsets[i]
+            numIndices = adjacencyState.numNeighbors[i]
+        else:
+            beginIndex, numIndices = checkOffset(
+                i, queryState.positions, gridState.numCells, gridState.D,
+                o, gridState.cellOffsets, gridState.hashTable, gridState.cellTable,
+                domainState.periodicity, gridState.qMin, gridState.qMax, gridState.hCell
+            )
+            if beginIndex < 0:
+                continue
+
+        beginIndex, numIndices = laneSlice(beginIndex, numIndices, lane, lanes, useAdjacency)
+        partial = computeMinNeighbourNormalDot_Func_i(
+            i, dim,
+            xi, hi, mi, rhoi,
+            referenceState, domainState,
+            kernelProperties,
+
+            beginIndex, numIndices, adjacencyState.neighborList if useAdjacency else gridState.sortIndex,
+            ki, referenceState.kinds,
+
+            useGradientRenormalization, Li,
+            useGradHTerms, omega_i, correctionData.referenceOmegas,
+            useVolume, Vi , correctionData.referenceVolumes,
+            useCRK, Ai, Bi, gradA_i, gradB_i,
+
+            outputValue,
+            surfaceMask,
+            surfaceNormals,
+        )
+        out = wp.min(out, partial)
+    return out
+
+
+@wp.kernel
+def computeMinNeighbourNormalDot_Kernel(
+    queryState: Any,
+    referenceState: Any,
+    domainState: domainData,
+
+    useAdjacency: wp.bool, adjacencyState: adjacencyData, gridState: gridData,
+    correctionData: Any,
+
+    kernelProperties: kernelState,
+    # Do not change the parameters above
+
+    surfaceMask: wp.array(dtype = wp.int32), # type: ignore
+    surfaceNormals: wp.array(dtype = vector(length=Any, dtype=scalar_t)), # type: ignore
+    # The last parameter is always the output array and should not be changed
+    outputValues : wp.array(dtype = scalar_t) # type: ignore
+):
+    i = wp.tid()
+    numParticles = queryState.positions.shape[0]
+    if i >= numParticles:
+        return
+
+    outputValues[i] = computeMinNeighbourNormalDot_Func_Adjacency(
+        i, domainState.dim, 0, 1,
+        queryState, referenceState, correctionData, domainState,
+        useAdjacency, adjacencyState, gridState, gridState.numOffsets if not useAdjacency else 1,
+        kernelProperties,  #queryKinds, referenceKinds,
+        # The parameters above are default parameters and shold not be changed
+
+        zero_like_warp(outputValues),
+        surfaceMask,
+        surfaceNormals,
+    )
+
+# (no multi-lane variant: the reduction is a minimum, `laneSum` is a sum)
+
+def _computeMinNeighbourNormalDotDtype(ctx, extras):
+    return castTorchToWarpAsBuiltins(ctx.query.densities).dtype
+
+
+_COMPUTEMINNEIGHBOURNORMALDOT = OperatorSpec(
+    kernel=computeMinNeighbourNormalDot_Kernel,
+    outputs=(OutputSpec(dtype=_computeMinNeighbourNormalDotDtype, shape=ShapeOf.QUERY),),
+    extras=(
+        ExtraSpec("surfaceMask", ExtraKind.TENSOR),
+        ExtraSpec("surfaceNormals", ExtraKind.TENSOR),
+    ),
+)
+
+
+def computeMinNeighbourNormalDotWarp(
+    queryParticles: ParticleState,
+    operationProperties: OperationProperties,
+    domain: DomainDescription,
+
+    surfaceMask: torch.Tensor,
+    surfaceNormals: torch.Tensor,
+    queryVolumes: Optional[torch.Tensor] = None, referenceVolumes: Optional[torch.Tensor] = None,
+    adjacency: Optional[Union[AdjacencyList, CompactHashMap]] = None, # if none a datastructure is created for EVERY operation!,
+    referenceParticles: Optional[ParticleState] = None,
+    crkState: Optional[CRKState] = None,
+    gradHState: Optional[Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor], GradHState]] = None,
+    renormalizationState: Optional[Union[torch.Tensor,RenormalizationState]] = None,
+):
+    with record_function("warpSPH[computeMinNeighbourNormalDot]"):
+        referenceParticles = referenceParticles if referenceParticles is not None else queryParticles
+        with record_function("warpSPH[computeMinNeighbourNormalDot] - Kernel Execution"):
+            ctx = SPHContext(
+                query=queryParticles, properties=operationProperties, domain=domain,
+                adjacency=adjacency, reference=referenceParticles,
+                corrections=Corrections(
+                    volumes=(queryVolumes, referenceVolumes),
+                    crk=crkState, gradH=gradHState, renorm=renormalizationState,
+                ),
+            )
+            return launchOperator(_COMPUTEMINNEIGHBOURNORMALDOT, ctx, surfaceMask=surfaceMask, surfaceNormals=surfaceNormals)

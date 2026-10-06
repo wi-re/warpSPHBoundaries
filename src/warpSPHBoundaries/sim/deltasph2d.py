@@ -309,7 +309,7 @@ class DeltaSPH2D:
                 self._fluidwarp = FluidWarp(self)
             fw = self._fluidwarp
             fps, fadj = fw.state(x, v, rho)
-            fk = fw.kernels(fadj, x, rho)
+            fk = fw.kernels(fps, fadj)
         else:
             i, j, r = neighbor_pairs(x, self.Hvec)
             nz = i != j
@@ -452,7 +452,8 @@ class DeltaSPH2D:
         if self.cfg.fluidWarp:
             if self._fluidwarp is None:
                 self._fluidwarp = FluidWarp(self)
-            fk = self._fluidwarp.kernels(self._fluidwarp.state(x, self.v, rho)[1], x, rho)
+            fps, fadj = self._fluidwarp.state(x, self.v, rho)
+            fk = self._fluidwarp.kernels(fps, fadj)
             i = j = r = d = gW = None
         else:
             i, j, r = neighbor_pairs(x, self.Hvec)

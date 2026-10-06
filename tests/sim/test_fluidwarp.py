@@ -79,7 +79,7 @@ def test_pair_kernels_equal_the_torch_pair_sums(device, skin):
     i, j, r, nz, d, gW, V = torch_pairs(sim, x, rho)
     fw = FluidWarp(sim, verletScale=skin)
     ps, adj = fw.state(x, sim.v, rho)
-    fk = fw.kernels(adj, x, rho)
+    fk = fw.kernels(ps, adj)
     p1 = fk.pass1()
     ii, jj, rr = i[nz], j[nz], r[nz]
     unit = (x[ii] - x[jj]) / rr.clamp(min=1e-300)[:, None]
@@ -105,7 +105,7 @@ def test_pair_kernels_equal_the_torch_pair_sums(device, skin):
     ref = torch.full((len(x),), float("inf"), dtype=F64, device=device).scatter_reduce(0, i, dots, reduce="amin", include_self=False)
     got = fk.min_dot(F, nrm)
     fin = torch.isfinite(ref)
-    assert torch.equal(fin, got < 1e299) and float((got[fin] - ref[fin]).abs().max()) <= 1e-13
+    assert torch.equal(fin, got < 1e29) and float((got[fin] - ref[fin]).abs().max()) <= 1e-13
 
 
 @pytest.mark.parametrize("device", DEVICES)

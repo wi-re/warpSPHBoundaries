@@ -13,7 +13,13 @@ from types import SimpleNamespace
 import torch
 from warpSPHCore import (DomainDescription, OperationDirection, OperationProperties, ParticleState, SupportScheme, buildVerletList, sphKernel_xi)
 from warpSPHCore.type_config import get_torch_precision
-from .fluidkernels import FluidKernels
+from dataclasses import replace
+
+from warpSPHCore import GradientScheme, RenormalizationState, scalar_t, warpOperation
+from warpSPH.modules.surfaceDetection.wp_dilate import dilateSurfaceMaskWarp
+from warpSPH.modules.util import countNeighbors
+from .modules.shifting import computeDeltaShiftRawWarp, computeMinNeighbourNormalDotWarp
+from .modules.surfaceDetection import computeBarecascoConeCountWarp, computeBarecascoCoverWarp
 from warpSPH.enumTypes import DensityDiffusionScheme, PressureForceScheme
 from warpSPH.modules.deltaSPH import computeScalarFieldDiffusion
 from warpSPH.modules.deltaSPH.wp_viscosityDelta import computeVelocityDiffusionDeltaSPH
@@ -77,6 +83,43 @@ class FluidWarp:
                                                self.domain, adjacency=adj, queryVelocities=ps.velocities, inviscid=True, c_s=cfg.c0, alpha=cfg.alpha * self.xiWarp / s.xi, nu=0.0, approachOnly=False)
         return out.to(F64)
 
-    def kernels(self, adj, x, rho):
-        """the detector / shifting pair kernels (`fluidkernels.FluidKernels`) on the adjacency `adj` at the positions `x`."""
-        return FluidKernels(self.sim, adj, x, rho)
+    def kernels(self, ps, adj):
+        """the detector / shifting sums (`FluidSums`) of the fluid state `ps` on the adjacency `adj`."""
+        return FluidSums(self, ps, adj)
+
+
+class FluidSums:
+    """the partial sums of the free-surface detector and of the delta+ shifting over the fluid pairs of one position set, as modules in warpSPH's layout (`sim/modules/`) and warpSPH's own modules where they exist:
+    `pass1()` = dict(C: Barecasco cover vector, nAll: number of neighbours within the support, Mf: fluid renormalisation matrix sum V_j (-d) (x) grad W, raw: raw shift sum), `cone_count`, `dilate`, `lam_gradient`,
+    `min_dot`.  A boundary representation adds its own part to these sums before the decisions (`DeltaSPH2D._detect_surface`, `shift`).  Float64 results whatever the precision of warpSPHCore."""
+
+    def __init__(self, fw, ps, adj):
+        self.fw, self.ps, self.adj, self.sim = fw, ps, adj, fw.sim
+        self.tp = fw.tp
+        self.op = OperationProperties(kernel=fw.sim.cfg.kernel, supportMode=SupportScheme.SuperSymmetric, operationMode=OperationDirection.AllToAll, gradientMode=GradientScheme.Naive)
+        self._p1 = None
+
+    def pass1(self):
+        if self._p1 is None:
+            fw, ps, adj, s = self.fw, self.ps, self.adj, self.sim
+            C = computeBarecascoCoverWarp(ps, self.op, fw.domain, adjacency=adj)
+            nAll = countNeighbors(ps, fw.config, None, adj).to(F64) - 1.0                     # the neighbours of the list within the support, the particle itself excluded
+            Mf = warpOperation(ps, replace(self.op, operation=WarpOperation.Covariance), fw.domain, adjacency=adj, covarianceReturnNumNeighbors=True)[0]
+            raw = computeDeltaShiftRawWarp(ps, self.op, fw.domain, R=s.cfg.shiftR, n=4, W0=s._w0, adjacency=adj)
+            self._p1 = dict(C=C.to(F64), nAll=nAll, Mf=Mf.to(F64), raw=raw.to(F64))
+        return self._p1
+
+    def cone_count(self, c, half):
+        return computeBarecascoConeCountWarp(self.ps, self.op, self.fw.domain, coverAxes=c.to(self.tp).contiguous(), halfAngle=scalar_t(half), adjacency=self.adj).to(F64)
+
+    def dilate(self, surface):
+        out = dilateSurfaceMaskWarp(self.ps, replace(self.op, kernel=self.sim.cfg.kernel), freeSurfaceMask=surface.to(self.tp), domain=self.fw.domain, adjacency=self.adj)
+        return out > 0.5
+
+    def lam_gradient(self, lam):
+        """sum V_j (lam_j - lam_i) grad_i W_ij (warpOperation Gradient, `Difference`, scatter)."""
+        op = OperationProperties(kernel=self.sim.cfg.kernel, operation=WarpOperation.Gradient, supportMode=SupportScheme.Scatter, operationMode=OperationDirection.AllToAll, gradientMode=GradientScheme.Difference)
+        return warpOperation(self.ps, op, queryValues=lam.to(self.tp).contiguous(), domain=self.fw.domain, adjacency=self.adj).to(F64)
+
+    def min_dot(self, F, nrm):
+        return computeMinNeighbourNormalDotWarp(self.ps, self.op, self.fw.domain, surfaceMask=F.to(torch.int32), surfaceNormals=nrm.to(self.tp).contiguous(), adjacency=self.adj).to(F64)
