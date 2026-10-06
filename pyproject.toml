@@ -21,5 +21,8 @@ test = ["pytest"]
 where = ["src"]
 include = ["edgebound*", "curvbound*"]
 
+[tool.setuptools.package-data]
+edgebound = ["data/tables/*.npz"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

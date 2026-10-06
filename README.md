@@ -30,16 +30,23 @@ maple/03_sphere.mpl         solid sphere (Wendland w2/w4/w6)
 maple/run_all.sh            regenerate results/symbolic/ (needs Maple 2026)
 src/curvbound/              PLAN track: kernel table, closed-form evaluators, oracles (curvature-aware planar / sphere integrals)
 src/edgebound/edge/         HANDOFF track: exact 2D edge-reduction integrals (mpmath -> numpy -> torch -> Warp), FEM weights, tiers 3 / 4
-src/edgebound/scene/        bodies and representations, boundary operations, wall operators of the delta+-SPH solver
+src/edgebound/scene/        bodies and representations, boundary operations, wall operators of the delta+-SPH solver, the boundary provider (`AnalyticBoundary`, `scene/provider.py`)
+src/edgebound/data/tables/  pre-tabulated tier-3 kernel tables (package data)
 src/edgebound/sim/          DFSPH2D and DeltaSPH2D solvers, cases, validation runners
 scripts/                    command-line runners (regression harness, profiler, validation, videos), scripts/studies, scripts/bench
-tests/                      pytest suite: tests/{edge,scene,sim,curvbound} (816 tests)
+tests/                      pytest suite: tests/{edge,scene,sim,curvbound} (910 tests)
 notebooks/demo.ipynb        executed demo: geometry, curves, validation
 docs/derivation.md          full mathematical write-up
 PLAN.md                     project status & roadmap
 results/symbolic/           Maple exports (committed; consumed by src/curvbound)
 results/figures/            notebook figures (generated, git-ignored)
 ```
+
+## Package layering
+
+`edge` <- `scene` <- `sim`: the edge machinery and the scene layer (`pip install .`, needs `warpSPHCore` only) are the boundary library that is to become `warpSPHBoundaries`; `sim` (the reference
+solvers) additionally needs `warpSPH`.  A scheme consumes the analytic bodies through `edgebound.scene.AnalyticBoundary` (the `BoundaryProvider` protocol: integrals at the fluid particles, signed distance,
+body kinematics); see docs/audit-warpsph-boundary-hooks.md.  The layering is enforced by `tests/test_package_layering.py`.
 
 ## Quick start
 

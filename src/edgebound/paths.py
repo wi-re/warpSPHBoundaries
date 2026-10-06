@@ -38,8 +38,13 @@ def tmp_dir():
     return Path(os.environ["EDGEBOUND_TMP"]) if "EDGEBOUND_TMP" in os.environ else _need_repo(".tmp")
 
 
+def packaged_tables_dir():
+    """the pre-tabulated tier-3 half-plane functions shipped with the package (read only when installed)"""
+    return Path(__file__).resolve().parent / "data" / "tables"
+
+
 def tables_dir():
-    """cache of the tabulated tier-3 half-plane functions (tracked in results/tables in a checkout)"""
+    """where newly tabulated tier-3 functions are written: the packaged directory in a checkout, the user cache directory when installed"""
     if REPO_ROOT is not None:
-        return REPO_ROOT / "results" / "tables"
+        return packaged_tables_dir()
     return Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "edgebound" / "tables"

@@ -59,8 +59,8 @@ def _counting_adjacency():
         counter[2] += 1
         return orig_f(self, *a, **k)
 
-    from edgebound.sim import deltasph2d as D
-    orig_x = D.fixed_adjacency                                          # the fused path builds its adjacency with the fixed-capacity builder (cfg.fixedAdjacency)
+    from edgebound.scene import provider as D
+    orig_x = D.fixed_adjacency                                          # the boundary provider builds the fused path adjacency with the fixed-capacity builder (cfg.fixedAdjacency)
 
     def counting_x(*a, **k):
         counter[0] += 1

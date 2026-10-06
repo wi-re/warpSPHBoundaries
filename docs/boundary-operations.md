@@ -70,7 +70,7 @@ For every (particle, body) pair the model is chosen **per particle** from `R/h_i
 
 | `R / h_i` | model | evaluated by | measured error vs the exact disk (value / gradient), `d = 0.05…0.6 h` |
 |---|---|---|---|
-| `≥ 2` | tier 3: `F_0 + κF_1 + κ²F_2`, gradient `∂_d λ n`, `d < 0` and cavities via the complement identity | torch, Hermite tables `F_k(q), F_k'(q)` (512 intervals per kernel, exact mpmath moments, cached in `results/tables/`) | `R = 4h`: 1.8e-5 / 3.9e-5; `R = 2h`: 1.4e-4 / 2.8e-4 |
+| `≥ 2` | tier 3: `F_0 + κF_1 + κ²F_2`, gradient `∂_d λ n`, `d < 0` and cavities via the complement identity | torch, Hermite tables `F_k(q), F_k'(q)` (512 intervals per kernel, exact mpmath moments, cached in `src/edgebound/data/tables/`) | `R = 4h`: 1.8e-5 / 3.9e-5; `R = 2h`: 1.4e-4 / 2.8e-4 |
 | `≤ 0.2` (and `[D−a, D+a]` inside one kernel piece, particle outside) | tier 4: disk series `K = 2` | torch, exact polynomial coefficients of `Δ^k W` | `R = 0.1h`: 2.4e-7 / 8.8e-6 (derivative of an asymptotic series loses an order) |
 | in between, or the series' validity fails | tier 2: **polygonisation of the body** (fan, edge `h/16`, polygon area = disk area) merged into the element mesh; only the pairs of particles with hard tier 2 are generated | Warp pair engine | `R = 0.7h`: 6e-8 / 6e-7; `R = 0.35h`: 2e-7 / 3e-6 |
 | `HalfPlaneBody` | always tier 3 with `κ = 0`: exact planar closed form `λ_2(d)` (also `d ≤ 0`) | table | ≤ 1e-9 vs the PLAN closed form |

@@ -30,12 +30,10 @@ import torch
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
 
 from ..scene.cone_area import cone_area_scene
-from ..scene.fixedadj import fixed_adjacency
 from .fluidwarp import FluidWarp
-from ..scene.boundaryOps import kernelName
 from ..scene.cover import cover_vector_scene
 from ..scene.fused import FusedWall, WallOutput
-from ..edge.warpfused import FusedGroup
+from ..scene.provider import AnalyticBoundary
 from ..scene.scene import BodyField, Scene, sceneOperation
 from ..scene.tensile import tensile_factor, tensile_vector_scene
 from ..scene.viscosity import lap_factor, lap_lambda_scene
@@ -150,7 +148,7 @@ class DeltaSPH2D:
         self._finalAux = None
         self._graphMode = False                                # True while the step is captured / replayed as a CUDA graph: no host-side caches or reads (graphstep.py)
         self._hc = None                                        # (Hvec tensor, all supports == H) cache of _constSupport
-        self._fgroups = None                                   # (FusedGroup tuple, {output role: group index}, config key) of the fused wall evaluation
+        self.boundary = AnalyticBoundary(scene) if scene is not None else None      # the analytic bodies as a boundary provider (scene/provider.py)
         self._wallCache = None                                 # (x, body poses, adjacency, pair moments, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
 
     # ---------------------------------------------------------------------------------------------------------------- helpers
@@ -211,26 +209,10 @@ class DeltaSPH2D:
         return (self.cfg.kernel, bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian"), bool(self.cfg.fixedAdjacency))
 
     def _fused_state(self, ps):
-        """the fused wall evaluation at the positions of `ps`: adjacency, one stage-1 launch family for the kernels the step needs, and every static output of this position set in `.out`
-        (lam, G, Cov of the kernel, `cover` = g0 of the degree-1 cone kernel per body, `lap` = sum(2 lam - tr g1) of lw, `tens` = g0 of wp5, per body, raw: factors applied by the consumers)."""
-        key = self._fused_key()
-        if self._fgroups is None or self._fgroups[2] != key:          # the layout follows the config flags (tests and sweeps change them on a live solver)
-            name = kernelName(self.cfg.kernel)
-            groups, idx = [FusedGroup(name), FusedGroup("cone", (3, 4))], {"w": 0, "cone": 1}
-            if self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian":
-                fam = self._family(); lap_factor(1.0, fam)                       # registers the kernel
-                idx["lap"] = len(groups); groups.append(FusedGroup("l" + fam))
-            fam = self._family(); tensile_factor(1.0, fam)                       # `shift` may be called whatever cfg.shifting says: the tensile group (4 terms) is always there
-            idx["tens"] = len(groups); groups.append(FusedGroup(fam + "p5", (3, 4)))
-            self._fgroups = (tuple(groups), idx, key)
-        groups, idx, _ = self._fgroups
-        adj = fixed_adjacency(self.scene, ps, self._props(WarpOperation.Density), self.H) if self.cfg.fixedAdjacency else self.scene.adjacency(ps, self._props(WarpOperation.Density))
-        fw = FusedWall(self.scene, adj, groups)
-        outs = [WallOutput("lam", 0, "lam"), WallOutput("G", 0, "g0"), WallOutput("Cov", 0, "cov"), WallOutput("cover", idx["cone"], "g0")]
-        if "lap" in idx: outs.append(WallOutput("lap", idx["lap"], "lap"))
-        if "tens" in idx: outs.append(WallOutput("tens", idx["tens"], "g0"))
-        fw.out = fw.evaluate(outs)
-        fw.key = key
+        """the fused wall evaluation at the positions of `ps` from the boundary provider (scene/provider.py): adjacency, one stage-1 launch family for the kernels the step needs, and every static output of this
+        position set in `.out` (lam, G, Cov of the kernel, `cover` = g0 of the degree-1 cone kernel per body, `lap` = sum(2 lam - tr g1) of lw, `tens` = g0 of wp5, per body, raw: factors applied by the consumers)."""
+        fw = self.boundary.aggregate(ps, self.H, self.cfg.kernel, laplacian=bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian"), fixedAdjacency=self.cfg.fixedAdjacency)
+        fw.key = self._fused_key()
         return fw
 
     def _wall_excess(self, A, G, pp):

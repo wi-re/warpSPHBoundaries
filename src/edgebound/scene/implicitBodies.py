@@ -50,11 +50,13 @@ def build_tier3_table(kname: str, n: int = NGRID, verbose=False):
 
 
 def load_tier3_table(kname: str):
-    TABLE_DIR.mkdir(parents=True, exist_ok=True)
-    f = TABLE_DIR / f"tier3_{kname}.npz"
+    f = paths.packaged_tables_dir() / f"tier3_{kname}.npz"                    # shipped with the package
     if not f.exists():
-        q, F, dF = build_tier3_table(kname)
-        np.savez(f, q=q, F=F, dF=dF)
+        TABLE_DIR.mkdir(parents=True, exist_ok=True)
+        f = TABLE_DIR / f"tier3_{kname}.npz"                                    # else the writable cache (the packaged directory in a checkout)
+        if not f.exists():
+            q, F, dF = build_tier3_table(kname)
+            np.savez(f, q=q, F=F, dF=dF)
     z = np.load(f)
     return z["q"], z["F"], z["dF"]
 
