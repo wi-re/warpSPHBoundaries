@@ -519,9 +519,18 @@ class DeltaSPH2D:
         self.surface, self.surfaceDilated = st["surface"], F
         return upd
 
+    def _wall_velocity(self, x, d, n, bidx):
+        """velocity of the wall at the contact point x - d n, of the nearest body (`bidx`, -1: none -> 0): v_b + omega x (cp - centre), the same rigid-body field as `Body.velocityAt`."""
+        cp = x - d[:, None] * n
+        W = torch.stack([b.velocityAt(cp) for b in self.scene.bodies])                              # [B, N, 2]
+        uw = W[bidx.clamp(min=0), torch.arange(len(x), device=x.device)]
+        return torch.where((bidx >= 0)[:, None], uw, torch.zeros_like(uw))
+
     def no_penetration(self):
         """warpSPH mDBC no-penetration, 'impulse' placement, for an analytic wall: a fluid particle at signed distance d < dp/4 from a wall that is closing on it (v_rel . n < 0, n into the fluid) gets
-        v += -f vn n with f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) (the ghost / boundary-particle geometry of a flat wall dp/2 inside the solid); f = 1 at the face (inelastic), 2 for a particle 1/4 dp inside (reflection)."""
+        v += -f vn n with f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) (the ghost / boundary-particle geometry of a flat wall dp/2 inside the solid); f = 1 at the face (inelastic), 2 for a particle 1/4 dp inside (reflection).
+        v_rel = v - u_w with u_w the velocity of the nearest body at the contact point (warpSPH `computeMdbcNoPenShift` uses vel_i - vel_j of the boundary particle j): the law is Galilean, a wall moving with
+        the fluid does not act, the correction brings the RELATIVE normal velocity to (1 - f) vn."""
         if self.scene is None or self.cfg.noPen != "impulse":
             return 0
         ws = self._wall_state(self.x, self.rho)
@@ -532,8 +541,8 @@ class DeltaSPH2D:
             else:
                 self._carry.copy_from(ws[3])
         if isinstance(ws[3], FusedWall):                                                           # full-length form: the near-wall rows are a mask (no host sync); a device count of the corrections
-            d, n, hit = self.scene.signed_distance(self.x, supportMax=self.H)
-            vn = (self.v * n).sum(1)                                                               # static walls (moving bodies: velocityAt of the nearest body, not needed yet)
+            d, n, hit, bidx = self.scene.signed_distance(self.x, supportMax=self.H, want_body=True)
+            vn = ((self.v - self._wall_velocity(self.x, d, n, bidx)) * n).sum(1)
             f = 3.0 - 4.0 * (0.5 + d / self.dx).clamp(0.25, 1.0)
             act = (lam.sum(0) > 1e-9) & hit & (d < 0.25 * self.dx) & (vn < 0)
             self.v = self.v + torch.where(act[:, None], (-f * vn)[:, None] * n, torch.zeros_like(n))
@@ -541,9 +550,8 @@ class DeltaSPH2D:
         near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
         if not len(near):
             return 0
-        d, n, hit = self.scene.signed_distance(self.x[near])
-        wallv = torch.zeros(len(near), 2, dtype=F64, device=self.dev)                              # static walls (moving bodies: velocityAt of the nearest body, not needed yet)
-        vn = ((self.v[near] - wallv) * n).sum(1)
+        d, n, hit, bidx = self.scene.signed_distance(self.x[near], want_body=True)
+        vn = ((self.v[near] - self._wall_velocity(self.x[near], d, n, bidx)) * n).sum(1)
         f = 3.0 - 4.0 * (0.5 + d / self.dx).clamp(0.25, 1.0)
         act = hit & (d < 0.25 * self.dx) & (vn < 0)
         corr = torch.where(act[:, None], (-f * vn)[:, None] * n, torch.zeros_like(n))

@@ -776,12 +776,13 @@ class Scene:
                         out[k:k + 20000] |= (~(neg & pos)).any(1)
         return out
 
-    def signed_distance(self, points, body=None, supportMax=None):
+    def signed_distance(self, points, body=None, supportMax=None, want_body=False):
         """(d [M], n [M,2], hit [M]) of world points to the solid of one body (or the nearest of all): d > 0 in the fluid, n the unit normal pointing from the wall into the fluid at the closest wall point.
         Surface loops: nearest edge (brute force over the edges, fine for a few dozen); SDF representations: the sampled distance and its gradient; implicit primitives: their own `signed`.  `hit` is False where
-        no representation could answer (volume representations)."""
+        no representation could answer (volume representations).  `want_body`: also return the index [M] of the body the answer belongs to (-1 where `hit` is False)."""
         pts = points.to(self.device, torch.float64)
         M = len(pts)
+        bidx = torch.full((M,), -1, dtype=torch.long, device=pts.device)
         best = torch.full((M,), float("inf"), dtype=torch.float64, device=pts.device)
         normal = torch.zeros((M, 2), dtype=torch.float64, device=pts.device)
         hit = torch.zeros(M, dtype=torch.bool, device=pts.device)
@@ -828,7 +829,10 @@ class Scene:
                 better = d < best
                 best = torch.where(better, d, best)
                 normal = torch.where(better[:, None], n, normal)
+                bidx = torch.where(better, torch.full_like(bidx, bi), bidx)
                 hit |= True
+        if want_body:
+            return best, normal, hit, bidx
         return best, normal, hit
 
     def candidates(self, body: Body, pos, sup, allowed, cells: Optional[ParticleCells] = None):
