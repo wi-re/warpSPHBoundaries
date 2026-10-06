@@ -160,3 +160,23 @@ def test_geometry_queries_and_wall_operations(device, solid):
     t_sub = tensile_vector_scene(sB, pts[idx], H, "w2", adj.restrict(idx))
     t_ref = tensile_vector_scene(sB, pts[idx], H, "w2")
     assert float((t_sub - t_ref).abs().max()) <= 1e-12 * max(float(t_ref.abs().max()), 1.0)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("kernel", ["w2", "w4", "lw2", "w2p5"])
+def test_warp_block_equals_torch_channels(device, kernel):
+    """`BoxTables.block` (the Warp lookup of the fused wall path: one thread per (row, corner, table) + a combine per row) equals the torch `channels` for the nine channels: both are float64 evaluations of
+    the same Chebyshev tensors, 1e-13 of the scale (stated before looking; they differ in summation order and the FMA contraction), including queries exactly on the wall lines, on the corners and far away."""
+    from edgebound.scene.scene import boxTables
+    register()
+    t = boxTables(kernel, device)
+    pos, sup = queries(device)
+    loc = pos - torch.as_tensor(CENTER, dtype=F64, device=device)
+    c, s = np.cos(-ANGLE), np.sin(-ANGLE)
+    loc = loc @ torch.as_tensor([[c, -s], [s, c]], dtype=F64, device=device).T
+    blk = t.block(loc, sup, LO, HI)
+    a0, a1, b0, b1 = (LO[0] - loc[:, 0]) / sup, (HI[0] - loc[:, 0]) / sup, (LO[1] - loc[:, 1]) / sup, (HI[1] - loc[:, 1]) / sup
+    lam, m, g0, g1 = t.channels(a0, a1, b0, b1)
+    ref = torch.cat([lam[:, None], m, g0, g1.flatten(1)], 1)
+    assert float((blk - ref).abs().max()) <= 1e-13 * max(float(ref.abs().max()), 1.0)
+    assert float(ref.abs().max()) > 0.1

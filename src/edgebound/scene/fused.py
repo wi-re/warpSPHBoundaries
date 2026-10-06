@@ -13,6 +13,7 @@ exactly the arithmetic of `sceneOperation` (Density, Gradient of a constant, Cov
 operations: the pairs of a row are summed by one thread in a fixed order (deterministic), rotated to the world frame once per query.  Surface representations only; other
 representations raise (callers keep the `sceneOperation` path for them).  `evaluate` can be called repeatedly on one `FusedWall` (new a1, other outputs): stage 1 is not repeated.
 """
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,7 +22,7 @@ import warp as wp
 
 from ..edge import warpfused
 from ..edge.precision import real, torch_real
-from .scene import SurfaceRep
+from .scene import BOX_EXACT_KERNELS, BoxRep, SurfaceRep, boxTables
 
 F64 = torch.float64
 KINDS = {"lam": (0, 1), "g0": (1, 2), "cov": (2, 4), "a1g1": (3, 2), "lap": (4, 1)}
@@ -222,26 +223,76 @@ class FusedWall:
         self.groups = tuple(groups)
         self.dev = str(scene.device)
         self.N = adjacency.numQueries
-        self.items = []                                       # per (body, surface rep) with pairs: dict(bi, rep, topo, ba, c, wp arrays, rotation)
+        self.items = []                                       # per (body, rep) with pairs / rows: dict(bi, rep, topo, ba, rows, keep, ind, w, R); topo is None for the table rows of a box, c is None for a polygon item that only serves cone_area
         for bi, ba in enumerate(adjacency.bodies):
             for rep, topo in zip(ba.body.reps, ba.reps):
-                if not isinstance(rep, SurfaceRep):
-                    raise NotImplementedError("FusedWall: surface representations only (got %s)" % type(rep).__name__)
-                if topo is None or not len(ba.cand):
+                if not len(ba.cand):
                     continue
-                c = warpfused.fused_channels(topo.qi, topo.e, ba.lpos, ba.lsup, rep.vertices, rep.edges, self.groups, device=self.dev)
-                rows = len(ba.cand)
-                perm, start = topo.csr(rows)
-                cand32, lsup = ba.cand.to(torch.int32).contiguous(), ba.lsup.to(torch_real).contiguous()
-                ang = float(ba.body.angle)
-                cs, sn = float(np.cos(ang)), float(np.sin(ang))                 # Pose.R = [[c, -s], [s, c]]
-                self.items.append(dict(bi=bi, rep=rep, topo=topo, ba=ba, rows=rows, keep=(c, perm, start, cand32, lsup), ind=None,
-                                       w=(wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wp.from_torch(c, dtype=real),
-                                          wp.from_torch(cand32, dtype=wp.int32), wp.from_torch(lsup, dtype=real)), R=(cs, -sn, sn, cs)))
+                if isinstance(rep, SurfaceRep):
+                    if topo is not None:
+                        self._add_item(bi, ba, rep, topo, range(len(self.groups)))
+                elif isinstance(rep, BoxRep):
+                    self._add_box(bi, ba, rep)
+                else:
+                    raise NotImplementedError("FusedWall: surface and box representations only (got %s)" % type(rep).__name__)
+
+    def _item(self, bi, ba, rep, topo, c, perm, start, ind0):
+        rows = len(ba.cand)
+        cand32, lsup = ba.cand.to(torch.int32).contiguous(), ba.lsup.to(torch_real).contiguous()
+        ang = float(ba.body.angle)
+        cs, sn = float(np.cos(ang)), float(np.sin(ang))                 # Pose.R = [[c, -s], [s, c]]
+        w = None if c is None else (wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wp.from_torch(c, dtype=real),
+                                    wp.from_torch(cand32, dtype=wp.int32), wp.from_torch(lsup, dtype=real))
+        ind = None
+        if ind0:                                                         # the indicator is part of the channels (box tables) or belongs to another item: add nothing in the contraction
+            z = torch.zeros(rows, dtype=torch_real, device=self.dev)
+            ind = (z, wp.from_torch(z, dtype=real))
+        self.items.append(dict(bi=bi, rep=rep, topo=topo, ba=ba, rows=rows, keep=(c, perm, start, cand32, lsup), ind=ind, w=w, R=(cs, -sn, sn, cs)))
+
+    def _add_item(self, bi, ba, rep, topo, gidx, ind0=False):
+        """a polygon item: the pair channels of the groups `gidx` (zero-padded to the full layout), pairs of a row summed in a fixed order."""
+        gidx = list(gidx)
+        c = warpfused.fused_channels(topo.qi, topo.e, ba.lpos, ba.lsup, rep.vertices, rep.edges, tuple(self.groups[g] for g in gidx), device=self.dev) if gidx else None
+        if c is not None and len(gidx) < len(self.groups):
+            full = torch.zeros((c.shape[0], 9 * len(self.groups)), dtype=c.dtype, device=c.device)
+            for k, g in enumerate(gidx):
+                full[:, 9 * g:9 * g + 9] = c[:, 9 * k:9 * k + 9]
+            c = full
+        rows = len(ba.cand)
+        perm, start = topo.csr(rows)
+        self._item(bi, ba, rep, topo, c, perm, start, ind0)
+
+    def _add_box(self, bi, ba, rep):
+        """a box: the groups of tabulated kernels are four corner lookups per query row (no pairs, one row = one 'pair', the indicator is inside the channels); the kinked kernels of `BOX_EXACT_KERNELS` (`cone`)
+        take the exact polygon of the same body (`rep.surface()`), which also serves `cone_area`."""
+        tab = [g for g, grp in enumerate(self.groups) if grp.kernel not in BOX_EXACT_KERNELS]
+        rows, dev = len(ba.cand), self.dev
+        if tab:
+            c = torch.zeros((rows, 9 * len(self.groups)), dtype=torch_real, device=dev)
+            for kern in dict.fromkeys(self.groups[g].kernel for g in tab):
+                t = boxTables(kern, dev)
+                blk = t.block(ba.lpos, ba.lsup, (float(rep.lo[0]), float(rep.lo[1])), (float(rep.hi[0]), float(rep.hi[1])))      # [rows, 9] units of h, the library convention of warpbc.edge_channels
+                if rep.solid == "outside":                                  # the solid is the plane minus the box
+                    if getattr(t, "_plane", None) is None:
+                        big = torch.full((1,), 1e3, dtype=F64, device=dev)
+                        L, M, G0, G1 = t.channels(-big, big, -big, big)
+                        t._plane = torch.cat([L[:, None], M, G0, G1.flatten(1)], 1)
+                    blk = t._plane - blk
+                blk = blk.to(torch_real)
+                for g in tab:
+                    if self.groups[g].kernel == kern:
+                        c[:, 9 * g:9 * g + 9] = blk
+            ar = torch.arange(rows, dtype=torch.int32, device=dev)
+            self._item(bi, ba, None, None, c, ar, torch.arange(rows + 1, dtype=torch.int32, device=dev), True)
+        surf = rep.surface()
+        topo = surf.topology(ba.lpos, ba.lsup)
+        if topo is not None:
+            exact = [g for g in range(len(self.groups)) if g not in tab]
+            self._add_item(bi, ba, surf, topo, exact, ind0=True)
 
     @staticmethod
     def supported(scene):
-        return all(isinstance(r, SurfaceRep) for b in scene.bodies for r in b.reps)
+        return all(isinstance(r, (SurfaceRep, BoxRep)) for b in scene.bodies for r in b.reps)
 
     def evaluate(self, outputs, a1=None):
         """{name: tensor [B, N, ...]} float64, world frame.  `a1`: [B, N, 2] world vectors for the "a1g1" outputs."""
@@ -255,6 +306,8 @@ class FusedWall:
         a1t = (a1 if need_a1 else torch.zeros(1, dtype=F64, device=dev)).to(torch_real).contiguous().reshape(-1)
         wa1, wpool = wp.from_torch(a1t, dtype=real), wp.from_torch(pool, dtype=real)
         for it in self.items:
+            if it["w"] is None:
+                continue
             if any_ind:
                 if it["ind"] is None:
                     ind = it["topo"].indicator(it["rep"], it["ba"].lpos).to(torch_real).contiguous()
@@ -281,13 +334,15 @@ class FusedWall:
 
     def cone_area(self, axes, half_angle):
         """[2, N] float64: area(solid cap disk(x, H) cap wedge(x, axis, half_angle)) (row 0, units length^2; `half_angle >= pi` = the full disk) and the full-disk area (row 1) for the world `axes` [N, 2]
-        (only the direction matters), summed over the bodies (a query outside the candidate list of a background rep gets nothing from it); one launch per (body, rep) over the pair topology of this position set (`scene/cone_area.py` is the reference).  The disk radius is the support of the
+        (only the direction matters), summed over the bodies (a query outside the candidate list of a background rep is deep in its solid: the full sector); one launch per (body, rep) over the pair topology of this position set (`scene/cone_area.py` is the reference).  The disk radius is the support of the
         query, so the pair filter (edges within one support) contains every edge with a chord.  Evaluated in float64 whatever the edge-kernel precision (angle differences near pi/2 amplify float32 round-off)."""
         N, dev = self.N, self.dev
         out = torch.zeros(2 * N, dtype=F64, device=dev)
         wout = wp.from_torch(out, dtype=wp.float64)
         axis = wp.from_torch(axes.to(F64).contiguous().reshape(-1), dtype=wp.float64)
         for it in self.items:
+            if it["topo"] is None:                                                    # the table rows of a box (its polygon item serves)
+                continue
             ba, rep = it["ba"], it["rep"]
             _, perm, start, cand32, _ = it["keep"]
             if it.get("cone") is None:
@@ -303,5 +358,12 @@ class FusedWall:
             wp.launch(_cone_area_kernel, dim=it["rows"], device=dev, inputs=[
                 wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wpe, wp.from_torch(cand32, dtype=wp.int32),
                 wl, ws, wi, wv, we, axis, wp.float64(float(ba.body.angle)), wp.float64(float(half_angle)), N, wout])
+            if rep.background:
+                out_of = torch.ones(N, dtype=F64, device=dev)
+                out_of[ba.cand.long()] = 0.0
+                sup = self.adj.queryParticles.supports.to(dev, F64)
+                wedge = 2.0 * float(half_angle) if float(half_angle) < math.pi else 2.0 * math.pi
+                out[:N] += out_of * 0.5 * sup * sup * wedge
+                out[N:] += out_of * math.pi * sup * sup
         wp.synchronize_device(dev)
         return out.reshape(2, N)

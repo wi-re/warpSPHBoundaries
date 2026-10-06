@@ -230,3 +230,21 @@ def test_reuse_invalidation(device):
     finally:
         restore()
     print("(g) invalidation: position / pose / support rebuild once (stale cache wrong by > 1e-4); rho / g do not rebuild")
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("case", ["dambreak", "sloshing"])
+def test_box_domain_fused_equals_scene_operation_path(device, case):
+    """the `box` domain (BoxRep: corner tables, the exact polygon for the cone group) runs the fused wall evaluation and gives the state of the `sceneOperation` path (cfg.fusedWall = False) to round-off
+    after 60 steps: positions 1e-12, velocities 1e-10 (stated before looking; the two paths evaluate the same tables and differ in summation order)."""
+    from edgebound.sim import cases
+    res = {}
+    for fused in (False, True):
+        kw = dict(nx=30, shifting=True, noPen="impulse") if case == "dambreak" else dict(nx=40)
+        sim = (cases.marrone_dambreak if case == "dambreak" else cases.sloshing_tank)(domain="box", device=device, fusedWall=fused, **kw)[0]
+        for _ in range(60):
+            sim.step()
+        res[fused] = (sim.x.clone(), sim.v.clone(), sim._wallCache is not None and type(sim._wallCache[2]).__name__)
+    assert res[True][2] == "FusedWall" and res[False][2] != "FusedWall"
+    assert float((res[True][0] - res[False][0]).abs().max()) <= 1e-12
+    assert float((res[True][1] - res[False][1]).abs().max()) <= 1e-10

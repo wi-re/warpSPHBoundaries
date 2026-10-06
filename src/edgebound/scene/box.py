@@ -14,6 +14,7 @@ a geometrically graded panel grid toward the origin (the kernel's odd powers of 
 """
 import numpy as np
 import torch
+import warp as wp
 from numpy.polynomial import chebyshev as C
 
 F64 = torch.float64
@@ -92,3 +93,183 @@ class BoxTables:
         g1 = -torch.stack([torch.stack([red(ya * pa - ph), red(p1b)], 1),               # d = 1: j = 1 boundary a dPhi/da - Phi, j = 2 boundary dPhi_1/db
                            torch.stack([red(p2a), red(yb * pb - ph)], 1)], 1)           # d = 2: j = 1 boundary dPhi_2/da,       j = 2 boundary b dPhi/db - Phi
         return lam, m, g0, g1
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------- Warp lookup
+NB = 21                                                                                   # BOX_DEGREE + 1 (checked in `BoxTables.block`)
+Vec21 = wp.types.vector(length=NB, dtype=wp.float64)
+Vec9 = wp.types.vector(length=9, dtype=wp.float64)
+
+
+@wp.func
+def _cheb_basis(t: wp.float64):
+    """T_k(t) and dT_k/dt, k = 0 .. 20 (`_basis`: cos(k th), k sin(k th) / sin(th) with the Taylor expansion within 1e-4 of the ends and the mirror image at pi)."""
+    th = wp.acos(wp.clamp(t, wp.float64(-1.0), wp.float64(1.0)))
+    sth = wp.sin(th)
+    d = wp.min(th, wp.float64(3.1415926535897932384626433832795) - th)
+    T = Vec21()
+    dT = Vec21()
+    for k in range(NB):
+        kf = wp.float64(k)
+        T[k] = wp.cos(kf * th)
+        sg = wp.float64(1.0)
+        if th > wp.float64(1.5707963267948966192313216916398) and k % 2 == 0:
+            sg = wp.float64(-1.0)
+        ratio = wp.sin(kf * th) / wp.max(sth, wp.float64(1.0e-300))
+        if d < wp.float64(1.0e-4):
+            ratio = kf * (wp.float64(1.0) - (kf * kf - wp.float64(1.0)) * d * d / wp.float64(6.0)) * sg
+        dT[k] = kf * ratio
+    return T, dT
+
+
+@wp.func
+def _tensor(coef: wp.array(dtype=wp.float64), base: int, U: Vec21, dU: Vec21, V: Vec21, dV: Vec21, su: wp.float64, sv: wp.float64):
+    """sum_kl C[k, l] U_k V_l and its derivatives with respect to the first / second variable (scaled by su / sv)."""
+    v = wp.float64(0.0)
+    vu = wp.float64(0.0)
+    vv = wp.float64(0.0)
+    for k in range(NB):
+        r0 = wp.float64(0.0)
+        r1 = wp.float64(0.0)
+        for l in range(NB):
+            c = coef[base + k * NB + l]
+            r0 += c * V[l]
+            r1 += c * dV[l]
+        v += U[k] * r0
+        vu += dU[k] * r0
+        vv += U[k] * r1
+    return v, su * vu, sv * vv
+
+
+@wp.func
+def _panel(x: wp.float64, breaks: wp.array(dtype=wp.float64), npan: int):
+    i = int(0)
+    for j in range(1, npan):
+        if x >= breaks[j]:
+            i = j
+    return i
+
+
+@wp.kernel
+def _box_tensor_kernel(lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64), lo0: wp.float64, lo1: wp.float64, hi0: wp.float64, hi1: wp.float64,
+                       phi: wp.array(dtype=wp.float64), phi1: wp.array(dtype=wp.float64), breaks: wp.array(dtype=wp.float64), npan: int, vals: wp.array(dtype=wp.float64)):
+    """stage 1 of the box lookup, one thread per (row, corner, table): the table value and its two derivatives at the corner (`BoxTables.corner`: Phi, Phi1, Phi2 = Phi1(b, a)) -> vals[(row * 4 + corner) * 9 + 3 table + (value, d/da, d/db)]."""
+    tid = wp.tid()
+    r = tid / 12
+    c = (tid / 3) % 4
+    tab = tid % 3
+    h = lsup[r]
+    a = (hi0 - lpos[2 * r]) / h
+    if c == 1 or c == 3:
+        a = (lo0 - lpos[2 * r]) / h
+    b = (hi1 - lpos[2 * r + 1]) / h
+    if c >= 2:
+        b = (lo1 - lpos[2 * r + 1]) / h
+    ac = wp.clamp(a, wp.float64(-1.0), wp.float64(1.0))
+    bc = wp.clamp(b, wp.float64(-1.0), wp.float64(1.0))
+    ia = _panel(ac, breaks, npan)
+    ib = _panel(bc, breaks, npan)
+    wa = breaks[ia + 1] - breaks[ia]
+    wb = breaks[ib + 1] - breaks[ib]
+    ta = (wp.float64(2.0) * ac - (breaks[ia] + breaks[ia + 1])) / wa
+    tb = (wp.float64(2.0) * bc - (breaks[ib] + breaks[ib + 1])) / wb
+    sa = wp.float64(2.0) / wa
+    sb = wp.float64(2.0) / wb
+    Ta, dTa = _cheb_basis(ta)
+    Tb, dTb = _cheb_basis(tb)
+    n2 = NB * NB
+    o = (r * 4 + c) * 9 + tab * 3
+    if tab == 0:
+        v, d1, d2 = _tensor(phi, (ia * npan + ib) * n2, Ta, dTa, Tb, dTb, sa, sb)
+        vals[o] = v
+        vals[o + 1] = d1
+        vals[o + 2] = d2
+    elif tab == 1:
+        v, d1, d2 = _tensor(phi1, (ia * npan + ib) * n2, Ta, dTa, Tb, dTb, sa, sb)
+        vals[o] = v
+        vals[o + 1] = d1
+        vals[o + 2] = d2
+    else:
+        v, d1, d2 = _tensor(phi1, (ib * npan + ia) * n2, Tb, dTb, Ta, dTa, sb, sa)           # Phi_2(a, b) = Phi1(b, a): the first variable is b
+        vals[o] = v
+        vals[o + 1] = d2
+        vals[o + 2] = d1
+
+
+@wp.kernel
+def _box_block_kernel(lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64), lo0: wp.float64, lo1: wp.float64, hi0: wp.float64, hi1: wp.float64,
+                      vals: wp.array(dtype=wp.float64), out: wp.array2d(dtype=wp.float64)):
+    """stage 2, one thread per row: the nine channels (lam, m, g0, g1; units of the support) of the rectangle by inclusion-exclusion of the four corners (`BoxTables.channels`)."""
+    r = wp.tid()
+    h = lsup[r]
+    lam = wp.float64(0.0)
+    m0 = wp.float64(0.0)
+    m1 = wp.float64(0.0)
+    gx = wp.float64(0.0)
+    gy = wp.float64(0.0)
+    g00 = wp.float64(0.0)
+    g01 = wp.float64(0.0)
+    g10 = wp.float64(0.0)
+    g11 = wp.float64(0.0)
+    for c in range(4):
+        a = (hi0 - lpos[2 * r]) / h
+        if c == 1 or c == 3:
+            a = (lo0 - lpos[2 * r]) / h
+        b = (hi1 - lpos[2 * r + 1]) / h
+        if c >= 2:
+            b = (lo1 - lpos[2 * r + 1]) / h
+        sg = wp.float64(1.0)
+        if c == 1 or c == 2:
+            sg = wp.float64(-1.0)
+        o = (r * 4 + c) * 9
+        ya = wp.float64(0.0)
+        if wp.abs(a) <= wp.float64(1.0):
+            ya = a
+        yb = wp.float64(0.0)
+        if wp.abs(b) <= wp.float64(1.0):
+            yb = b
+        lam += sg * vals[o]
+        m0 += sg * vals[o + 3]
+        m1 += sg * vals[o + 6]
+        gx -= sg * vals[o + 1]
+        gy -= sg * vals[o + 2]
+        g00 -= sg * (ya * vals[o + 1] - vals[o])
+        g01 -= sg * vals[o + 5]
+        g10 -= sg * vals[o + 7]
+        g11 -= sg * (yb * vals[o + 2] - vals[o])
+    out[r, 0] = lam
+    out[r, 1] = m0
+    out[r, 2] = m1
+    out[r, 3] = gx
+    out[r, 4] = gy
+    out[r, 5] = g00
+    out[r, 6] = g01
+    out[r, 7] = g10
+    out[r, 8] = g11
+
+
+def _block(self, lpos, lsup, lo, hi):
+    """[rows, 9] float64: the nine channels (units of the support, the `warpbc.edge_channels` convention) of the rectangle [lo, hi] for the body-frame positions `lpos` [rows, 2] and supports `lsup`; the
+    Warp counterpart of `channels` (one thread per row, the two tables read from device memory; stage 1 one thread per (row, corner, table), stage 2 one per row)."""
+    assert self.N + 1 == NB, "box.py Warp lookup is compiled for BOX_DEGREE = %d" % (NB - 1)
+    dev = str(lpos.device)
+    if getattr(self, "_wp", None) is None:
+        self._wp = (wp.from_torch(self.coef["Phi"].contiguous().reshape(-1), dtype=wp.float64), wp.from_torch(self.coef["Phi1"].contiguous().reshape(-1), dtype=wp.float64),
+                    wp.from_torch(self.breaks.contiguous(), dtype=wp.float64), len(self.breaks) - 1)
+    wphi, wphi1, wbr, npan = self._wp
+    rows = lpos.shape[0]
+    out = torch.zeros((max(rows, 1), 9), dtype=F64, device=lpos.device)
+    if rows:
+        lp = lpos.to(F64).contiguous().reshape(-1)
+        ls = lsup.to(F64).contiguous()
+        vals = torch.empty(rows * 36, dtype=F64, device=lpos.device)
+        wlp, wls = wp.from_torch(lp, dtype=wp.float64), wp.from_torch(ls, dtype=wp.float64)
+        box = [wp.float64(float(lo[0])), wp.float64(float(lo[1])), wp.float64(float(hi[0])), wp.float64(float(hi[1]))]
+        wvals = wp.from_torch(vals, dtype=wp.float64)
+        wp.launch(_box_tensor_kernel, dim=rows * 12, device=dev, inputs=[wlp, wls] + box + [wphi, wphi1, wbr, npan, wvals])
+        wp.launch(_box_block_kernel, dim=rows, device=dev, inputs=[wlp, wls] + box + [wvals, wp.from_torch(out, dtype=wp.float64)])
+        wp.synchronize_device(dev)
+    return out[:rows]
+
+
+BoxTables.block = _block

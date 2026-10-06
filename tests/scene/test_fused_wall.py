@@ -87,13 +87,64 @@ def test_fused_outputs_equal_scene_operations(device, constant):
 
 @pytest.mark.parametrize("device", DEVICES)
 def test_fused_rejects_other_representations(device):
-    sc = Scene([Body(bodyId=0, reps=[BoxRep((0.0, 0.0), (1.0, 1.0))])], device)
+    from edgebound.scene.implicitBodies import DiskBody
+    from edgebound.scene.scene import ImplicitRep
+    sc = Scene([Body(bodyId=0, reps=[ImplicitRep(DiskBody(center=(0.5, 0.5), radius=0.2))])], device)
     assert not FusedWall.supported(sc)
     pos = torch.tensor([[0.5, 0.5]], dtype=F64, device=device)
     ps = ParticleState(positions=pos, supports=torch.full((1,), 0.3, dtype=F64, device=device), masses=torch.ones(1, dtype=F64, device=device), kinds=torch.zeros(1, dtype=torch.int32, device=device),
                        densities=torch.ones(1, dtype=F64, device=device))
-    with pytest.raises(NotImplementedError, match="surface representations only"):
+    with pytest.raises(NotImplementedError, match="surface and box representations only"):
         FusedWall(sc, sc.adjacency(ps, props(WarpOperation.Density, "w2")), (FusedGroup("w2"),))
+
+
+def make_box(device, solid, n=500, seed=2):
+    """a rotated, translated box body (`solid` inside = an obstacle, outside = a tank) and a second thin box body, constant support 0.5."""
+    lap_factor(1.0, "w2"); tensile._register("w2")
+    sc = Scene([Body(bodyId=0, center=(0.3, -0.2), angle=0.7, reps=[BoxRep((0.1, -0.2), (2.3, 1.1), solid)]),
+                Body(bodyId=1, center=(3.0, 1.0), angle=-0.4, reps=[BoxRep((-0.6, -0.05), (0.6, 0.05))])], device)
+    rng = np.random.default_rng(seed)
+    pos = torch.as_tensor(rng.uniform(-1.2, 4.2, (n, 2)), dtype=F64, device=device)
+    ps = ParticleState(positions=pos, supports=torch.full((n,), 0.5, dtype=F64, device=device), masses=torch.ones(n, dtype=F64, device=device), kinds=torch.zeros(n, dtype=torch.int32, device=device),
+                       densities=torch.ones(n, dtype=F64, device=device))
+    return sc, ps, pos, torch.as_tensor(rng.normal(size=(2, n, 2)), dtype=F64, device=device)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("solid", ["inside", "outside"])
+def test_fused_box_equals_scene_operations(device, solid):
+    """`BoxRep` bodies in the fused path (corner tables for `w2` / `lw2` / `w2p5`, the exact polygon for `cone`) against `sceneOperation` and the library functions on the same scene (the same tables:
+    round-off only, 1e-12 of the scale), and `cone_area` against `cone_area_scene` (1e-11 H^2); tank (`outside`) and obstacle (`inside`), two bodies, deterministic."""
+    from edgebound.scene.cone_area import cone_area_scene
+    H = 0.5
+    sc, ps, pos, a1 = make_box(device, solid)
+    B, N = len(sc.bodies), len(pos)
+    assert FusedWall.supported(sc)
+    adj = sc.adjacency(ps, props(WarpOperation.Density, "w2"))
+    fw = FusedWall(sc, adj, (FusedGroup("w2"), FusedGroup("lw2"), FusedGroup("cone", (3, 4)), FusedGroup("w2p5", (3, 4))))
+    outs = (WallOutput("lam", 0, "lam"), WallOutput("G", 0, "g0"), WallOutput("Cov", 0, "cov"), WallOutput("A", 0, "a1g1"),
+            WallOutput("lap", 1, "lap"), WallOutput("cover", 2, "g0"), WallOutput("tens", 3, "g0"))
+    got = fw.evaluate(outs, a1=a1)
+    pm = sc.precompute(adj, props(WarpOperation.Density, "w2"))
+    one = BodyField(torch.tensor(1.0, dtype=F64, device=device))
+    flds = [BodyField(torch.zeros(N, dtype=F64, device=device), a1[b], rho=1.0, perQuery=True) for b in range(B)]
+    refs = {"lam": sceneOperation(ps, props(WarpOperation.Density, "w2"), sc, pm, None, [BodyField(rho=1.0)] * B, perBody=True),
+            "G": sceneOperation(ps, props(WarpOperation.Gradient, "w2"), sc, pm, None, [one] * B, perBody=True),
+            "Cov": sceneOperation(ps, props(WarpOperation.Covariance, "w2"), sc, pm, None, [one] * B, perBody=True).reshape(B, N, 2, 2),
+            "A": sceneOperation(ps, props(WarpOperation.Gradient, "w2"), sc, pm, None, flds, perBody=True)}
+    for name, ref in refs.items():
+        d, scale = close(got[name], ref)
+        assert scale > 0.5, (name, scale)
+    close(lap_factor(H, "w2") * got["lap"], lap_lambda_scene(sc, pos, H, "w2"))
+    close(-(math.pi * H ** 3 / 3) * got["cover"].sum(0), cover_vector_scene(sc, pos, H))
+    close(tensile_factor(H, "w2") * got["tens"].sum(0), tensile_vector_scene(sc, pos, H, "w2"))
+    axes = torch.as_tensor(np.random.default_rng(9).uniform(-1, 1, (N, 2)), dtype=F64, device=device)
+    for al in (math.pi / 6, math.pi):
+        area = fw.cone_area(axes, al)
+        assert float((area[0] - cone_area_scene(sc, pos, axes, al, H)).abs().max()) <= 1e-11 * H * H
+    again = fw.evaluate(outs, a1=a1)
+    for o in outs:
+        assert torch.equal(got[o.name], again[o.name]), o.name
 
 
 @pytest.mark.parametrize("device", DEVICES)
