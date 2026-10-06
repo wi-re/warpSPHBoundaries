@@ -437,6 +437,13 @@ class DeltaSPH2D:
             forces = torch.stack([forces, self._load(visc, lever) if visc is not None else torch.zeros_like(forces)])      # [2, B, 3]: pressure, wall viscous; (Fx, Fy, torque about the centre)
         return acc, drho, forces
 
+    def loadsAt(self, x, v, rho):
+        """POST-HOC wall loads from an exported state: [2, B, 3] = (pressure, wall viscous) x per body (Fx, Fy, torque z about the body centre) of the fluid state (x, v, rho) at the CURRENT body poses of `self.scene`
+        and the current gravity.  The wall terms are a pure function of that state, so a fresh solver on the same scene (bodies placed at the pose of the exported frame) reproduces the loads of a run from its trajectory
+        file; the average of two consecutive frames agrees with what the step books (time-centred at the half step) to ~5e-4 of the peak, a single frame to ~1e-2.  Not recoverable from a state: the no-penetration
+        impulse (`wallLoads[2]`), a correction of the velocity inside the step (zero unless particles press into the wall)."""
+        return self.rhs(x, v, rho, want_forces=True)[2]
+
     def _load(self, acc_b, lever):
         """load of the fluid on every body [B, 3] = (Fx, Fy, torque z about the body centre) from the per-body particle accelerations `acc_b` [B, N, 2] of a wall term: the reaction is -m a, acting at `lever` [B, N, 2]."""
         F = -self.m * acc_b
