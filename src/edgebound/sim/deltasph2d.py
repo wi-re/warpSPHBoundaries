@@ -130,6 +130,7 @@ class DeltaSPH2D:
         self.dt = self.cfg.fixedDt if self.cfg.fixedDt else self.cfg.cfl * self.H / (self.cfg.c0 * self.ks)
         self.dt_t = torch.tensor(float(self.dt), dtype=F64, device=device)     # the time step on the device (the host copy `dt` follows after every step)
         self.gravityFn = None                                  # t -> (gx, gy): a rolling tank as rotating gravity (SPHERIC test case 10), evaluated after every step
+        self.wallLoads = torch.zeros((3, self.nb, 3), dtype=F64, device=device)      # load of the fluid on every body per term (pressure, wall viscous, no-penetration impulse): Fx, Fy, torque z about the body centre; last step
         self.wallForce = torch.zeros((self.nb, 2), dtype=F64, device=device)      # force of the fluid on every body (pressure part), last RHS call
         self.surface = torch.zeros(n, dtype=torch.bool, device=device)
         self.surfaceDilated = self.surface
@@ -138,6 +139,7 @@ class DeltaSPH2D:
         self._fluidwarp = None                                 # FluidWarp of cfg.fluidWarp (lazy)
         self._graphCfg = None
         self._graphed = None                                   # GraphedStep (or False when the configuration does not allow it), lazy
+        self._nopenLoad = None
         self._carry = None                                     # FusedWall of the last no-penetration evaluation, persistent buffers (graph step only)
         self._carryNext = False
         self._carryEnabled = False
@@ -363,7 +365,7 @@ class DeltaSPH2D:
             accw = -wall / rho[None, :, None]
             acc = acc + accw.sum(0)
             if want_forces:
-                forces = -(self.m * accw).sum(1)                                                     # force of the fluid on each body
+                forces = self._load(accw, x[None].expand(self.nb, -1, -1))                          # load of the fluid on each body: -m sum a (a pair force is central: its torque about the centre is that of the force at the particle)
         # artificial viscosity (fluid only)
         if cfg.viscosity:
             if fw is not None:
@@ -373,6 +375,10 @@ class DeltaSPH2D:
                 mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
                 fac = cfg.alpha * cfg.c0 * H / self.xi
                 acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
+        visc = lever = None
+        if want_forces and self.nb and cfg.viscosity and cfg.wallViscosity:
+            visc = torch.zeros((self.nb, len(x), 2), dtype=F64, device=self.dev)                    # per body acceleration of the wall viscous term, for the load of the fluid on the body
+            lever = x[None].repeat(self.nb, 1, 1)                                                   # where the reaction acts: the particle, or the contact point for the tangential no-slip friction
         if cfg.viscosity and cfg.wallViscosity and isinstance(adj, FusedWall) and cfg.wallViscosityForm in ("laplacian", "noslip"):
             fac = cfg.alpha * cfg.c0 * H / self.xi                                                  # full-length form: the near-wall rows are a mask, not an index list (no host sync)
             nearm = (lam.sum(0) > 1e-9).to(F64)
@@ -382,11 +388,17 @@ class DeltaSPH2D:
                 if cfg.wallViscosityForm == "laplacian":
                     un = ((v - b.velocityAt(x)) * nb_).sum(1)
                     dl = lap_factor(H, self._family()) * adj.out["lap"][bi]
-                    acc = acc + (-2.0 * (fac / 8.0) * cfg.wallMass * un / rho * dl * nearm)[:, None] * nb_
+                    term = (-2.0 * (fac / 8.0) * cfg.wallMass * un / rho * dl * nearm)[:, None] * nb_
                 else:
-                    dsd, _, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
+                    dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
                     dd = dsd.clamp(min=0.25 * self.dx)
-                    acc = acc + torch.where((hit & (nearm > 0))[:, None], -2.0 * (fac / 8.0) * (v - b.velocityAt(x)) * (gm / (rho * dd))[:, None], torch.zeros_like(v))
+                    cp = x - dsd[:, None] * nsd                                                     # the wall point: the wall velocity of the friction is the one THERE (rotating walls)
+                    term = torch.where((hit & (nearm > 0))[:, None], -2.0 * (fac / 8.0) * (v - b.velocityAt(cp)) * (gm / (rho * dd))[:, None], torch.zeros_like(v))
+                    if lever is not None:
+                        lever[bi] = cp
+                acc = acc + term
+                if visc is not None:
+                    visc[bi] = term
         elif cfg.viscosity and cfg.wallViscosity and len(near):
             fac = cfg.alpha * cfg.c0 * H / self.xi
             if cfg.wallViscosityForm == "laplacian":
@@ -403,19 +415,32 @@ class DeltaSPH2D:
                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
                 un = ((v - b.velocityAt(x)) * nb_).sum(1)
                 if cfg.wallViscosityForm == "noslip":
-                    d, _, hit = self.scene.signed_distance(x[near], body=bi)                           # d_signed > 0 in the fluid; hit False only for volume representations
+                    d, nsd, hit = self.scene.signed_distance(x[near], body=bi)                         # d_signed > 0 in the fluid; hit False only for volume representations
                     dd = d.clamp(min=0.25 * self.dx)                                                   # the 1/d floor (the no-penetration law keeps particles at d >= ~0.25 dx)
-                    acc = acc.index_add(0, near, torch.where(hit[:, None], -2.0 * (fac / 8.0) * (v - b.velocityAt(x))[near] * (gm[near] / (rho[near] * dd))[:, None], torch.zeros_like(v[near])))   # fac/8 = nu_eff; gm = |G_b|; all-components relative velocity (no-slip)
-                    continue
-                if cfg.wallViscosityForm == "laplacian":
-                    acc = acc.index_add(0, near, (-2.0 * (fac / 8.0) * cfg.wallMass * un[near] / rho[near] * dl[bi])[:, None] * nb_[near])   # fac/8 = fac/(2(d+2)), d = 2: moment identity, viscosity.py
+                    cp = x[near] - d[:, None] * nsd                                                    # the wall velocity of the friction is the one at the wall point
+                    accv = torch.where(hit[:, None], -2.0 * (fac / 8.0) * (v[near] - b.velocityAt(cp)) * (gm[near] / (rho[near] * dd))[:, None], torch.zeros_like(v[near]))   # fac/8 = nu_eff; gm = |G_b|; all-components relative velocity (no-slip)
+                    if lever is not None:
+                        lever[bi, near] = cp
+                elif cfg.wallViscosityForm == "laplacian":
+                    accv = (-2.0 * (fac / 8.0) * cfg.wallMass * un[near] / rho[near] * dl[bi])[:, None] * nb_[near]   # fac/8 = fac/(2(d+2)), d = 2: moment identity, viscosity.py
                 else:
                     yy = u[:, :, None] * u[:, None, :]                                                   # [P,2,2]
                     M2 = torch.einsum("qrp,r,pab->qab", ins[bi].to(F64), wprime, yy) * dphi              # int W' dr int yhat (x) yhat 1[solid] dphi
                     accv = (fac * cfg.wallMass * 2.0 * un[near] / rho[near])[:, None] * torch.einsum("qab,qb->qa", M2, nb_[near])
-                    acc = acc.index_add(0, near, accv)
+                acc = acc.index_add(0, near, accv)
+                if visc is not None:
+                    visc[bi].index_add_(0, near, accv)
         acc = acc + self.g[None]
+        if forces is not None:
+            forces = torch.stack([forces, self._load(visc, lever) if visc is not None else torch.zeros_like(forces)])      # [2, B, 3]: pressure, wall viscous; (Fx, Fy, torque about the centre)
         return acc, drho, forces
+
+    def _load(self, acc_b, lever):
+        """load of the fluid on every body [B, 3] = (Fx, Fy, torque z about the body centre) from the per-body particle accelerations `acc_b` [B, N, 2] of a wall term: the reaction is -m a, acting at `lever` [B, N, 2]."""
+        F = -self.m * acc_b
+        r = lever - torch.stack([b.center for b in self.scene.bodies])[:, None, :]
+        tau = (r[..., 0] * F[..., 1] - r[..., 1] * F[..., 0]).sum(1)
+        return torch.cat([F.sum(1), tau[:, None]], 1)
 
     # ---------------------------------------------------------------------------------------------------------------- particle shifting (delta+) and no-penetration
     def _surface_state(self, x, rho):
@@ -531,6 +556,7 @@ class DeltaSPH2D:
         v += -f vn n with f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) (the ghost / boundary-particle geometry of a flat wall dp/2 inside the solid); f = 1 at the face (inelastic), 2 for a particle 1/4 dp inside (reflection).
         v_rel = v - u_w with u_w the velocity of the nearest body at the contact point (warpSPH `computeMdbcNoPenShift` uses vel_i - vel_j of the boundary particle j): the law is Galilean, a wall moving with
         the fluid does not act, the correction brings the RELATIVE normal velocity to (1 - f) vn."""
+        self._nopenLoad = torch.zeros((self.nb, 3), dtype=F64, device=self.dev)
         if self.scene is None or self.cfg.noPen != "impulse":
             return 0
         ws = self._wall_state(self.x, self.rho)
@@ -545,7 +571,9 @@ class DeltaSPH2D:
             vn = ((self.v - self._wall_velocity(self.x, d, n, bidx)) * n).sum(1)
             f = 3.0 - 4.0 * (0.5 + d / self.dx).clamp(0.25, 1.0)
             act = (lam.sum(0) > 1e-9) & hit & (d < 0.25 * self.dx) & (vn < 0)
-            self.v = self.v + torch.where(act[:, None], (-f * vn)[:, None] * n, torch.zeros_like(n))
+            corr = torch.where(act[:, None], (-f * vn)[:, None] * n, torch.zeros_like(n))
+            self.v = self.v + corr
+            self._nopenLoad = self._impulse_load(self.x, d, n, bidx, corr)
             return act.sum()
         near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
         if not len(near):
@@ -556,7 +584,19 @@ class DeltaSPH2D:
         act = hit & (d < 0.25 * self.dx) & (vn < 0)
         corr = torch.where(act[:, None], (-f * vn)[:, None] * n, torch.zeros_like(n))
         self.v = self.v.index_add(0, near, corr)
+        self._nopenLoad = self._impulse_load(self.x[near], d, n, bidx, corr)
         return int(act.sum())
+
+    def _impulse_load(self, x, d, n, bidx, corr):
+        """load of the fluid on each body [B, 3] of the no-penetration impulse: the particle momentum change m corr over the step is the reaction -m corr / dt on the body that exerted it (`bidx`), applied at the contact point x - d n."""
+        cp = x - d[:, None] * n
+        rows = []
+        for bi, b in enumerate(self.scene.bodies):
+            c = torch.where((bidx == bi)[:, None], corr, torch.zeros_like(corr))
+            F = -self.m * c / self.dt_t
+            r = cp - b.center
+            rows.append(torch.cat([F.sum(0), (r[:, 0] * F[:, 1] - r[:, 1] * F[:, 0]).sum()[None]]))
+        return torch.stack(rows)
 
     # ---------------------------------------------------------------------------------------------------------------- body-fitted packing
     def residual(self, x=None):
@@ -631,9 +671,10 @@ class DeltaSPH2D:
         """one step: the device part (`_step_core`, no host reads, capturable as a CUDA graph) and the host bookkeeping (time, the rolling gravity, the host copy of dt)."""
         self.dt_t.fill_(self.dt)                                  # the device scalar follows the host value (a test or a caller may set `sim.dt`)
         dt = self.dt
-        forces, nopen = self._step_core()
-        if forces is not None:
-            self.wallForce = forces
+        loads, nopen = self._step_core()
+        if loads is not None:
+            self.wallLoads = loads
+            self.wallForce = loads[0, :, :2]                       # the pressure force, as before
         self.nopen_count = nopen
         self.time += dt
         if self.gravityFn is not None:
@@ -674,8 +715,9 @@ class DeltaSPH2D:
         if self.cfg.shifting:
             self.x = self.x + self.shift(dt)
         nopen = self.no_penetration()
+        loads = None if forces is None else torch.cat([forces, self._nopenLoad[None]])      # [3, B, 3]: pressure, wall viscous, no-penetration impulse (Fx, Fy, torque z about the body centre); the dt of the impulse is this step's
         self.dt_t.copy_(self._next_dt(a1))                         # in place: the device scalar is a persistent buffer
-        return forces, nopen
+        return loads, nopen
 
     # ---------------------------------------------------------------------------------------------------------------- diagnostics
     def pressure(self):

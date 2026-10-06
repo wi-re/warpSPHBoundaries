@@ -169,7 +169,8 @@ class GraphedStep:
         self.carry_pose = [r[2][:6] for r in rows]
         forces, nopen = self.out[3], self.out[4]
         if forces is not None:
-            sim.wallForce = forces.clone()
+            sim.wallLoads = forces.clone()
+            sim.wallForce = sim.wallLoads[0, :, :2]
         sim.nopen_count = nopen.clone() if isinstance(nopen, torch.Tensor) else nopen
         sim.time += dt
         if sim.gravityFn is not None:

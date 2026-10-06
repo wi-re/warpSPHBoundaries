@@ -25,7 +25,7 @@ def run(maker, steps, graph, **kw):
 
 
 def same(a, b):
-    for name in ("x", "v", "rho", "wallForce"):
+    for name in ("x", "v", "rho", "wallForce", "wallLoads"):
         assert torch.equal(getattr(a, name), getattr(b, name)), name
     assert a.time == b.time and a.dt == b.dt
 
