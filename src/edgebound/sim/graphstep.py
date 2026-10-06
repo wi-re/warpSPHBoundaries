@@ -6,7 +6,7 @@ Every call: the host value of `dt` is written into `dt_t`, the state is copied i
 validity flags and (b) the new dt.  If any flag is set the replayed result is discarded and the step is run eagerly (where the Verlet check rebuilds the list for real); the next call then captures again
 against the new adjacency (the key is the identity of the Verlet list).  Whenever no flag is set, the eager checks would all have kept the prior list, so the replay is the eager result.
 
-Requirements (else the eager step is used): `cfg.fluidWarp` and `cfg.fusedWall` (the Verlet list and the fused wall are the capturable pieces), `SurfaceRep` / `BoxRep` walls, no `wallViscosityForm = "pairwise"` (index lists).  Bodies may move (prescribed motion): the poses of the three stages of a step (before the first RHS, after the first half move, after the second) are computed on the host with the arithmetic of `Body.move` and fed to the graph as device inputs (`stage` [3, B, 8]: centre, velocity, cos, sin, omega, alpha); the bodies are bound to them while the step is captured.  A time-dependent gravity (`gravityFn`) is fine: `g` is a static input updated every call.
+Requirements (else the eager step is used): `cfg.fluidWarp` and `cfg.fusedWall` (the Verlet list and the fused wall are the capturable pieces), `SurfaceRep` / `BoxRep` walls, no `wallViscosityForm = "pairwise"` (index lists).  Bodies may move (prescribed motion): they are part of the integrated state (system.py), so the graph takes their state at the start of the step as one device input (`sim._bodyIn` [3, B, 3]: centre / angle, velocity / omega, acceleration / alpha, filled from the host bodies before every replay), integrates them with the particles and returns the final state in `sim._bodyOut`, which the host bodies take over after the replay (one host read together with the validity flags and dt).  A time-dependent gravity (`gravityFn`) is fine: `g` is a static input updated every call.
 """
 import contextlib
 import gc
@@ -52,39 +52,14 @@ class GraphedStep:
         self.key = None
         self.stats = dict(captures=0, replays=0, eager=0)
         self.carry_ref, self.carry_pose = None, None
-        nb = len(sim.scene.bodies)
-        self.stage = torch.zeros((3, nb, 8), dtype=F64, device=sim.dev)         # per stage and body: cx, cy, vx, vy, cos, sin, omega, alpha
 
-    def _bind(self, k):
-        """bind the bodies to the device pose of stage k (called from `_step_core` while the graph is captured / warmed up)."""
-        for bi, b in enumerate(self.sim.scene.bodies):
-            st = self.stage[k, bi]
-            b.center, b.linearVelocity, b._cs = st[0:2], st[2:4], (st[4], st[5])
-            b.angularVelocity, b.angularAcceleration = st[6], st[7]
+    def _pose_id(self):
+        """what identifies the bodies as the last replay left them: the objects (device tensors) and values (host floats) the write-back set."""
+        return [(b.center, b.linearVelocity, b.angle, b.angularVelocity) for b in self.sim.scene.bodies]
 
-    def _pack(self, advance):
-        """fill `stage` from the host: stage 0 = the bodies as they are, stages 1 and 2 = after `Body.move(dt/2)` once and twice (same arithmetic; python floats and the device centre / velocity read back once)."""
-        sim = self.sim
-        bodies = sim.scene.bodies
-        dev = torch.cat([torch.cat([b.center, b.linearVelocity]) for b in bodies]).tolist() if bodies else []
-        h = 0.5 * sim.dt
-        rows = []
-        for bi, b in enumerate(bodies):
-            cx, cy, vx, vy = dev[4 * bi:4 * bi + 4]
-            ang, om, al = float(b.angle), float(b.angularVelocity), float(b.angularAcceleration)
-            ax, ay = [float(a) for a in b.linearAcceleration.tolist()]
-            st = []
-            for k in range(3):
-                st.append([cx, cy, vx, vy, float(np.cos(ang)), float(np.sin(ang)), om, al])
-                if advance:                                                   # Body.move: centre with the old velocity, angle with the old omega, then the velocities
-                    cx, cy = cx + h * vx, cy + h * vy
-                    ang = ang + h * om
-                    vx, vy = vx + h * ax, vy + h * ay
-                    om = om + h * al
-            rows.append(st)
-        if rows:
-            self.stage.copy_(torch.tensor(rows, dtype=F64).permute(1, 0, 2))
-        return rows
+    def _same_pose(self):
+        old, new = self.carry_pose, self._pose_id()
+        return old is not None and len(old) == len(new) and all(a[0] is b[0] and a[1] is b[1] and a[2] == b[2] and a[3] == b[3] for a, b in zip(old, new))
 
     def _refresh_carry(self):
         """eagerly evaluate the wall at the current positions and poses and write it into the carry buffers."""
@@ -100,11 +75,10 @@ class GraphedStep:
     def _capture(self):
         sim = self.sim
         saved = (sim.x, sim.v, sim.rho, sim.g, sim.dt_t.clone(), sim.surface, sim.surfaceDilated)
-        bsaved = [(b.center, b.linearVelocity, b.angularVelocity, b.angularAcceleration, getattr(b, "_cs", None)) for b in sim.scene.bodies]
+        bsaved = [(b.center, b.linearVelocity, b.linearAcceleration, b.angle, b.angularVelocity, b.angularAcceleration, getattr(b, "_cs", None)) for b in sim.scene.bodies]
         sim._graphMode = True
-        sim._graphBind = self._bind
         sim._carry, sim._carryNext, sim._carryEnabled = None, False, sim.cfg.noPen == "impulse" and sim.scene is not None
-        self._pack(advance=False)                                              # warm-up / capture see the bodies at their current pose in every stage (values are replaced before every replay)
+        sim._body_pack()                                                       # warm-up / capture see the bodies as they are now (the values are replaced before every replay)
         try:
             sim.x, sim.v, sim.rho = saved[0].clone(), saved[1].clone(), saved[2].clone()
             sim._step_core()                                                  # warm-up: module loads, per-position-set caches, the first Verlet list; its result is discarded
@@ -118,7 +92,7 @@ class GraphedStep:
             graph = torch.cuda.CUDAGraph()
             with _no_gc(), deferVerletChecks() as flags, wp.ScopedStream(wp.stream_from_torch(stream)), torch.cuda.graph(graph, stream=stream, capture_error_mode="thread_local"):
                 forces, nopen = sim._step_core()
-            self.out = (sim.x, sim.v, sim.rho, forces, nopen)
+            self.out = (sim.x, sim.v, sim.rho, forces, nopen, sim._bodyOut)
             self.flags = list(flags)
             self.graph = graph
             self.key = self._key()
@@ -129,9 +103,8 @@ class GraphedStep:
             sim.dt_t.copy_(saved[4])
             sim.surface, sim.surfaceDilated = saved[5], saved[6]
             sim._graphMode = False
-            sim._graphBind = None
             for b, st in zip(sim.scene.bodies, bsaved):
-                b.center, b.linearVelocity, b.angularVelocity, b.angularAcceleration, b._cs = st
+                b.center, b.linearVelocity, b.linearAcceleration, b.angle, b.angularVelocity, b.angularAcceleration, b._cs = st
 
     def step(self):
         sim = self.sim
@@ -139,10 +112,9 @@ class GraphedStep:
         dt = sim.dt
         if self.graph is None or self.key != self._key():
             self._capture()
-        rows = self._pack(advance=True)
+        sim._body_pack()
         if sim._carry is not None:
-            now0 = [r[0][:6] for r in rows]
-            if self.carry_ref is not sim.x or self.carry_pose != now0:           # state changed since the last replay (first step, eager fallback, a caller): rebuild the carry at the current positions
+            if self.carry_ref is not sim.x or not self._same_pose():           # state changed since the last replay (first step, eager fallback, a caller): rebuild the carry at the current positions
                 self._refresh_carry()
         sim._graphMode = True
         try:
@@ -154,19 +126,20 @@ class GraphedStep:
         finally:
             sim._graphMode = False
         bad = torch.stack(self.flags).any().to(F64) if self.flags else torch.zeros((), dtype=F64, device=sim.dev)
-        bad_h, dt_h = torch.stack([bad, sim.dt_t[()]]).tolist()               # the one host read of the step
+        host = torch.cat([bad.reshape(1), sim.dt_t.reshape(1), self.out[5].reshape(-1)] if sim.nb else [bad.reshape(1), sim.dt_t.reshape(1)]).tolist()               # the one host read of the step
+        bad_h, dt_h = host[0], host[1]
         if bad_h:                                                             # the Verlet list is no longer valid: this step eagerly (rebuilds), the next one captures against the new list
             self.stats["eager"] += 1
             sim.dt_t.fill_(dt)
             sim._graphMode = False
             return sim._step_eager()
         self.stats["replays"] += 1
-        for b in sim.scene.bodies:                                            # the bodies end the step where the eager step leaves them (two half moves)
-            b.move(0.5 * dt)
-            b.move(0.5 * dt)
+        if sim.nb:
+            sim._bodyOut = self.out[5]
+            sim._body_writeback(host[2:])
         sim.x, sim.v, sim.rho = self.out[0].clone(), self.out[1].clone(), self.out[2].clone()
         self.carry_ref = sim.x
-        self.carry_pose = [r[2][:6] for r in rows]
+        self.carry_pose = self._pose_id()
         forces, nopen = self.out[3], self.out[4]
         if forces is not None:
             sim.wallLoads = forces.clone()

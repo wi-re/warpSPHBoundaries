@@ -3,7 +3,7 @@
 (a) dam break and sloshing (rolling gravity = a static input updated every call), 40 steps: positions, velocities, densities, the wall force, the host time and dt are torch.equal to the eager run with
     the same cfg (the graph replays the very kernels of the eager step: a bit-level contract, not a tolerance), one capture and 40 replays;
 (b) a run long enough for the Verlet list to become invalid: the step that finds the flag set is run eagerly, the next one captures against the new list, and the state stays equal to the eager run;
-(c) the box domain and bodies with prescribed motion are captured (the stage poses are device inputs); (d) a configuration the graph cannot take (pairwise wall viscosity) uses the eager step silently.
+(c) the box domain and bodies with prescribed motion are captured (the bodies are part of the integrated state: their state at the start of the step is a device input); (d) a configuration the graph cannot take (pairwise wall viscosity) uses the eager step silently.
 CUDA only.
 """
 import pytest
@@ -57,7 +57,7 @@ def test_box_domain_is_captured(domain):
 
 @pytest.mark.parametrize("domain", ["box", "surface"])
 def test_moving_body_poses_are_graph_inputs(domain):
-    """a tank body with a prescribed motion (velocity, acceleration, rotation, angular acceleration): the three stage poses of every step come from the host and the replay equals the eager step bit for bit
+    """a tank body with a prescribed motion (velocity, acceleration, rotation, angular acceleration): the body state is integrated on the device with the particles and the replay equals the eager step bit for bit
     (the pose changes every step, so a baked pose would be wrong from the second step on); the host bodies end where the eager bodies end."""
     def go(graph):
         sim = cases.marrone_dambreak(nx=24, shifting=True, noPen="impulse", domain=domain, device=DEV, fluidWarp=True, graphStep=graph)[0]

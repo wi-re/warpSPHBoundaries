@@ -12,13 +12,14 @@ boundary-particle population (mDBC ghost nodes, free-slip mirror, no-penetration
     artificial visc.    dv_i = alpha c0 H / xi  sum_j V_j mu_ij grad_i W_ij / mean(rho_i, rho_j),   mu_ij = (v_i - v_j).x_ij / (r_ij^2 + 1e-14 H^2)     [wall term: not yet]
     free surface        Barecasco: cover vector C = sum_j unit(x_i - x_j); surface iff no neighbour within pi/6 of C/|C|.  The wall counts as the continuum of wall particles
                         (number density mu / dx^2): the solid is sampled on a polar grid around the particle with `Scene.inside`
-    time integration    DualSPHysics symplectic Euler: k0 at t^n; half step; k1 at the half state; v^{n+1} = v^n + dt a_1, x^{n+1} = x^n + dt (v^n + v^{n+1}) / 2, rho^{n+1} = rho^n + dt drho_1
+    time integration    DualSPHysics symplectic Euler as warpSPHIntegrators `symplecticEuler` (system.py): k0 at t^n; half step; k1 at the half state; v^{n+1} = v^n + dt a_1, x^{n+1} = x^n + dt (v^n + v^{n+1}) / 2, rho^{n+1} = rho^n + dt drho_1
     time step           Sun 2017 Eq. (5): min(viscous, acoustic CFL, acceleration), growth <= 1.1
 
 Units as warpSPH (rest density 1, P* = P / (rho0 g H)); Wendland C2, support H = 4 dx (h/dx = 2), mass m = rho0 dx^2, V_j = m / rho_j.
 
 Wall pressure: `P_b >= 0` (`clampWallPressure`): the hydrostatic extrapolation is a suction at a ceiling (dfsph-validation.md s.7); warpSPH's mDBC carries the ghost's own (possibly negative) pressure there.
 """
+import contextlib
 import dataclasses
 import math
 from dataclasses import dataclass
@@ -143,7 +144,10 @@ class DeltaSPH2D:
         self._carry = None                                     # FusedWall of the last no-penetration evaluation, persistent buffers (graph step only)
         self._carryNext = False
         self._carryEnabled = False
-        self._graphBind = None                                 # graph capture: binds the bodies to the device pose of stage k (graphstep.py)
+        self._bodyIn = torch.zeros((3, self.nb, 3), dtype=F64, device=device)      # the bodies entering a step on the device: (centre, angle), (velocity, omega), (acceleration, alpha); a captured step reads it as a static input
+        self._bodyOut = None                                   # the bodies leaving the step [2, B, 3]: (centre, angle), (velocity, omega)
+        self._stage = 0                                        # right-hand-side evaluations of the current step (system.py)
+        self._finalAux = None
         self._graphMode = False                                # True while the step is captured / replayed as a CUDA graph: no host-side caches or reads (graphstep.py)
         self._hc = None                                        # (Hvec tensor, all supports == H) cache of _constSupport
         self._fgroups = None                                   # (FusedGroup tuple, {output role: group index}, config key) of the fused wall evaluation
@@ -168,7 +172,7 @@ class DeltaSPH2D:
     def _wall_state(self, x, rho):
         """`_wall_data` and the wall adjacency at x (the near-wall consumers -- cover, Laplacian, tensile -- take its `restrict` instead of searching again)."""
         ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
-        poses = [(b.center.clone(), float(b.angle)) for b in self.scene.bodies]
+        poses = None if self._graphMode else [(b.center.clone(), float(b.angle)) for b in self.scene.bodies]      # (float(angle) is a host read, the cache is off in graph mode)
         c = self._wallCache
         fused = self.cfg.fusedWall and FusedWall.supported(self.scene)
         if self._carryNext:                                     # graph step, first RHS: the wall evaluation the previous step's no-penetration law made at these very positions (graphstep.py)
@@ -345,7 +349,7 @@ class DeltaSPH2D:
                     out = out + 2.0 * rho * ((vel - b.velocityAt(x)) * nb_).sum(1) * gm
             return out
         self._kinematic = kinematic
-        kin = kinematic(v)
+        kin = self._kin = kinematic(v)
         drho = kin
         # density diffusion (fourtakas2019, fluid only)
         if cfg.ddt and fw is not None:
@@ -667,10 +671,28 @@ class DeltaSPH2D:
                 return self._graphed.step()
         return self._step_eager()
 
+    def _body_pack(self):
+        """the bodies as they are (host objects: device centre / velocity / acceleration, python angle / omega / alpha) -> the device input `_bodyIn` of the step."""
+        bs = self.scene.bodies if self.scene is not None else []
+        if not bs:
+            return
+        lin = torch.stack([torch.cat([b.center, b.linearVelocity, b.linearAcceleration.to(self.dev)]) for b in bs])      # [B, 6]
+        ang = torch.tensor([[float(b.angle), float(b.angularVelocity), float(b.angularAcceleration)] for b in bs], dtype=F64).to(self.dev)   # [B, 3]
+        self._bodyIn.copy_(torch.stack([torch.cat([lin[:, 0:2], ang[:, 0:1]], 1), torch.cat([lin[:, 2:4], ang[:, 1:2]], 1), torch.cat([lin[:, 4:6], ang[:, 2:3]], 1)]))
+
+    def _body_writeback(self, flat):
+        """the bodies end the step where the integrator left them: `self._bodyOut` [2, B, 3] on the device (centre, velocity), `flat` its host values (the angle and omega become python floats again)."""
+        nb = self.nb
+        for i, b in enumerate(self.scene.bodies):
+            b.center, b.linearVelocity = self._bodyOut[0, i, 0:2].clone(), self._bodyOut[1, i, 0:2].clone()
+            b.angle, b.angularVelocity = flat[i * 3 + 2], flat[(nb + i) * 3 + 2]
+            b._cs = None
+
     def _step_eager(self):
-        """one step: the device part (`_step_core`, no host reads, capturable as a CUDA graph) and the host bookkeeping (time, the rolling gravity, the host copy of dt)."""
+        """one step: the device part (`_step_core`, no host reads, capturable as a CUDA graph) and the host bookkeeping (time, the bodies, the rolling gravity, the host copy of dt)."""
         self.dt_t.fill_(self.dt)                                  # the device scalar follows the host value (a test or a caller may set `sim.dt`)
         dt = self.dt
+        self._body_pack()
         loads, nopen = self._step_core()
         if loads is not None:
             self.wallLoads = loads
@@ -679,45 +701,29 @@ class DeltaSPH2D:
         self.time += dt
         if self.gravityFn is not None:
             self.g = torch.tensor(self.gravityFn(self.time), dtype=F64, device=self.dev)
-        self.dt = float(self.dt_t)
+        vals = torch.cat([self.dt_t.reshape(1), self._bodyOut.reshape(-1)]).tolist() if self._bodyOut is not None else [float(self.dt_t)]
+        self.dt = vals[0]
+        if self._bodyOut is not None:
+            self._body_writeback(vals[1:])
         return self.time
 
     def _step_core(self):
-        """DualSPHysics symplectic Euler with time-centred continuity, shifting and the no-penetration impulse on the device state (x, v, rho, g, dt_t); returns (forces, no-penetration count)."""
-        dt = self.dt_t
+        """the library's symplectic Euler (system.py: `symplecticEuler(DeltaSPHSystem, dt, deltaSPHRhs)`; shifting and the no-penetration impulse in the system's `finalize`) on the device state (x, v, rho, g, dt_t, the bodies
+        `_bodyIn`); returns (loads, no-penetration count) and leaves the bodies in `_bodyOut`."""
+        from warpSPHIntegrators import symplecticEuler
+        from warpSPHIntegrators.util import deferHostTime
+        from .system import DeltaSPHSystem, deltaSPHRhs
         self._carryNext = self._graphMode and self._carry is not None
-        if self._graphMode and self._graphBind is not None:
-            self._graphBind(0)                                     # the bodies at their pose of stage 0 (device inputs of the graph)
-        a0, d0, _ = self.rhs(self.x, self.v, self.rho)
-        xh, vh, rh = self.x + 0.5 * dt * self.v, self.v + 0.5 * dt * a0, self.rho + 0.5 * dt * d0
-        if self.scene is not None:
-            if self._graphMode:
-                self._graphBind(1)
-            else:
-                for b in self.scene.bodies:
-                    b.move(0.5 * self.dt)
-        a1, d1, forces = self.rhs(xh, vh, rh, want_forces=True)
-        vn = self.v + dt * a1
-        self.x = self.x + 0.5 * dt * (self.v + vn)
-        rho_new = self.rho + dt * d1
-        if self.cfg.timeCentred:
-            # warpSPHIntegrators `symplecticEuler` drift field: rho^{n+1} = rho^n + dt (k1 - kin(k1)) + dt K(x_h, vbar),  vbar = (v^n + v^{n+1}) / 2, K the kinematic rate (same positions and densities as k1)
-            K = self._kinematic(0.5 * (self.v + vn))
-            rho_new = rho_new + dt * (K - self._kinematic(vh))
-        self.v = vn
-        self.rho = rho_new
-        if self.scene is not None:
-            if self._graphMode:
-                self._graphBind(2)
-            else:
-                for b in self.scene.bodies:
-                    b.move(0.5 * self.dt)
-        if self.cfg.shifting:
-            self.x = self.x + self.shift(dt)
-        nopen = self.no_penetration()
-        loads = None if forces is None else torch.cat([forces, self._nopenLoad[None]])      # [3, B, 3]: pressure, wall viscous, no-penetration impulse (Fx, Fy, torque z about the body centre); the dt of the impulse is this step's
-        self.dt_t.copy_(self._next_dt(a1))                         # in place: the device scalar is a persistent buffer
-        return loads, nopen
+        dt = self.dt_t if self._graphMode else self.dt              # a captured step has no host dt: the device scalar, with the integrator's host time deferred
+        with deferHostTime() if self._graphMode else contextlib.nullcontext():
+            res = symplecticEuler(DeltaSPHSystem.of(self, self._bodyIn), dt, deltaSPHRhs)
+        st, aux = res.state.state, self._finalAux
+        self.x, self.v, self.rho = st.positions, st.velocities, st.densities
+        self._bodyOut = torch.stack([st.bodyPositions, st.bodyVelocities]) if self.nb else None
+        forces = aux["forces"]
+        loads = None if forces is None else torch.cat([forces, aux["nopenLoad"][None]])        # [3, B, 3]: pressure, wall viscous, no-penetration impulse (Fx, Fy, torque z about the body centre); the dt of the impulse is this step's
+        self.dt_t.copy_(self._next_dt(aux["acc"]))                 # in place: the device scalar is a persistent buffer
+        return loads, aux["nopen"]
 
     # ---------------------------------------------------------------------------------------------------------------- diagnostics
     def pressure(self):
