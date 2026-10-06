@@ -820,6 +820,8 @@ class Body:
                 if isinstance(r, DiskArrayRep):
                     out.append(self._tile(r, hmin))
                 elif isinstance(r, (SurfaceRep, BoxRep)):
+                    if self.periodic is not None:
+                        self._checkCompact(r, max(float(hmin), self.periodicSupport))
                     out.append(r)
                 elif isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody) and r.shape.solid == "inside":
                     out.append(r.disks().to(device))                                      # a solid disk: one table lookup per query (any radius), no polygon
@@ -858,12 +860,16 @@ class Body:
         return t
 
     def _checkCompact(self, rep, supportMax):
-        L = self.periodic.length(rep.centres)
+        """on every periodic axis the body is either COMPACT (extent from the centre + support below half the box length: the nearest image of the centre serves every row) or SPANNING (its bounds cover the whole
+        window [-L/2 - H, L/2 + H] around the centre: a plate or wall that is itself periodic, e.g. a channel wall; the geometry is assumed translation invariant by L).  Anything else is refused."""
         lo, hi = rep.bounds()
+        L = self.periodic.length(lo)
+        H = float(supportMax)
         ext = torch.maximum(lo.abs(), hi.abs())
-        bad = (L > 0) & (ext + float(supportMax) >= 0.5 * L)
-        if bool(bad.any()):
-            raise ValueError("a periodic body must fit its cell: extent + support below half the box length on every periodic axis")
+        compact = ext + H < 0.5 * L
+        spanning = (lo <= -0.5 * L - H) & (hi >= 0.5 * L + H)
+        if bool(((L > 0) & ~(compact | spanning)).any()):
+            raise ValueError("a periodic body must fit its cell (extent + support below half the box length) or span it (cover the box plus a support) on every periodic axis")
 
     def fusable(self):
         """True when `fusedReps` exists (whatever the support: the tier-2 polygon of a disk needs a size only for its resolution)."""

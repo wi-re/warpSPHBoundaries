@@ -55,7 +55,7 @@ def main():
     ap.add_argument("--f", type=float, default=0.03)
     ap.add_argument("--time", type=float, default=40.0)
     ap.add_argument("--H", type=float, default=4.0, help="support in units of dx")
-    ap.add_argument("--wall", default="noslip")
+    ap.add_argument("--wall", default="noslip", help="wallViscosityForm: noslip (flux form), noslipMirror (exact Laplacian, antisymmetric mirror)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n

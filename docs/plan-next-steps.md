@@ -104,6 +104,25 @@ counter-clockwise, 1/2 rho U^2 D), `strouhal`, `window_mean`; `tests/sim/test_lo
 6. **Sensitivity of the loads** to the closure choices (free-slip vs no-slip, `constant` vs `zeros`), to the resolution (R/H), and to the representation (disk element vs
    polygon vs SdfRep of the same disk): the representation-independence of the loads is a test of the package itself.
 
+### Results so far (2026-10-06, `scripts/studies/periodic_cylinder_array.py`, `periodic_channel.py`, `stokes_array_ref.py`)
+
+Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185 (the shear-wave decay of the discretisation measures nu_eff = 0.955 alpha c0 H / (8 xi)), body force f, Re ~ 0.6, no-slip wall.
+
+* **Rung 1 (invariance, rest)**: tests (`test_periodic_fluid`, `test_periodic_wall`).  **Rung 2 (momentum balance)**: PASS.  Steady-state plate / cylinder loads equal the body force on the fluid particles present to
+  0.2-0.6 % at every resolution (cylinder n = 32 / 64 / 96: 1.006, 0.999, 1.002; channel 0.996-1.001).  Against the geometric fluid area (L^2 - pi R^2) the balance looks 1-2 % off only because the cut lattice holds ~0.8 % fewer
+  particles than the area (a half-spacing gap at the wall).  Lift of the symmetric array: zero to noise (1e-5 of the drag).
+* **Viscosity under periodicity** (shear-wave decay, no walls): nu_eff = 0.955 +- 0.01 of alpha c0 H / (8 xi), linear in alpha, independent of n at fixed H/dx.
+* **Reference for rung 4**: the Sangani-Acrivos square-array expansion K = 4 pi / (-1/2 ln c - 0.738 + c - 0.887 c^2 + 2.038 c^3) = 30.30 at c = 0.1257 is confirmed by an independent Fourier volume-penalisation Stokes
+  solve (K = 31.9, 30.7, 30.4 at 128, 256, 384 points, converging to 29.8-30.3; the momentum balance of the solve is exact).
+* **Rung 4, the drag is 8 % low and does not converge away**: K (flux-form `noslip` wall, fixed nu) = 28.26, 27.80, 27.71 at n = 32, 64, 96 (R/dx = 6.4 ... 19), i.e. 0.915 of the reference; with the exact antisymmetric-mirror wall
+  Laplacian (`wallViscosityForm="noslipMirror"`, new: the `laplacian` integral with the whole relative velocity flipped) 28.6 at n = 48 (0.943).  Resolution does not remove it, so it is a wall-model offset, not sampling.
+* **Rung 3, plane Poiseuille between periodic-spanning plates** (new: `Body._checkCompact` accepts a body that spans the box): the profile amplitude over the parabola of the bulk viscosity is 0.898 / 0.913 / 0.927 (mirror,
+  n = 32 / 48 / 64) and 0.950 / 0.961 / 0.966 (flux form `noslip`): first order or slower in dx, equivalent to a no-slip plane 0.4-0.6 dx inside the fluid.  The channel is too slow while the cylinder array is too permeable,
+  so the two errors do not have one sign: the wall viscosity closure is not yet accurate to better than ~5-10 % in either geometry.
+* **Conclusion**: the periodic machinery (1a-1d) is consistent (invariance to round-off, exact momentum balance, loads recoverable); the quantity that limits permeability / drag accuracy is the no-slip wall viscosity
+  model of the solver (a model question, independent of periodicity).  Candidate next studies, in order: wall-closure calibration on the channel + a Couette annulus (a convex curved wall with an exact solution) with the
+  mirror and flux forms, the dependence on H / dx and on shifting, and a sampling check of the half-spacing wall gap (fluid mass).
+
 ### Risks
 
 * The Dirichlet frame pins a region that is also a shifting / density-diffusion neighbour; edge effects at the frame feed the wake through the periodic image.  Rung 5 quantifies this.

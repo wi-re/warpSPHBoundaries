@@ -76,7 +76,7 @@ class DeltaSPHConfig:
     shiftCurvatureAngle: float = 15.0   # degrees
     noPen: str = "off"                  # 'impulse': once per step, closing particles within dp/4 of a wall get v_n <- v_n (1 - f(d)), f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) (warpSPH mDBC no-penetration, 'impulse' placement)
     wallViscosity: bool = True          # wall term of the alpha-viscosity (free-slip mirror), form: wallViscosityForm
-    wallViscosityForm: str = "laplacian"   # "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples) | "noslip": no-slip wall (v_w = body velocity): Chiron-style flux term -2 nu_eff (v - v_w) |G| / (rho d), nu_eff = alpha c0 H/(8 xi), d = max(distance to the wall, 0.25 dx)
+    wallViscosityForm: str = "laplacian"   # "noslipMirror": the exact wall Laplacian of "laplacian" with the antisymmetric mirror (no-slip: the whole relative velocity flips) | "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples) | "noslip": no-slip wall (v_w = body velocity): Chiron-style flux term -2 nu_eff (v - v_w) |G| / (rho d), nu_eff = alpha c0 H/(8 xi), d = max(distance to the wall, 0.25 dx)
     fusedWall: bool = True              # step 3 of docs/plan-wall-evaluation.md: lam, G, Cov, A, the cover vector, the wall Laplacian and the tensile term of one position set from ONE fused kernel launch family (scene/fused.py); surface-loop walls with one support only, else the sceneOperation path is used
     fixedAdjacency: bool = True         # step 5 of the plan: the wall adjacency of the fused path in ONE Warp launch per (body, rep) with fixed shapes and no host sync (scene/fixedadj.py); False = Scene.adjacency (torch.nonzero / cell-list pair search), the oracle
     graphStep: bool = True              # step 5b of the plan: replay the whole step as a CUDA graph (graphstep.py; needs fluidWarp, fusedWall, static surface-loop walls, else eager)
@@ -231,12 +231,12 @@ class DeltaSPH2D:
         return self._hc[1]
 
     def _fused_key(self):
-        return (self.cfg.kernel, bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian"), bool(self.cfg.fixedAdjacency), float(self.cfg.wallParticleSpacing))
+        return (self.cfg.kernel, bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm in ("laplacian", "noslipMirror")), bool(self.cfg.fixedAdjacency), float(self.cfg.wallParticleSpacing))
 
     def _fused_state(self, ps):
         """the fused wall evaluation at the positions of `ps` from the boundary provider (scene/provider.py): adjacency, one stage-1 launch family for the kernels the step needs, and every static output of this
         position set in `.out` (lam, G, Cov of the kernel, `cover` = g0 of the degree-1 cone kernel per body, `lap` = sum(2 lam - tr g1) of lw, `tens` = g0 of wp5, per body, raw: factors applied by the consumers)."""
-        fw = self._provider().aggregate(ps, self.H, self.cfg.kernel, laplacian=bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm == "laplacian"), fixedAdjacency=self.cfg.fixedAdjacency)
+        fw = self._provider().aggregate(ps, self.H, self.cfg.kernel, laplacian=bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm in ("laplacian", "noslipMirror")), fixedAdjacency=self.cfg.fixedAdjacency)
         fw.key = self._fused_key()
         return fw
 
@@ -336,8 +336,8 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None and (not isinstance(adj, WallAggregate) or not self._graphMode):         # the index list is only needed by the non-fused and the 'pairwise' paths (and diagnostics); a graph capture has none
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
-        if cfg.viscosity and cfg.wallViscosity and cfg.wallViscosityForm not in ("laplacian", "pairwise", "noslip"):
-            raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise' or 'noslip', got %r" % (cfg.wallViscosityForm,))
+        if cfg.viscosity and cfg.wallViscosity and cfg.wallViscosityForm not in ("laplacian", "pairwise", "noslip", "noslipMirror"):
+            raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise', 'noslip' or 'noslipMirror', got %r" % (cfg.wallViscosityForm,))
         self.surface = self._detect_surface(x, None if fk else i, None if fk else j, None if fk else r, lam, adj, fk)
         if cfg.dilateSurface:
             self.surfaceDilated = fk.dilate(self.surface) if fk else self._sum(self.surface[j].to(F64), i) > 0.5            # pairs include i = j
@@ -390,7 +390,7 @@ class DeltaSPH2D:
         if want_forces and self.nb and cfg.viscosity and cfg.wallViscosity:
             visc = torch.zeros((self.nb, len(x), 2), dtype=F64, device=self.dev)                    # per body acceleration of the wall viscous term, for the load of the fluid on the body
             lever = x[None].repeat(self.nb, 1, 1)                                                   # where the reaction acts: the particle, or the contact point for the tangential no-slip friction
-        if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip"):
+        if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip", "noslipMirror"):
             fac = cfg.alpha * cfg.c0 * H / self.xi                                                  # full-length form: the near-wall rows are a mask, not an index list (no host sync)
             nearm = (lam.sum(0) > 1e-9).to(F64)
             for bi, b in enumerate(self.scene.bodies):
@@ -400,6 +400,9 @@ class DeltaSPH2D:
                     un = ((v - b.velocityAt(x)) * nb_).sum(1)
                     dl = lap_factor(H, self._family()) * adj.out["lap"][bi]
                     term = (-2.0 * (fac / 8.0) * cfg.wallMass * un / rho * dl * nearm)[:, None] * nb_
+                elif cfg.wallViscosityForm == "noslipMirror":                                       # the same exact wall Laplacian with the antisymmetric mirror: the wall continuum moves with 2 v_w - v, the whole relative velocity flips (free slip flips its normal part only)
+                    dl = lap_factor(H, self._family()) * adj.out["lap"][bi]
+                    term = (-2.0 * (fac / 8.0) * cfg.wallMass / rho * dl * nearm)[:, None] * (v - b.velocityAt(x))
                 else:
                     dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
                     dd = dsd.clamp(min=0.25 * self.dx)
