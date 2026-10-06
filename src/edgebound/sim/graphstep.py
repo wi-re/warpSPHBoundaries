@@ -39,7 +39,7 @@ def graphable(sim):
         return False
     if cfg.wallViscosity and cfg.viscosity and cfg.wallViscosityForm == "pairwise":
         return False
-    if not FusedWall.supported(sim.scene, cfg.fixedAdjacency):
+    if cfg.wallParticleSpacing > 0 or not FusedWall.supported(sim.scene, cfg.fixedAdjacency):
         return False
     return torch.cuda.is_available() and str(sim.dev).startswith("cuda")
 

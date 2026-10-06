@@ -221,7 +221,12 @@ def _spec_arrays(outputs, B, N, dev, groups):
     return _SPEC_CACHE[key]
 
 
-class FusedWall:
+class WallAggregate:
+    """marker base of the wall aggregates a scheme consumes (the contract is documented in `provider.py`): `.out` (lam, G, Cov, cover, lap, tens per body), `evaluate(outputs, a1)`, `cone_area(axes, half_angle)`.
+    `FusedWall` is the analytic one (exact edge integrals), `particles.ParticleAggregate` the wall-particle quadrature."""
+
+
+class FusedWall(WallAggregate):
     """stage 1 of the fused wall evaluation at one position set (see the module docstring)."""
 
     def __init__(self, scene, adjacency, groups):

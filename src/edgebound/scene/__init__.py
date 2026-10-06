@@ -2,12 +2,12 @@
 vector, cone area, tensile term, wall Laplacian) and the boundary PROVIDER a scheme consumes (`AnalyticBoundary`, `provider.py`).  See docs/scene-architecture.md.
 
 Public surface (lazy: importing the package does not import warp / torch kernels):  Scene, Body, SurfaceRep, BoxRep, ImplicitRep, SdfRep, VolumeRep, DiskBody, HalfPlaneBody,
-AnalyticBoundary, BoundaryProvider, WallAggregate, WallOutput.  Layering (enforced by tests/test_package_layering.py): `edge` <- `scene` <- `sim`; `edge` and `scene` import `warpSPHCore` but never `warpSPH`.
+AnalyticBoundary, ParticleBoundary, BoundaryProvider, WallAggregate, WallOutput.  Layering (enforced by tests/test_package_layering.py): `edge` <- `scene` <- `sim`; `edge` and `scene` import `warpSPHCore` but never `warpSPH`.
 """
 _EXPORTS = {
     "Scene": "scene", "Body": "scene", "SurfaceRep": "scene", "BoxRep": "scene", "ImplicitRep": "scene", "SdfRep": "scene", "VolumeRep": "scene", "BodyField": "scene", "sceneOperation": "scene",
     "DiskBody": "implicitBodies", "HalfPlaneBody": "implicitBodies", "TierPolicy": "implicitBodies",
-    "AnalyticBoundary": "provider", "BoundaryProvider": "provider", "WallAggregate": "provider",
+    "AnalyticBoundary": "provider", "ParticleBoundary": "particles", "BoundaryProvider": "provider", "WallAggregate": "fused",
     "WallOutput": "fused", "FusedWall": "fused",
 }
 __all__ = sorted(_EXPORTS)

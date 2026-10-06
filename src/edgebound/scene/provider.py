@@ -27,12 +27,10 @@ from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, Ope
 from ..edge.warpfused import FusedGroup
 from .boundaryOps import kernelName
 from .fixedadj import fixed_adjacency
-from .fused import FusedWall, WallOutput
+from .fused import FusedWall, WallAggregate, WallOutput
 from .scene import Scene
 from .tensile import tensile_factor
 from .viscosity import lap_factor
-
-WallAggregate = FusedWall
 
 _FAMILY = {KernelFunctions.Wendland2: "w2", KernelFunctions.Wendland4: "w4"}
 
