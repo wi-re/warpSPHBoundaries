@@ -76,3 +76,30 @@ bit-for-bit as a CUDA graph; the bundle is ONE `FusedWall` item.
 
 **Not covered:** overlapping disks (the integrals add), per-fibre kinematics inside one bundle (separate bodies, at the per-body launch cost), cavities of circular shape (polygon), the 3D sphere / cylinder (same identities
 with M(r) = int s^2 W; a two-angle cap quadrature builds the tables, a lookup in (D, R) again; infinite cylinders: the projected 2D kernel; finite cylinders need the end caps).
+
+
+## Per-fibre kinematics: what separate bodies cost, and why (2026-10-06)
+
+A fibre that moves on its own (prescribed motion now, coupled motion later) needs its own body today.  Measured in the solver, CUDA graph replay, a channel of ~6000 particles with 4 / 16 / 36 fibres, ms per step:
+
+| | bundle (one body) | separate bodies, first version | after the kernel fix below |
+|---|---|---|---|
+| f64, 16 fibres | 25 | 55 | 13 / 25 |
+| f64, 36 fibres | 23 | 98 | 13 / 41 |
+| f32, 16 fibres | 4.0 | 34 | 3.6 / 14 |
+| f32, 36 fibres | 9.2 | 61 | 3.8 / 28 |
+
+(the "after" columns are bundle / bodies).  Profile of the extra GPU time per additional fibre body (graph replay, 254 launches per fibre per step):
+
+* **the disk kernels: 0.98 ms of 1.42 ms** in the first version.  The lookup kernel ran one thread per slot doing ~3000 dependent table loads / FMAs for four kernel groups, so a launch cost ~200 us (the serial latency of its longest
+  thread) whatever the number of active slots, and every body pays it once, in sequence.  Fix (done): one thread per (slot, group, table channel) for the lookup and a small assembly kernel (20 + 6 us per launch);
+  the closed-form cone area runs one thread per (slot, part) with deterministic reduction over the slots (100 us: the f64 transcendental chain of one closed-form evaluation is the floor).  This also halved the bundle
+  (25 -> 13 ms f64, 9 -> 4 ms f32).
+* **the solver's per-body Python loops: ~0.3 ms per body** (170 small torch kernels per body per step: the wall continuity mirror, the wall viscosity, the free-slip pressure terms, the no-penetration `signed_distance`
+  per body, the loads).  Nothing in the graph removes them: they are launches, not host work.
+* the memory of the per-body arrays is `B x N x ~15` doubles: 100 fibres x 10^6 particles is 12 GB, so separate bodies do not scale in memory either.
+
+Remaining cost of an independently moving fibre as a separate body: ~1 ms per fibre per step (f64 and f32), i.e. 100 fibres ~ 100 ms per step.  The scalable form is SLOT-RESOLVED instance kinematics: the bundle keeps one launch and one
+slot list (K = the most fibres a particle sees, 1 - 4), the aggregate holds the per-slot channels [N, K, ...] (instead of [B, N, ...]), and the solver treats the K slots as K pseudo-bodies whose kinematics are
+GATHERED per particle from per-fibre state arrays (centre, velocity, omega, acceleration, alpha: integrated like the body state, device inputs of the graph); loads are scattered per fibre (`index_add`).  Cost ~ K x one body
+instead of M x one body, memory N x K.

@@ -4,7 +4,8 @@ units of h) in the BODY frame of the query positions; the indicator of the solid
 
     c = disk_channels_device(slot_q, slot_m, lpos, lsup, centres, radii, groups, device)       # slot_m < 0: an empty slot (all channels 0)
 
-Lookup (h = 1: D = |centre - x| / h, R = radius / h, delta = D - R): D >= 1 + R: zero; R > 1 and D <= R - 1: the support ball lies in the disk (lam = 1, g1 = I); R > 1: the table L over (v = (delta + 1) / 2, s = 1 / R);
+Two launches: one thread per (slot, group, table channel) does the lookups (the latency of a launch is the serial work of its longest thread: one thread per slot took 200 us whatever the number of active slots),
+one thread per slot assembles the nine channels.  Lookup (h = 1: D = |centre - x| / h, R = radius / h, delta = D - R): D >= 1 + R: zero; R > 1 and D <= R - 1: the support ball lies in the disk (lam = 1, g1 = I); R > 1: the table L over (v = (delta + 1) / 2, s = 1 / R);
 R <= 1: one of six tables over (w, r), w = (2 / pi) asin(sqrt(u)) with u the position inside the delta interval between the surface and the tangency lines, r the position in the radius branch, times R^2.
 """
 import numpy as np
@@ -15,14 +16,13 @@ from .disktables import load_disk_tables
 from .precision import IS_F32, np_real, real, torch_real, vec2_t, sync as _sync
 
 wp.config.quiet = True
-vec5 = wp.types.vector(length=5, dtype=real)
 vec12 = wp.types.vector(length=12, dtype=real)
 CH = 5
 
 
 @wp.func
-def _panel_eval(coef: wp.array(dtype=real), base: int, pa: int, pb: int, na: int, nb: int, a: real, b: real):
-    """sum_{p,q} coef[panel, p, q, :] T_p(ta) T_q(tb) for the panel of (a, b) in [0, 1]^2 (a vec5)."""
+def _panel_eval1(coef: wp.array(dtype=real), base: int, pa: int, pb: int, na: int, nb: int, a: real, b: real, ch: int):
+    """sum_{p,q} coef[panel, p, q, ch] T_p(ta) T_q(tb) for the panel of (a, b) in [0, 1]^2: ONE channel (one thread of the launch; the latency of a launch is the serial work of its longest thread)."""
     a = wp.clamp(a, real(0.0), real(1.0))
     b = wp.clamp(b, real(0.0), real(1.0))
     af = a * real(pa)
@@ -44,30 +44,27 @@ def _panel_eval(coef: wp.array(dtype=real), base: int, pa: int, pb: int, na: int
             Ta[k] = real(2.0) * ta * Ta[k - 1] - Ta[k - 2]
         if k < nb:
             Tb[k] = real(2.0) * tb * Tb[k - 1] - Tb[k - 2]
-    out = vec5(real(0.0))
+    out = real(0.0)
     for p in range(na):
+        acc = real(0.0)
         for q in range(nb):
-            w = Ta[p] * Tb[q]
-            idx = base + (((i * pb + j) * na + p) * nb + q) * 5
-            for c in range(5):
-                out[c] = out[c] + w * coef[idx + c]
+            acc += Tb[q] * coef[base + (((i * pb + j) * na + p) * nb + q) * 5 + ch]
+        out += Ta[p] * acc
     return out
 
 
 @wp.func
-def _disk_group(coef: wp.array(dtype=real), off: int, D: real, R: real, pu: int, pR: int, nu: int, nR: int, Lpu: int, Lps: int, Lnu: int, Lns: int):
-    """(lam, m1x, g0x, g1xx, g1yy) of the disk (centre distance D, radius R, h = 1) for the tables of one kernel at `off`."""
-    res = vec5(real(0.0))
+def _disk_group1(coef: wp.array(dtype=real), off: int, D: real, R: real, ch: int, pu: int, pR: int, nu: int, nR: int, Lpu: int, Lps: int, Lnu: int, Lns: int):
+    """channel `ch` (lam, m1x, g0x, g1xx, g1yy) of the disk (centre distance D, radius R, h = 1) for the tables of one kernel at `off`."""
     if D >= real(1.0) + R:
-        return res
+        return real(0.0)
     Ssz = pu * pR * nu * nR * 5
     if R > real(1.0):
         if D <= R - real(1.0):
-            res[0] = real(1.0)
-            res[3] = real(1.0)
-            res[4] = real(1.0)
-            return res
-        return _panel_eval(coef, off + 6 * Ssz, Lpu, Lps, Lnu, Lns, (D - R + real(1.0)) * real(0.5), real(1.0) / R)
+            if ch == 0 or ch == 3 or ch == 4:
+                return real(1.0)
+            return real(0.0)
+        return _panel_eval1(coef, off + 6 * Ssz, Lpu, Lps, Lnu, Lns, (D - R + real(1.0)) * real(0.5), real(1.0) / R, ch)
     delta = D - R
     branch = int(0)
     if R > real(0.5):
@@ -96,26 +93,40 @@ def _disk_group(coef: wp.array(dtype=real), off: int, D: real, R: real, pu: int,
     rr = real(2.0) * R
     if branch == 1:
         rr = real(2.0) * R - real(1.0)
-    r = _panel_eval(coef, off + (branch * 3 + k) * Ssz, pu, pR, nu, nR, w, rr)
-    R2 = R * R
-    for c in range(5):
-        res[c] = r[c] * R2
-    return res
+    return _panel_eval1(coef, off + (branch * 3 + k) * Ssz, pu, pR, nu, nR, w, rr, ch) * R * R
 
 
 @wp.kernel
-def _disk_channels_kernel(slot_q: wp.array(dtype=int), slot_m: wp.array(dtype=int), pos: wp.array(dtype=vec2_t), sup: wp.array(dtype=real),
-                          centres: wp.array(dtype=vec2_t), radii: wp.array(dtype=real), coef: wp.array(dtype=real), goff: wp.array(dtype=int), nG: int, gsize: int,
-                          pu: int, pR: int, nu: int, nR: int, Lpu: int, Lps: int, Lnu: int, Lns: int, cout: wp.array2d(dtype=real)):
+def _disk_table_kernel(slot_q: wp.array(dtype=int), slot_m: wp.array(dtype=int), pos: wp.array(dtype=vec2_t), sup: wp.array(dtype=real),
+                       centres: wp.array(dtype=vec2_t), radii: wp.array(dtype=real), coef: wp.array(dtype=real), goff: wp.array(dtype=int), nG: int,
+                       pu: int, pR: int, nu: int, nR: int, Lpu: int, Lps: int, Lnu: int, Lns: int, tmp: wp.array2d(dtype=real)):
+    """one thread per (slot, group, table channel): the lookup of the five table channels of every group in parallel (tmp[slot, 5 g + c])."""
     tid = wp.tid()
-    m = slot_m[tid]
+    slot = tid / (nG * 5)
+    rem = tid - slot * nG * 5
+    g = rem / 5
+    c = rem - g * 5
+    m = slot_m[slot]
     if m < 0:
         return
-    q = slot_q[tid]
+    q = slot_q[slot]
     h = sup[q]
     y = (centres[m] - pos[q]) / h
     D = wp.sqrt(y[0] * y[0] + y[1] * y[1])
-    R = radii[m] / h
+    tmp[slot, g * 5 + c] = _disk_group1(coef, goff[g], D, radii[m] / h, c, pu, pR, nu, nR, Lpu, Lps, Lnu, Lns)
+
+
+@wp.kernel
+def _disk_assemble_kernel(slot_q: wp.array(dtype=int), slot_m: wp.array(dtype=int), pos: wp.array(dtype=vec2_t), centres: wp.array(dtype=vec2_t), tmp: wp.array2d(dtype=real),
+                          nG: int, cout: wp.array2d(dtype=real)):
+    """the nine channels of every group in the body frame from the five table channels and the direction to the centre."""
+    slot = wp.tid()
+    m = slot_m[slot]
+    if m < 0:
+        return
+    q = slot_q[slot]
+    y = centres[m] - pos[q]
+    D = wp.sqrt(y[0] * y[0] + y[1] * y[1])
     cx = real(1.0)
     cy = real(0.0)
     if D > real(1.0e-12):
@@ -124,17 +135,17 @@ def _disk_channels_kernel(slot_q: wp.array(dtype=int), slot_m: wp.array(dtype=in
     tx = -cy
     ty = cx
     for g in range(nG):
-        r = _disk_group(coef, goff[g], D, R, pu, pR, nu, nR, Lpu, Lps, Lnu, Lns)
         col = g * 9
-        cout[tid, col] = r[0]
-        cout[tid, col + 1] = r[1] * cx
-        cout[tid, col + 2] = r[1] * cy
-        cout[tid, col + 3] = r[2] * cx
-        cout[tid, col + 4] = r[2] * cy
-        cout[tid, col + 5] = r[3] * cx * cx + r[4] * tx * tx
-        cout[tid, col + 6] = r[3] * cx * cy + r[4] * tx * ty
-        cout[tid, col + 7] = r[3] * cx * cy + r[4] * tx * ty
-        cout[tid, col + 8] = r[3] * cy * cy + r[4] * ty * ty
+        t0 = g * 5
+        cout[slot, col] = tmp[slot, t0]
+        cout[slot, col + 1] = tmp[slot, t0 + 1] * cx
+        cout[slot, col + 2] = tmp[slot, t0 + 1] * cy
+        cout[slot, col + 3] = tmp[slot, t0 + 2] * cx
+        cout[slot, col + 4] = tmp[slot, t0 + 2] * cy
+        cout[slot, col + 5] = tmp[slot, t0 + 3] * cx * cx + tmp[slot, t0 + 4] * tx * tx
+        cout[slot, col + 6] = tmp[slot, t0 + 3] * cx * cy + tmp[slot, t0 + 4] * tx * ty
+        cout[slot, col + 7] = tmp[slot, t0 + 3] * cx * cy + tmp[slot, t0 + 4] * tx * ty
+        cout[slot, col + 8] = tmp[slot, t0 + 3] * cy * cy + tmp[slot, t0 + 4] * ty * ty
 
 
 class DiskPlan:
@@ -179,8 +190,10 @@ def disk_channels_device(slot_q, slot_m, positions, supports, centres, radii, gr
         wsup = wp.from_torch(supports.to(torch_real).contiguous(), dtype=real)
         wc = wp.from_torch(centres.to(torch_real).contiguous(), dtype=vec2_t)
         wr = wp.from_torch(radii.to(torch_real).contiguous(), dtype=real)
-        wp.launch(_disk_channels_kernel, dim=P, device=device, inputs=[wq, wm, wpos, wsup, wc, wr, plan.coef, plan.goff, plan.nG, plan.gsize, pu, pR, nu, nR, Lpu, Lps, Lnu, Lns,
-                                                                        wp.from_torch(cout, dtype=real)])
+        tmp = torch.zeros((P, plan.nG * 5), dtype=torch_real, device=device)
+        wp.launch(_disk_table_kernel, dim=P * plan.nG * 5, device=device, inputs=[wq, wm, wpos, wsup, wc, wr, plan.coef, plan.goff, plan.nG, pu, pR, nu, nR, Lpu, Lps, Lnu, Lns,
+                                                                                   wp.from_torch(tmp, dtype=real)])
+        wp.launch(_disk_assemble_kernel, dim=P, device=device, inputs=[wq, wm, wpos, wc, wp.from_torch(tmp, dtype=real), plan.nG, wp.from_torch(cout, dtype=real)])
         _sync(device)
     c = cout[:P]
     return c.to(torch.float64) if as_float64 else c

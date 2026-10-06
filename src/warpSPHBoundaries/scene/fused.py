@@ -280,48 +280,50 @@ def _disk_cum(D: wp.float64, R: wp.float64, psi: wp.float64):
 
 
 @wp.func
-def _disk_cum_any(D: wp.float64, R: wp.float64, psi: wp.float64, T: wp.float64):
-    """the cumulative area I at any real angle (odd in psi, 2 pi periodic up to the full area T)."""
+def _disk_cum_any(D: wp.float64, R: wp.float64, psi: wp.float64):
+    """the cumulative area I at any real angle (odd in psi, 2 pi periodic up to the full area T, which is only evaluated when the angle leaves (-pi, pi])."""
     two_pi = wp.float64(6.283185307179586476925286766559)
     p0 = _wrap_pi(psi)
     k = wp.floor((psi - p0) / two_pi + wp.float64(0.5))
     v = _disk_cum(D, R, wp.abs(p0))
     if p0 < wp.float64(0.0):
         v = -v
-    return k * T + v
+    if k != wp.float64(0.0):
+        v = v + k * wp.float64(2.0) * _disk_cum(D, R, wp.float64(3.1415926535897932384626433832795))
+    return v
 
 
 @wp.kernel
 def _disk_cone_area_kernel(slots: wp.array(dtype=int), K: int, cand: wp.array(dtype=int), lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64),
                            centres: wp.array(dtype=wp.float64), radii: wp.array(dtype=wp.float64), axis: wp.array(dtype=wp.float64), Rm: wp.array(dtype=wp.float64), al: wp.float64,
-                           N: int, out: wp.array(dtype=wp.float64)):
-    """per query row: area(disks cap disk(p, H) cap wedge(p, axis, al)) -> out[q] and the full disk cap ball -> out[N + q] (added), over the disks of the slots of the row (they do not overlap)."""
-    row = wp.tid()
+                           tmp: wp.array2d(dtype=wp.float64)):
+    """one thread per (query row, slot, part): part 0 the full disk cap ball -> tmp[slot, 0]; parts 1 and 2 the cumulative areas at the two wedge limits -> tmp[slot, 1], tmp[slot, 2] (the latency of a
+    launch is the serial work of its longest thread: the three closed-form evaluations run in parallel); the callers combine them and sum the K slots of a row in slot order."""
+    tid = wp.tid()
+    slot = tid / 3
+    part = tid - slot * 3
+    row = slot / K
+    m = slots[slot]
+    if m < 0:
+        return
     q = cand[row]
     H = lsup[row]
     px = lpos[2 * row]
     py = lpos[2 * row + 1]
-    th = wp.atan2((-Rm[2] * axis[2 * q] + Rm[0] * axis[2 * q + 1]), Rm[0] * axis[2 * q] + Rm[2] * axis[2 * q + 1])
     pi = wp.float64(3.1415926535897932384626433832795)
-    a_wedge = wp.float64(0.0)
-    a_full = wp.float64(0.0)
-    for s in range(K):
-        m = slots[row * K + s]
-        if m < 0:
-            continue
-        cx = centres[2 * m] - px
-        cy = centres[2 * m + 1] - py
-        D = wp.sqrt(cx * cx + cy * cy) / H
-        R = radii[m] / H
-        T = wp.float64(2.0) * _disk_cum(D, R, pi)
-        a_full += T * H * H
-        if al < pi:
-            g = _wrap_pi(th - wp.atan2(cy, cx))
-            a_wedge += (_disk_cum_any(D, R, g + al, T) - _disk_cum_any(D, R, g - al, T)) * H * H
+    cx = centres[2 * m] - px
+    cy = centres[2 * m + 1] - py
+    D = wp.sqrt(cx * cx + cy * cy) / H
+    R = radii[m] / H
+    if part == 0:
+        tmp[slot, 0] = wp.float64(2.0) * _disk_cum(D, R, pi) * H * H
+    elif al < pi:
+        th = wp.atan2((-Rm[2] * axis[2 * q] + Rm[0] * axis[2 * q + 1]), Rm[0] * axis[2 * q] + Rm[2] * axis[2 * q + 1])
+        g = _wrap_pi(th - wp.atan2(cy, cx))
+        if part == 1:
+            tmp[slot, 1] = _disk_cum_any(D, R, g + al) * H * H
         else:
-            a_wedge += T * H * H
-    out[q] = out[q] + a_wedge
-    out[N + q] = out[N + q] + a_full
+            tmp[slot, 2] = _disk_cum_any(D, R, g - al) * H * H
 
 
 _SPEC_CACHE = {}
@@ -542,8 +544,15 @@ class FusedWall(WallAggregate):
                     sl = it["topo"].e.to(torch.int32).contiguous()
                     it["cone"] = (lpos, lsup, cen, rad, sl, tuple(wp.from_torch(t, dtype=dt) for t, dt in ((lpos, wp.float64), (lsup, wp.float64), (cen, wp.float64), (rad, wp.float64), (sl, wp.int32))))
                 wl, ws, wc, wr, wsl = it["cone"][5]
-                wp.launch(_disk_cone_area_kernel, dim=it["rows"], device=dev, inputs=[wsl, it["topo"].K, wp.from_torch(cand32, dtype=wp.int32), wl, ws, wc, wr, axis, it["R"][3],
-                                                                                       wp.float64(float(half_angle)), N, wout])
+                K = it["topo"].K
+                tmp = torch.zeros((it["rows"] * K, 3), dtype=F64, device=dev)
+                wp.launch(_disk_cone_area_kernel, dim=it["rows"] * K * 3, device=dev, inputs=[wsl, K, wp.from_torch(cand32, dtype=wp.int32), wl, ws, wc, wr, axis, it["R"][3],
+                                                                                              wp.float64(float(half_angle)), wp.from_torch(tmp, dtype=wp.float64)])
+                full = tmp[:, 0]
+                wedge = (tmp[:, 1] - tmp[:, 2]) if float(half_angle) < math.pi else full
+                sums = torch.stack([wedge, full], 1).reshape(it["rows"], K, 2).sum(1)           # the slots of a row in slot order: deterministic
+                out[ba.cand.long()] += sums[:, 0]
+                out[N + ba.cand.long()] += sums[:, 1]
                 continue
             if it.get("cone") is None:
                 lpos = ba.lpos.to(F64).contiguous().reshape(-1)
