@@ -15,6 +15,8 @@ a geometrically graded panel grid toward the origin (the kernel's odd powers of 
 import numpy as np
 import torch
 import warp as wp
+
+from ..edge.precision import sync as _sync
 from numpy.polynomial import chebyshev as C
 
 F64 = torch.float64
@@ -268,7 +270,7 @@ def _block(self, lpos, lsup, lo, hi):
         wvals = wp.from_torch(vals, dtype=wp.float64)
         wp.launch(_box_tensor_kernel, dim=rows * 12, device=dev, inputs=[wlp, wls] + box + [wphi, wphi1, wbr, npan, wvals])
         wp.launch(_box_block_kernel, dim=rows, device=dev, inputs=[wlp, wls] + box + [wvals, wp.from_torch(out, dtype=wp.float64)])
-        wp.synchronize_device(dev)
+        _sync(dev)
     return out[:rows]
 
 

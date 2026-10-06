@@ -19,6 +19,7 @@ import torch
 import warp as wp
 
 from . import warpbc as W
+from .precision import sync as _sync
 from .precision import IS_F32, IS_F64, np_real, real, torch_real, vec2_t
 from .warp2d import _dangle, _edge_integral, _isqrt, _sdiff
 
@@ -204,6 +205,6 @@ def fused_channels(pair_q, pair_e, positions, supports, vertices, edges, groups,
             wq, we, wpos, wsup, wv, wed, plan.radii, plan.t_kind, plan.t_i, plan.t_a, plan.t_b, plan.t_R, plan.t_var, plan.t_gate, plan.t_c0, plan.t_c1, plan.t_mR,
             plan.t_route, plan.t_nn, plan.t_panels, plan.t_gofs, nT, plan.cn, plan.cc, plan.gx, plan.gw, wta, wtb])
         wp.launch(_fused_reduce_kernel, dim=P, device=device, inputs=[wta, wtb, plan.t_kind, plan.t_ch, plan.goff, plan.nG, nT, real(1 / np.pi), wp.from_torch(cout, dtype=real)])
-        wp.synchronize_device(device)
+        _sync(device)
     c = cout[:P]
     return c.to(torch.float64) if as_float64 else c

@@ -151,3 +151,9 @@ def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
     adj = SceneAdjacency(N, bodies, {"candidates": None}, queryParticles)
     adj.supportMax = float(supportMax)
     return adj
+
+
+def indicator_device(rep, lpos, supportMax):
+    """winding number + background of the points `lpos` [N, 2] (body frame) against the SurfaceRep `rep`, without a host sync (the `fixed_topology` kernel with every row valid; the edge slots are not used)."""
+    n = len(lpos)
+    return fixed_topology(rep, lpos, torch.full((n,), float(supportMax), dtype=F64, device=lpos.device), torch.ones(n, dtype=torch.bool, device=lpos.device), supportMax).ind

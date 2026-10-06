@@ -21,7 +21,7 @@ import torch
 import warp as wp
 
 from ..edge import warpfused
-from ..edge.precision import real, torch_real
+from ..edge.precision import real, sync as _sync, torch_real
 from .fixedadj import fixed_topology
 from .scene import BOX_EXACT_KERNELS, BoxRep, SurfaceRep, boxTables
 
@@ -328,7 +328,7 @@ class FusedWall:
             wp.launch(_wall_contract_kernel, dim=it["rows"], device=dev, inputs=[
                 wstart, wperm, wc, wcand, wlsup, windv, real(R00), real(R01), real(R10), real(R11),
                 len(outputs), o_group, o_kind, o_base, o_dim, o_ind, wa1, it["bi"] * N * 2, it["bi"], N, wpool])
-        wp.synchronize_device(dev)
+        _sync(dev)
         res = {}
         for o, b0 in zip(outputs, base):
             dim = KINDS[o.kind][1]
@@ -373,5 +373,5 @@ class FusedWall:
                 wedge = 2.0 * float(half_angle) if float(half_angle) < math.pi else 2.0 * math.pi
                 out[:N] += out_of * 0.5 * sup * sup * wedge
                 out[N:] += out_of * math.pi * sup * sup
-        wp.synchronize_device(dev)
+        _sync(dev)
         return out.reshape(2, N)

@@ -725,6 +725,7 @@ class Scene:
         for b in bodies:
             b.center = b.center.to(device)
             b.linearVelocity = b.linearVelocity.to(device)
+            b.linearAcceleration = b.linearAcceleration.to(device)         # a host tensor would be copied (a synchronisation) on every `accelerationAt`
             for r in b.reps:
                 r.to(device) if hasattr(r, "to") else None
 
@@ -759,7 +760,7 @@ class Scene:
                         out[k:k + 20000] |= (~(neg & pos)).any(1)
         return out
 
-    def signed_distance(self, points, body=None):
+    def signed_distance(self, points, body=None, supportMax=None):
         """(d [M], n [M,2], hit [M]) of world points to the solid of one body (or the nearest of all): d > 0 in the fluid, n the unit normal pointing from the wall into the fluid at the closest wall point.
         Surface loops: nearest edge (brute force over the edges, fine for a few dozen); SDF representations: the sampled distance and its gradient; implicit primitives: their own `signed`.  `hit` is False where
         no representation could answer (volume representations)."""
@@ -783,7 +784,11 @@ class Scene:
                     k = dist.argmin(1)
                     dmin = dist.gather(1, k[:, None])[:, 0]
                     cp = c[torch.arange(M, device=pts.device), k]
-                    ins = rep.indicator(lp) > 0.5
+                    if supportMax is None:
+                        ins = rep.indicator(lp) > 0.5
+                    else:                                                                              # sync-free winding number (scene/fixedadj.py)
+                        from .fixedadj import indicator_device
+                        ins = indicator_device(rep, lp, supportMax) > 0.5
                     d = torch.where(ins, -dmin, dmin)
                     # the wall normal into the fluid: the left normal of the edge points INTO the solid (solid on the left), so the fluid normal is the right normal
                     ek = e[k] / e[k].norm(dim=1, keepdim=True)

@@ -154,6 +154,17 @@ def _mindot_kernel(x: wp.array(dtype=vec2_t), F: wp.array(dtype=int), nrm: wp.ar
     out[i] = mn
 
 
+_CF = {}
+
+
+def _kernel_constants(device):
+    """the four normalisation constants of the Wendland kernels as a device array (built once per device: a host-to-device copy synchronises)."""
+    if device not in _CF:
+        cf = torch.tensor([7.0 / math.pi, 7.0 * 20.0 / math.pi, 9.0 / math.pi, 9.0 * 56.0 / 3.0 / math.pi], dtype=torch_real, device=device)
+        _CF[device] = (cf, wp.from_torch(cf, dtype=real))
+    return _CF[device][1]
+
+
 def _wa(t, dt):
     return wp.from_torch(t.contiguous(), dtype=dt)
 
@@ -173,9 +184,7 @@ class FluidKernels:
         self.wx = wp.from_torch(self.x, dtype=vec2_t)
         self.woff, self.wnn, self.wj = _wa(self.off, wp.int32), _wa(self.nn, wp.int32), _wa(self.jl, wp.int64)
         self.H = sim.H
-        cf = torch.tensor([7.0 / math.pi, 7.0 * 20.0 / math.pi, 9.0 / math.pi, 9.0 * 56.0 / 3.0 / math.pi], dtype=torch_real, device=x.device)
-        self.cf = wp.from_torch(cf, dtype=real)
-        self._cf = cf
+        self.cf = _kernel_constants(x.device)
         self._p1 = None
 
     def pass1(self):

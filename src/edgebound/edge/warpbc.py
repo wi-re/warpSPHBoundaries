@@ -20,6 +20,7 @@ import warp as wp
 
 from . import np2d
 from .np2d import _compile_profile_moment, _inner_profile, compile_moment, kernel_profile
+from .precision import sync as _sync
 from .precision import IS_F32, IS_F64, np_real, require_f64, torch_real, vec2_t, vec3_t
 from .warp2d import _dangle, _edge_integral, _isqrt, _sdiff, real
 
@@ -501,7 +502,7 @@ def pair_weights(pair_q, pair_e, positions, supports, vertices, elements, kernel
             *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc,
             plan.ubR, plan.ubK, plan.ubB, plan.nub, plan.gx, plan.gw, GAUSS_N, real(FAR_RATIO), real(TINY), len(plan.radii_host),
             wp.from_torch(wout, dtype=real), wp.from_torch(gout, dtype=real)])
-        wp.synchronize_device(device)
+        _sync(device)
     w, G = wout[:P], gout[:P].reshape(P, 3, 2)
     return (w, G) if as_torch else (w.cpu().numpy(), G.cpu().numpy())
 
@@ -899,7 +900,7 @@ def _edge_channels_cheb(pair_q, pair_e, positions, supports, vertices, edges, ke
                 wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
                 *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV,
                 plan.cc, plan.gx, plan.gw, nodes, panels, wp.from_torch(cout, dtype=real)])
-        wp.synchronize_device(device)
+        _sync(device)
     c = cout[:P].to(torch.float64)                                   # the kernel computed in `real`; the tensors handed on are float64
     return c if as_torch else c.cpu().numpy()
 
@@ -947,6 +948,6 @@ def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, 
             wp.launch(_edge_channels_kernel, dim=P, device=device, inputs=[
                 wq, we, wpos, wsup, wv, wed, plan.radii, real(1 / np.pi),
                 *plan.e, plan.nE, *plan.v, plan.v_mR, plan.nV, plan.cn, plan.cc, wp.from_torch(cout, dtype=real)])
-        wp.synchronize_device(device)
+        _sync(device)
     c = cout[:P].to(torch.float64)                                   # the kernel computed in `real`; the tensors handed on are float64
     return c if as_torch else c.cpu().numpy()

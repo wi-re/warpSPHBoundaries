@@ -10,10 +10,11 @@ from edgebound.edge import precision as PR
 from edgebound.sim import cases
 
 fused = "--old-wall" not in sys.argv
+graph = "--graph" in sys.argv                                    # fluidWarp + graphStep: the whole step replayed as a CUDA graph (sim/graphstep.py)
 tag = PR.real.__name__
 out = {}
 for name, maker, steps, kw in (("dambreak", cases.marrone_dambreak, 300, dict(nx=67, shifting=True, noPen="impulse")), ("sloshing", cases.sloshing_tank, 200, dict(nx=100))):
-    sim = maker(fusedWall=fused, **kw)[0]
+    sim = maker(fusedWall=fused, **(dict(fluidWarp=True, graphStep=True) if graph else {}), **kw)[0]
     for _ in range(10): sim.step()
     torch.cuda.synchronize(); t0 = time.time(); ke = []
     for k in range(steps):
@@ -21,7 +22,7 @@ for name, maker, steps, kw in (("dambreak", cases.marrone_dambreak, 300, dict(nx
         if k % 20 == 0: ke.append(float(sim.kinetic()))
     torch.cuda.synchronize()
     out[name] = dict(x=sim.x.cpu().numpy(), v=sim.v.cpu().numpy(), ke=np.array(ke), ms=(time.time() - t0) / steps * 1e3)
-    print(tag, "fusedWall" if fused else "sceneOperation", name, "%.1f ms/step" % out[name]["ms"], flush=True)
+    print(tag, ("graph" if graph else "fusedWall") if fused else "sceneOperation", name, "%.1f ms/step" % out[name]["ms"], flush=True)
 d = paths.tmp_dir(); os.makedirs(d, exist_ok=True)
 np.savez(os.path.join(d, "step_time_%s.npz" % tag), **{f"{n}_{k}": v for n, dd in out.items() for k, v in dd.items()})
 ref = os.path.join(d, "step_time_float64.npz")

@@ -58,3 +58,11 @@ if not IS_F64 and "edgebound_precision_warned" not in os.environ:
 def require_f64(what):
     if not IS_F64:
         raise NotImplementedError("%s is float64 only (active precision %s): set warpSPHCore_PRECISION=float64" % (what, real.__name__))
+
+
+def sync(device):
+    """`wp.synchronize_device` unless a CUDA graph is being captured (a synchronisation is illegal inside a capture; the warp launches then run on the captured torch stream)."""
+    import torch
+    import warp as wp
+    if not torch.cuda.is_current_stream_capturing():
+        wp.synchronize_device(device)
