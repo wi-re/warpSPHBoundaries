@@ -29,6 +29,7 @@ from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, Ope
 
 from ..scene.cone_area import cone_area_scene
 from ..scene.fixedadj import fixed_adjacency
+from .fluidwarp import FluidWarp
 from ..scene.boundaryOps import kernelName
 from ..scene.cover import cover_vector_scene
 from ..scene.fused import FusedWall, WallOutput
@@ -75,12 +76,36 @@ class DeltaSPHConfig:
     wallViscosityForm: str = "laplacian"   # "laplacian": exact wall Laplacian (viscosity.lap_lambda_scene, free-slip mirror, nu_eff = alpha c0 H/(8 xi), Wendland C2 and C4) | "pairwise": the warpSPH pairwise (Monaghan) form with the free-slip mirror, polar quadrature of the solid (cfg.surfaceSamples) | "noslip": no-slip wall (v_w = body velocity): Chiron-style flux term -2 nu_eff (v - v_w) |G| / (rho d), nu_eff = alpha c0 H/(8 xi), d = max(distance to the wall, 0.25 dx)
     fusedWall: bool = True              # step 3 of docs/plan-wall-evaluation.md: lam, G, Cov, A, the cover vector, the wall Laplacian and the tensile term of one position set from ONE fused kernel launch family (scene/fused.py); surface-loop walls with one support only, else the sceneOperation path is used
     fixedAdjacency: bool = True         # step 5 of the plan: the wall adjacency of the fused path in ONE Warp launch per (body, rep) with fixed shapes and no host sync (scene/fixedadj.py); False = Scene.adjacency (torch.nonzero / cell-list pair search), the oracle
+    fluidWarp: bool = False             # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
     barecascoThreshold: float = math.pi / 3
     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle: used ONLY by wallViscosityForm = "pairwise"
     kernel: KernelFunctions = KernelFunctions.Wendland2
     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
+
+
+def _sym2_lam_pinv(M, pinv=True):
+    """(min |eigenvalue| [N], pseudo-inverse [N,2,2]) of 2 x 2 matrices M [N,2,2] that are symmetric to round-off, in closed form (the batched LAPACK-style `eigvalsh` / `pinv` of tiny matrices were 1.1 ms of GPU
+    time per step, 8 % of the dam break).  `eigvalsh`'s convention is kept: the lower triangle defines the matrix.  The pseudo-inverse drops eigenvalues below 2 eps max|lambda| (torch's default rtol)."""
+    a, b, d = M[:, 0, 0], M[:, 1, 0], M[:, 1, 1]
+    mid, disc = 0.5 * (a + d), torch.sqrt((0.5 * (a - d)) ** 2 + b * b)
+    l1, l2 = mid + disc, mid - disc
+    lam = torch.minimum(l1.abs(), l2.abs())
+    if not pinv:
+        return lam, None
+    # unit eigenvector of l1: the larger of (b, l1 - a) and (l1 - d, b); isotropic matrices (disc = 0) take (1, 0)
+    ua, ub = torch.stack([b, l1 - a], 1), torch.stack([l1 - d, b], 1)
+    u = torch.where((ua * ua).sum(1, keepdim=True) >= (ub * ub).sum(1, keepdim=True), ua, ub)
+    nrm = u.norm(dim=1, keepdim=True)
+    ex = torch.zeros_like(u); ex[:, 0] = 1.0
+    u = torch.where(nrm > 1e-300, u / nrm.clamp(min=1e-300), ex)
+    w = torch.stack([-u[:, 1], u[:, 0]], 1)
+    cut = 2.0 * torch.finfo(M.dtype).eps * torch.maximum(l1.abs(), l2.abs())
+    c1 = torch.where(l1.abs() > cut, 1.0 / torch.where(l1 == 0, torch.ones_like(l1), l1), torch.zeros_like(l1))
+    c2 = torch.where(l2.abs() > cut, 1.0 / torch.where(l2 == 0, torch.ones_like(l2), l2), torch.zeros_like(l2))
+    L = c1[:, None, None] * u[:, :, None] * u[:, None, :] + c2[:, None, None] * w[:, :, None] * w[:, None, :]
+    return lam, L
 
 
 class DeltaSPH2D:
@@ -106,6 +131,8 @@ class DeltaSPH2D:
         self.surface = torch.zeros(n, dtype=torch.bool, device=device)
         self.surfaceDilated = self.surface
         self.history = []
+        self._w0 = float(self.W(torch.tensor([self.dx], dtype=F64, device=device), self.H)[0])          # W(dx): the tensile reference of the shift
+        self._fluidwarp = None                                 # FluidWarp of cfg.fluidWarp (lazy)
         self._hc = None                                        # (Hvec tensor, all supports == H) cache of _constSupport
         self._fgroups = None                                   # (FusedGroup tuple, {output role: group index}, config key) of the fused wall evaluation
         self._wallCache = None                                 # (x, body poses, adjacency, pair moments, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
@@ -212,17 +239,21 @@ class DeltaSPH2D:
         if fam is None:  raise NotImplementedError("exact wall operations: Wendland C2 and C4 only")
         return fam
 
-    def _detect_surface(self, x, i, j, r, lam, adj=None):
+    def _detect_surface(self, x, i, j, r, lam, adj=None, fk=None):
         """warpSPH `detectFreeSurfaceBarecasco`: C = sum unit(x_i - x_j) over neighbours (W > 0), c = C/|C|; surface iff no neighbour (j != i) has angle(x_j - x_i, c) <= threshold/2
         (all neighbours count when C = 0).  Wall: the continuum of wall particles (density mu/dx^2), the exact edge reduction (cover) and closed-form area (cone).  No scene: lam of shape [0, N], near empty, nothing added.
-        `adj`: the wall adjacency at x (the cover vector takes its restriction to the near-wall particles)."""
+        `adj`: the wall adjacency at x (the cover vector takes its restriction to the near-wall particles).  `fk`: the `FluidKernels` of the fluid adjacency (cfg.fluidWarp; then i, j, r are unused)."""
         cfg = self.cfg
-        nz = i != j
-        ii, jj, rr = i[nz], j[nz], r[nz]
-        d = x[ii] - x[jj]
-        unit = d / rr.clamp(min=1e-300)[:, None]
-        C = self._sum(unit, ii)
         nw = cfg.wallMass / self.dx ** 2
+        if fk is not None:
+            p1 = fk.pass1()
+            C, allcount = p1["C"], p1["nAll"]
+        else:
+            nz = i != j
+            ii, jj, rr = i[nz], j[nz], r[nz]
+            d = x[ii] - x[jj]
+            unit = d / rr.clamp(min=1e-300)[:, None]
+            C = self._sum(unit, ii)
         fused = isinstance(adj, FusedWall)
         if fused:                                                                                    # full-length outputs, masked to the near-wall particles (no host sync)
             nearm = (lam.sum(0) > 1e-9).to(F64)
@@ -234,10 +265,13 @@ class DeltaSPH2D:
                 C = C.index_add(0, near, nw * cover)
         norm = C.norm(dim=1)
         c = C / norm.clamp(min=1e-300)[:, None]
-        cosang = -((unit) * c[ii]).sum(1)                                                            # -n_ij . c
-        inCone = torch.acos(cosang.clamp(-1.0, 1.0)) <= cfg.barecascoThreshold / 2
-        count = self._sum(inCone.to(F64), ii)
-        allcount = self._sum(torch.ones_like(rr), ii)                                                # C = 0: all neighbours count (wall particles too)
+        if fk is not None:
+            count = fk.cone_count(c, cfg.barecascoThreshold / 2)
+        else:
+            cosang = -((unit) * c[ii]).sum(1)                                                        # -n_ij . c
+            inCone = torch.acos(cosang.clamp(-1.0, 1.0)) <= cfg.barecascoThreshold / 2
+            count = self._sum(inCone.to(F64), ii)
+            allcount = self._sum(torch.ones_like(rr), ii)                                            # C = 0: all neighbours count (wall particles too)
         if fused:
             areas = adj.cone_area(c, cfg.barecascoThreshold / 2) * nearm                             # [2, N]: cone, full disk (the wall continuum)
             count, allcount = count + nw * areas[0], allcount + nw * areas[1]
@@ -251,10 +285,19 @@ class DeltaSPH2D:
     def rhs(self, x, v, rho, want_forces=False):
         cfg = self.cfg
         H, V = self.H, self.m / rho
-        i, j, r = neighbor_pairs(x, self.Hvec)
-        nz = i != j
-        d = x[i] - x[j]
-        gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))      # grad_i W_ij
+        fw = None
+        if cfg.fluidWarp:
+            if self._fluidwarp is None:
+                self._fluidwarp = FluidWarp(self)
+            fw = self._fluidwarp
+            fps, fadj = fw.state(x, v, rho)
+            fk = fw.kernels(fadj, x, rho)
+        else:
+            i, j, r = neighbor_pairs(x, self.Hvec)
+            nz = i != j
+            d = x[i] - x[j]
+            gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))      # grad_i W_ij
+            fk = None
         P = cfg.c0 ** 2 * (rho - cfg.rho0)
         adj = None
         if self.scene is not None:
@@ -266,9 +309,9 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None:
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
-        self.surface = self._detect_surface(x, i, j, r, lam, adj)
+        self.surface = self._detect_surface(x, None if fk else i, None if fk else j, None if fk else r, lam, adj, fk)
         if cfg.dilateSurface:
-            self.surfaceDilated = self._sum(self.surface[j].to(F64), i) > 0.5            # pairs include i = j
+            self.surfaceDilated = fk.dilate(self.surface) if fk else self._sum(self.surface[j].to(F64), i) > 0.5            # pairs include i = j
         else:
             self.surfaceDilated = self.surface
         sw = (P >= 0) | self.surfaceDilated
@@ -276,7 +319,7 @@ class DeltaSPH2D:
 
         # continuity: fluid pairs, wall (free-slip mirror); the kinematic rate is a function of the velocity (time-centred continuity re-evaluates it with the mean velocity)
         def kinematic(vel):
-            out = -rho * self._sum(V[j] * ((vel[j] - vel[i]) * gW).sum(1), i)
+            out = fw.continuity(fps, fadj, vel) if fw is not None else -rho * self._sum(V[j] * ((vel[j] - vel[i]) * gW).sum(1), i)
             if self.nb and cfg.wallContinuity:
                 for bi, b in enumerate(self.scene.bodies):
                     gm = G[bi].norm(dim=1)
@@ -287,13 +330,15 @@ class DeltaSPH2D:
         kin = kinematic(v)
         drho = kin
         # density diffusion (fourtakas2019, fluid only)
-        if cfg.ddt:
+        if cfg.ddt and fw is not None:
+            drho = drho + fw.density_diffusion(fps, fadj)
+        elif cfg.ddt:
             xij = d
-            tot = (rho[j] - rho[i]) + cfg.rho0 * (xij @ self.g) / cfg.c0 ** 2
+            tot = (rho[j] - rho[i]) + cfg.rho0 * (xij[:, 0] * self.g[0] + xij[:, 1] * self.g[1]) / cfg.c0 ** 2
             psi = -2.0 * tot[:, None] * xij / (r * (r + 1e-14 * H)).clamp(min=1e-300)[:, None]
             drho = drho + cfg.delta * H * cfg.c0 / self.xi * self._sum(torch.where(nz, V[j] * (psi * gW).sum(1), torch.zeros_like(r)), i)
         # pressure force
-        acc = -self._sum((V[j] * (P[j] + s[i] * P[i]))[:, None] * gW, i) / rho[:, None]
+        acc = fw.pressure(fps, fadj, P, self.surfaceDilated) if fw is not None else -self._sum((V[j] * (P[j] + s[i] * P[i]))[:, None] * gW, i) / rho[:, None]
         pp = P.clamp(min=0)
         forces = None
         if self.nb:
@@ -305,10 +350,13 @@ class DeltaSPH2D:
                 forces = -(self.m * accw).sum(1)                                                     # force of the fluid on each body
         # artificial viscosity (fluid only)
         if cfg.viscosity:
-            vij = v[i] - v[j]
-            mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
-            fac = cfg.alpha * cfg.c0 * H / self.xi
-            acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
+            if fw is not None:
+                acc = acc + fw.viscosity(fps, fadj, v)
+            else:
+                vij = v[i] - v[j]
+                mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
+                fac = cfg.alpha * cfg.c0 * H / self.xi
+                acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
         if cfg.viscosity and cfg.wallViscosity and len(near):
             fac = cfg.alpha * cfg.c0 * H / self.xi
             if cfg.wallViscosityForm == "laplacian":
@@ -343,10 +391,17 @@ class DeltaSPH2D:
     def _surface_state(self, x, rho):
         """pair data, detector and renormalisation matrices at positions x: dict(i, j, r, d, gW, V, lam [B,N], G, adj (the wall adjacency), near, surface, F (dilated), Mf [N,2,2], Mt [N,2,2])."""
         H = self.H
-        i, j, r = neighbor_pairs(x, self.Hvec)
-        nz = i != j
-        d = x[i] - x[j]
-        gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
+        fk = None
+        if self.cfg.fluidWarp:
+            if self._fluidwarp is None:
+                self._fluidwarp = FluidWarp(self)
+            fk = self._fluidwarp.kernels(self._fluidwarp.state(x, self.v, rho)[1], x, rho)
+            i = j = r = d = gW = None
+        else:
+            i, j, r = neighbor_pairs(x, self.Hvec)
+            nz = i != j
+            d = x[i] - x[j]
+            gW = torch.where(nz[:, None], self.dW(r, H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         V = self.m / rho
         lam, G, Mw, adj = torch.zeros((0, len(x)), dtype=F64, device=self.dev), None, None, None
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
@@ -362,11 +417,15 @@ class DeltaSPH2D:
                 G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
                 Mw = self._wall_op(ps, pm, WarpOperation.Covariance, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev))).reshape(self.nb, len(x), 2, 2)
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
-        surface = self._detect_surface(x, i, j, r, lam, adj)
-        F = self._sum(surface[j].to(F64), i) > 0.5
-        Mf = torch.zeros((len(x), 2, 2), dtype=F64, device=self.dev).index_add_(0, i, V[j][:, None, None] * (-d)[:, :, None] * gW[:, None, :])
+        surface = self._detect_surface(x, i, j, r, lam, adj, fk)
+        if fk is not None:
+            F = fk.dilate(surface)
+            Mf = fk.pass1()["Mf"]
+        else:
+            F = self._sum(surface[j].to(F64), i) > 0.5
+            Mf = torch.zeros((len(x), 2, 2), dtype=F64, device=self.dev).index_add_(0, i, V[j][:, None, None] * (-d)[:, :, None] * gW[:, None, :])
         Mt = Mf + (Mw.sum(0) if Mw is not None else 0.0)
-        return dict(i=i, j=j, r=r, d=d, gW=gW, V=V, lam=lam, G=G, adj=adj, near=near, surface=surface, F=F, Mf=Mf, Mt=Mt)
+        return dict(i=i, j=j, r=r, d=d, gW=gW, V=V, lam=lam, G=G, adj=adj, near=near, surface=surface, F=F, Mf=Mf, Mt=Mt, fk=fk)
 
     def shift(self, dt):
         """delta+ particle shift (warpSPH `solveShifting`, projection 'surfaceNormal', one iteration): raw shift
@@ -375,12 +434,15 @@ class DeltaSPH2D:
         lambda_min of the renormalisation matrix is < 0.4, capped at 0.5 Umax dt and clamped to 0.5 dx per component.  Normals n = -grad(lambda_min)/|grad(lambda_min)|, lambda_min of the fluid + wall matrix."""
         cfg, x, v, rho, H = self.cfg, self.x, self.v, self.rho, self.H
         st = self._surface_state(x, rho)
-        i, j, r, gW, V, F = st["i"], st["j"], st["r"], st["gW"], st["V"], st["F"]
+        i, j, r, gW, V, F, fk = st["i"], st["j"], st["r"], st["gW"], st["V"], st["F"], st["fk"]
         n_ = len(x)
-        w0 = self.W(torch.tensor([self.dx], dtype=F64, device=self.dev), H)[0]
-        Wij = self.W(r, H)
-        coef = 0.5 * self.m / (rho[i] + rho[j]) * (1.0 + cfg.shiftR * (Wij / w0) ** 4)
-        raw = self._sum(coef[:, None] * gW, i)
+        w0 = self._w0
+        if fk is not None:
+            raw = fk.pass1()["raw"]
+        else:
+            Wij = self.W(r, H)
+            coef = 0.5 * self.m / (rho[i] + rho[j]) * (1.0 + cfg.shiftR * (Wij / w0) ** 4)
+            raw = self._sum(coef[:, None] * gW, i)
         if self.scene is not None:
             # wall particles: sum_b m_b/(2 (rho_i + rho_b)) [..] grad W = (rho0 / (4 rho_i)) mu int [1 + R (W/W0)^4] grad_i W dA   (rho_b ~ rho_i, wall particle density mu / dx^2 of mass m)
             #   mu int grad_i W dA = G exactly;  T = int W^4 grad_i W dA by the exact edge reduction (tensile.tensile_vector_scene)
@@ -396,18 +458,20 @@ class DeltaSPH2D:
         hs = H / self.ks
         upd = raw * (-cfg.shiftCFL * Ma * 16.0 * hs ** 2)
         # ---- surface treatment
-        ev_t = torch.linalg.eigvalsh(st["Mt"])
-        lam_t = ev_t.abs().min(dim=1).values
-        ev_f = torch.linalg.eigvalsh(st["Mf"])
-        lam_f = ev_f.abs().min(dim=1).values
-        L = torch.linalg.pinv(st["Mt"])
-        dl = lam_t[j] - lam_t[i]
-        gl_ = torch.einsum("nab,nb->na", L, self._sum((V[j] * dl)[:, None] * gW, i))
-        nrm = -gl_ / gl_.norm(dim=1, keepdim=True).clamp(min=1e-300)
-        nz = i != j
-        both = F[i] & F[j] & nz
-        dots = torch.where(both, (nrm[i] * nrm[j]).sum(1), torch.full_like(r, float("inf")))
-        minDot = torch.full((n_,), float("inf"), dtype=F64, device=self.dev).scatter_reduce(0, i, dots, reduce="amin", include_self=False)
+        lam_t, L = _sym2_lam_pinv(st["Mt"])
+        lam_f, _ = _sym2_lam_pinv(st["Mf"], pinv=False)
+        if fk is not None:
+            gl_ = torch.einsum("nab,nb->na", L, fk.lam_gradient(lam_t))
+            nrm = -gl_ / gl_.norm(dim=1, keepdim=True).clamp(min=1e-300)
+            minDot = fk.min_dot(F, nrm)
+        else:
+            dl = lam_t[j] - lam_t[i]
+            gl_ = torch.einsum("nab,nb->na", L, self._sum((V[j] * dl)[:, None] * gW, i))
+            nrm = -gl_ / gl_.norm(dim=1, keepdim=True).clamp(min=1e-300)
+            nz = i != j
+            both = F[i] & F[j] & nz
+            dots = torch.where(both, (nrm[i] * nrm[j]).sum(1), torch.full_like(r, float("inf")))
+            minDot = torch.full((n_,), float("inf"), dtype=F64, device=self.dev).scatter_reduce(0, i, dots, reduce="amin", include_self=False)
         kappa = (minDot >= math.cos(math.radians(cfg.shiftCurvatureAngle))).to(F64)
         outward = (upd * nrm).sum(1)
         tang = upd - outward[:, None] * nrm

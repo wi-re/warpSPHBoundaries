@@ -79,7 +79,7 @@ def test_box_channels_equal_the_polygon_path(device, solid):
     """(a) Density, Gradient of a constant, Covariance of BoxRep vs SurfaceRep.box, every registered kernel, both orientations, rotated pose, per-query supports."""
     register()
     sS, sB = scenes(device, solid)
-    pos, sup = queries(device)
+    pos, sup = queries(device, exact=False)                                  # the points on the wall lines / corners are nudged 1e-6 off: the polygon path's winding rule there depends on the last bit of the world -> body transform (BoxRep is the continuous value)
     ps = state(pos, sup, device)
     for kernel, (tl, tg) in TOL.items():
         a, b = ops(sS, ps, kernel), ops(sB, ps, kernel)
