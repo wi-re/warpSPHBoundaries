@@ -62,6 +62,16 @@ This is also the case the fibre-permeability studies need.
     nearest image).
     Test: a periodic array evaluated with the shift equals the same body replicated 3x3 (a test-only construction) with the box clipped, per particle and channel, to the table
     accuracy; the loads of the single body equal the per-image loads summed over the replicas divided by the number of images.
+    **DONE (2026-10-06, `main`), with a simpler mechanism than per-slot kernel shifts.**  The body-frame conversion is the one place the image enters: `Body.toLocal(x) = pose.toLocal(c + min_image(x - c))`
+    (`Body.image` / `relative`, set by `Scene.setPeriodic(box, support)`, which `DeltaSPH2D` calls from `cfg.periodic`), used by `fixed_adjacency`, `Scene.candidates`, `signed_distance`, `inside`,
+    `velocityAt` / `accelerationAt` and the lever arms of the loads.  So every wall consumer (fused kernels, cover, cone area, Laplacian, tensile, no-penetration) sees the nearest image and no Warp kernel
+    changed.  A compact body (extent + support < L/2, checked at build) needs nothing else; a bundle that spans the box carries the tiled copies of its disks inside the one body
+    (`DiskArrayRep.tiled`: images k in [-2, 2]^2 within the reach of the box around the centre; the broadphase box of such a body is the whole box), so a query meets each fibre once and the loads of the single body
+    are the sum over its rows.  Limits: a bundle with images cannot rotate (offsets are in the body frame), the torque of a bundle is about its centre with image arms (meaningful for one compact body only),
+    the wall-particle provider (`ParticleBoundary`) and the oracle scene path (`cone_area_scene`) are not periodic (the periodic solver needs the fused wall).
+    Tests: `tests/scene/test_periodic_bodies.py` (fused lam / G / Cov / A of raw positions with integer box offsets per particle equal the explicit 3x3 / 5x5 image bodies at the wrapped positions to 1e-9,
+    one fibre, a six-fibre bundle with fibres at the seam, a channel periodic in x only, misuse refused, signed distance / inside), `tests/sim/test_periodic_wall.py` (`rhs` and loads invariant under per-particle
+    box offsets, a symmetric fluid at rest exerts no force on the fibre, steps eager and graph keep the offsets, translating problem + body together is a symmetry).
 
 1c. **Prescribed-velocity frame.**  `cfg.pinned` (bool mask or region callback on the initial positions): velocity set to U∞ at the end of every stage, excluded from
     shifting and no-penetration, still counted as fluid in all sums (density, pressure); the same mask is what the `zeros` / `constant` BC closure of item 4 uses.

@@ -33,6 +33,7 @@ from .boundaryOps import (BoundaryMesh, queryAllowed, tier3Table, tier4Table, bo
                           buildBoundaryAdjacency, buildElementGrid, kernelName)
 from .box import BoxTables, chebyshev_nodes, fit_panels
 from .implicitBodies import DiskBody, HalfPlaneBody, TierPolicy, evaluateBody
+from .periodic import Periodic, min_image
 
 F64 = torch.float64
 
@@ -680,6 +681,25 @@ class DiskArrayRep:
             self._bounds = ((self.centres - r).amin(0), (self.centres + r).amax(0))
         return self._bounds
 
+    def tiled(self, periodic: Periodic, supportMax):
+        """this bundle with its periodic images: every disk at every box shift k (|k| <= 2 per periodic axis) whose image intersects the reach of the box around the body-frame origin, [-L/2 - H, L/2 + H]
+        per axis (H = `supportMax`).  A query min-imaged into that box then meets every disk it can see, once (support < L / 2), so the loads of the one body are the sum over the rows without double counting.
+        The body frame must be the world frame (no rotation) for the offsets to be box lengths."""
+        L = periodic.length(self.centres)
+        ks = [(i, j) for i in range(-2, 3) for j in range(-2, 3)]
+        cen, rad = [], []
+        for i, j in ks:
+            if (i and L[0] == 0) or (j and L[1] == 0):
+                continue
+            c = self.centres + torch.stack([i * L[0], j * L[1]])
+            reach = (c.abs() - 0.5 * L - float(supportMax) - self.radii[:, None])
+            keep = ((reach <= 0) | (L == 0)).all(1)
+            cen.append(c[keep])
+            rad.append(self.radii[keep])
+        out = DiskArrayRep(torch.cat(cen), torch.cat(rad)).to(self.centres.device)
+        out._tileOf = (len(self.radii), len(out.radii))
+        return out
+
     def signed(self, pos):
         """(d, n): signed distance (positive in the fluid) to the nearest disk and the unit normal into the fluid there, at body-frame points `pos` [N, 2]; no host synchronisation."""
         N = len(pos)
@@ -750,6 +770,8 @@ class Body:
     reps: list = field(default_factory=list)
     linearAcceleration: tuple = (0.0, 0.0)       # prescribed motion: enter the wall pressure condition  dp/dn = rho (g - a_wall) . n
     angularAcceleration: float = 0.0
+    periodic: Optional[Periodic] = None          # set by `Scene.setPeriodic`: this body sees the particles at their nearest periodic image (below)
+    periodicSupport: float = 0.0                 # the largest kernel support of the particles (the reach of the images)
 
     def __post_init__(self):
         self.center = torch.as_tensor(self.center, dtype=F64)
@@ -758,9 +780,23 @@ class Body:
 
     def accelerationAt(self, world):
         """acceleration of the material points of the body at world positions: a + alpha J s - omega^2 s (s = x - centre)."""
-        s = world - self.center
+        s = self.relative(world)
         w, al = self.angularVelocity, self.angularAcceleration                 # floats, or 0-d device tensors while a graph is captured (graphstep.py)
         return self.linearAcceleration.to(world.device) + al * torch.stack([-s[:, 1], s[:, 0]], 1) - w * w * s
+
+    def image(self, world):
+        """the world points at their nearest periodic image of the body centre, `c + min_image(x - c)` (the points themselves without a periodic box).  A derived copy: the particle positions are never written."""
+        if self.periodic is None:
+            return world
+        return self.center + min_image(world - self.center, self.periodic)
+
+    def relative(self, world):
+        """x - centre at the nearest image (lever arms of the loads)."""
+        return min_image(world - self.center, self.periodic)
+
+    def toLocal(self, world):
+        """body-frame coordinates of world points (nearest image of the body centre in a periodic box)."""
+        return self.pose.toLocal(self.image(world))
 
     @property
     def pose(self):
@@ -781,7 +817,9 @@ class Body:
         if key not in cache:
             out = []
             for r in self.reps:
-                if isinstance(r, (SurfaceRep, BoxRep, DiskArrayRep)):
+                if isinstance(r, DiskArrayRep):
+                    out.append(self._tile(r, hmin))
+                elif isinstance(r, (SurfaceRep, BoxRep)):
                     out.append(r)
                 elif isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody) and r.shape.solid == "inside":
                     out.append(r.disks().to(device))                                      # a solid disk: one table lookup per query (any radius), no polygon
@@ -797,6 +835,36 @@ class Body:
             cache[key] = out
         return cache[key]
 
+    def tiledRep(self, rep):
+        """`rep` with its periodic images for the reach `periodicSupport` of the scene (cached); `rep` itself without a periodic box."""
+        if self.periodic is None:
+            return rep
+        cache = self.__dict__.setdefault("_tileCache", {})
+        key = (id(rep), self.periodicSupport)
+        if key not in cache:
+            cache[key] = self._tile(rep, self.periodicSupport)
+        return cache[key]
+
+    def _tile(self, rep, supportMax):
+        """a periodic box: the disks of a bundle with the periodic images a query of the box around the body centre can reach (`DiskArrayRep.tiled`); the rep itself otherwise.  Images need the body not to rotate (the image
+        offsets are fixed in the body frame); a single compact body needs none (the nearest image of the centre serves every row)."""
+        if self.periodic is None or len(rep.radii) < 2:
+            if self.periodic is not None:
+                self._checkCompact(rep, supportMax)
+            return rep
+        t = rep.tiled(self.periodic, max(float(supportMax), self.periodicSupport))
+        if len(t.radii) > len(rep.radii) and float(self.angle) != 0.0:
+            raise NotImplementedError("a bundle with periodic images cannot rotate (its image offsets are fixed in the body frame)")
+        return t
+
+    def _checkCompact(self, rep, supportMax):
+        L = self.periodic.length(rep.centres)
+        lo, hi = rep.bounds()
+        ext = torch.maximum(lo.abs(), hi.abs())
+        bad = (L > 0) & (ext + float(supportMax) >= 0.5 * L)
+        if bool(bad.any()):
+            raise ValueError("a periodic body must fit its cell: extent + support below half the box length on every periodic axis")
+
     def fusable(self):
         """True when `fusedReps` exists (whatever the support: the tier-2 polygon of a disk needs a size only for its resolution)."""
         return all(isinstance(r, (SurfaceRep, BoxRep, SdfRep, DiskArrayRep)) or (isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody)) for r in self.reps)
@@ -808,12 +876,16 @@ class Body:
         key = (str(dev), len(self.reps), tuple(id(r) for r in self.reps))
         if key not in cache:
             los, his = zip(*[r.bounds() for r in self.reps])
-            cache[key] = (torch.stack([a.to(dev) for a in los]).amin(0), torch.stack([a.to(dev) for a in his]).amax(0))
+            lo, hi = torch.stack([a.to(dev) for a in los]).amin(0), torch.stack([a.to(dev) for a in his]).amax(0)
+            if self.periodic is not None and any(isinstance(r, DiskArrayRep) and len(r.radii) > 1 for r in self.reps):         # a bundle sees its tiled images: every query of the box around the centre is a candidate
+                L = self.periodic.length(lo)
+                lo, hi = torch.where(L > 0, -0.5 * L, lo), torch.where(L > 0, 0.5 * L, hi)
+            cache[key] = (lo, hi)
         return cache[key]
 
     def velocityAt(self, world):
         w = self.angularVelocity
-        r = world - self.center
+        r = self.relative(world)
         return self.linearVelocity + w * torch.stack([-r[:, 1], r[:, 0]], 1)
 
 
@@ -910,12 +982,23 @@ class Scene:
         self.bodies = bodies
         self.device = device
         self.volumeMode = volumeMode
+        self.periodic = None
         for b in bodies:
             b.center = b.center.to(device)
             b.linearVelocity = b.linearVelocity.to(device)
             b.linearAcceleration = b.linearAcceleration.to(device)         # a host tensor would be copied (a synchronisation) on every `accelerationAt`
             for r in b.reps:
                 r.to(device) if hasattr(r, "to") else None
+
+    def setPeriodic(self, periodic: Optional[Periodic], support: float = 0.0):
+        """a periodic box for all bodies (scene/periodic.py): every body sees the particles at the nearest image of its centre; the representations are rebuilt for the box (cached lowerings are dropped)."""
+        self.periodic = periodic
+        for b in self.bodies:
+            b.periodic, b.periodicSupport = periodic, float(support)
+            b.__dict__.pop("_tileCache", None)
+            b.__dict__.pop("_fusedCache", None)
+            b.__dict__.pop("_obbCache", None)
+        return self
 
     def inside(self, points, body=None):
         """True where a world point lies inside the solid of any body (surface loops: winding number; SDF / implicit primitives: negative signed distance, positive = fluid; volume: inside a triangle).
@@ -925,7 +1008,7 @@ class Scene:
         for bi, bd in enumerate(self.bodies):
             if body is not None and bi != body:
                 continue
-            lp = bd.pose.toLocal(pts)
+            lp = bd.toLocal(pts)
             for rep in bd.reps:
                 if isinstance(rep, SurfaceRep):
                     out |= rep.indicator(lp) > 0.5
@@ -934,7 +1017,7 @@ class Scene:
                 elif isinstance(rep, SdfRep):
                     out |= rep.signed(lp)[0] < 0
                 elif isinstance(rep, DiskArrayRep):
-                    out |= rep.signed(lp)[0] < 0
+                    out |= bd.tiledRep(rep).signed(lp)[0] < 0
                 elif isinstance(rep, ImplicitRep):
                     out |= rep.shape.signed(lp)[0] < 0
                 elif isinstance(rep, VolumeRep):
@@ -963,7 +1046,7 @@ class Scene:
         for bi, bd in enumerate(self.bodies):
             if body is not None and bi != body:
                 continue
-            lp = bd.pose.toLocal(pts)
+            lp = bd.toLocal(pts)
             for rep in bd.reps:
                 if isinstance(rep, SurfaceRep):
                     V = rep.vertices
@@ -996,7 +1079,7 @@ class Scene:
                     d, n_loc, _, _ = rep.signed(lp)
                     n = bd.pose.vecToWorld(n_loc)
                 elif isinstance(rep, DiskArrayRep):
-                    d, n_loc = rep.signed(lp)
+                    d, n_loc = bd.tiledRep(rep).signed(lp)
                     n = bd.pose.vecToWorld(n_loc)
                 elif isinstance(rep, ImplicitRep):
                     d, n_loc, _ = rep.shape.signed(lp)
@@ -1022,12 +1105,12 @@ class Scene:
             pad = float(sup.max())
             pre = cells.gather(wc.amin(0) - pad, wc.amax(0) + pad)
             sub = pos[pre]
-            lpos = pose.toLocal(sub)
+            lpos = body.toLocal(sub)
             d = (lo - lpos).clamp(min=0) + (lpos - hi).clamp(min=0)
             hit = (d.norm(dim=1) < sup[pre]) & allowed[pre]
             idx = torch.sort(pre[hit]).values
-            return idx, pose.toLocal(pos[idx])
-        lpos = pose.toLocal(pos)
+            return idx, body.toLocal(pos[idx])
+        lpos = body.toLocal(pos)
         d = (lo - lpos).clamp(min=0) + (lpos - hi).clamp(min=0)
         hit = (d.norm(dim=1) < sup) & allowed
         idx = torch.nonzero(hit).flatten()
@@ -1042,7 +1125,7 @@ class Scene:
             raise NotImplementedError("2D only")
         allowed = queryAllowed(queryParticles, operationProperties.operationMode, dev)
         bodies, stats = [], {"candidates": []}
-        cells = ParticleCells.build(pos, float(sup.max())) if len(self.bodies) > 1 else None
+        cells = ParticleCells.build(pos, float(sup.max())) if len(self.bodies) > 1 and self.periodic is None else None        # (the world-box prefilter does not know the images)
         for body in self.bodies:
             cand, lpos = self.candidates(body, pos, sup, allowed, cells)
             lsup = sup[cand]

@@ -38,7 +38,8 @@ from ..scene.provider import AnalyticBoundary
 from ..scene.scene import BodyField, Scene, sceneOperation
 from ..scene.tensile import tensile_factor, tensile_vector_scene
 from ..scene.viscosity import lap_factor, lap_lambda_scene
-from .pairs import F64, Periodic, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
+from ..scene.periodic import Periodic, min_image
+from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
 KSCALE = 1.897367                       # warpSPHCore sphKernelScale(Wendland2, 2D): support / smoothing length
@@ -151,6 +152,10 @@ class DeltaSPH2D:
         self._finalAux = None
         self._graphMode = False                                # True while the step is captured / replayed as a CUDA graph: no host-side caches or reads (graphstep.py)
         self._hc = None                                        # (Hvec tensor, all supports == H) cache of _constSupport
+        if self.cfg.periodic is not None:
+            self.cfg.periodic.checkSupport(self.H)
+            if scene is not None:
+                scene.setPeriodic(self.cfg.periodic, self.H)                      # the bodies see the particles at their nearest image (scene/periodic.py); the fused wall path only
         self.boundary = AnalyticBoundary(scene) if scene is not None else None      # the analytic bodies as a boundary provider (scene/provider.py)
         self._wallCache = None                                 # (x, body poses, adjacency, pair moments, lam, G) of the last _wall_data call: the next step's first RHS is evaluated at the positions the no-penetration law just used
 
@@ -448,7 +453,7 @@ class DeltaSPH2D:
     def _load(self, acc_b, lever):
         """load of the fluid on every body [B, 3] = (Fx, Fy, torque z about the body centre) from the per-body particle accelerations `acc_b` [B, N, 2] of a wall term: the reaction is -m a, acting at `lever` [B, N, 2]."""
         F = -self.m * acc_b
-        r = lever - torch.stack([b.center for b in self.scene.bodies])[:, None, :]
+        r = min_image(lever - torch.stack([b.center for b in self.scene.bodies])[:, None, :], self.cfg.periodic)
         tau = (r[..., 0] * F[..., 1] - r[..., 1] * F[..., 0]).sum(1)
         return torch.cat([F.sum(1), tau[:, None]], 1)
 
@@ -605,7 +610,7 @@ class DeltaSPH2D:
         for bi, b in enumerate(self.scene.bodies):
             c = torch.where((bidx == bi)[:, None], corr, torch.zeros_like(corr))
             F = -self.m * c / self.dt_t
-            r = cp - b.center
+            r = b.relative(cp)
             rows.append(torch.cat([F.sum(0), (r[:, 0] * F[:, 1] - r[:, 1] * F[:, 0]).sum()[None]]))
         return torch.stack(rows)
 

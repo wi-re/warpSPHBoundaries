@@ -207,7 +207,7 @@ def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
     bodies = []
     for body in scene.bodies:
         lo, hi = body.obb()
-        lpos = body.pose.toLocal(pos)
+        lpos = body.toLocal(pos)
         d = (lo - lpos).clamp(min=0) + (lpos - hi).clamp(min=0)
         valid = (d.norm(dim=1) < sup) & allowed
         replist = body.fusedReps(supportMax, dev) or body.reps                  # implicit / SDF bodies as their exact polygon

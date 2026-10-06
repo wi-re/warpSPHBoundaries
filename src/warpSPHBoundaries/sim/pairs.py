@@ -1,11 +1,11 @@
 """Fluid-fluid building blocks shared by the two solvers: the float64 dtype, the Wendland C2 / C4 pair kernels in 2D, and the ordered neighbour pairs (dense
 distance matrix for small systems, cell list otherwise).  Phase 3 of HANDOFF replaces these with warpSPH modules; keep them isolated."""
 import math
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 
+from ..scene.periodic import Periodic, min_image
 from ..scene.scene import buildCellList
 
 F64 = torch.float64
@@ -19,33 +19,6 @@ def wendland2(r, h):
 def dwendland2(r, h):
     q = r / h
     return torch.where(q < 1, -7.0 / (math.pi * h ** 3) * 20.0 * q * (1 - q) ** 3, torch.zeros_like(q))
-
-
-@dataclass(frozen=True)
-class Periodic:
-    """a periodic box: `lo`, `hi` (x, y) and the periodic axes `flags`.  Periodicity is a property of the pair geometry only: the stored positions are never wrapped, clipped or written (the state x is
-    the integrated trajectory, dx/dt stays exact for exports and learning), a particle may be any number of box lengths away from the box.  The displacement of a pair is the minimum image,
-    `d - L round(d / L)`, at the place it is formed; a search hashes a temporary wrapped copy and the pair distances are computed from the raw positions.  Needs the support below L / 2 on a periodic axis."""
-    lo: Tuple[float, float]
-    hi: Tuple[float, float]
-    flags: Tuple[bool, bool] = (True, True)
-
-    def length(self, ref):
-        """the box lengths of the periodic axes (0 on the others) as a tensor like `ref`."""
-        return torch.tensor([(h - l) if f else 0.0 for l, h, f in zip(self.lo, self.hi, self.flags)], dtype=ref.dtype, device=ref.device)
-
-    def checkSupport(self, H):
-        for a, f in enumerate(self.flags):
-            if f and 2.0 * H >= self.hi[a] - self.lo[a]:
-                raise ValueError(f"periodic axis {a}: the box length {self.hi[a] - self.lo[a]} must exceed twice the support {H}")
-
-
-def min_image(d, periodic: Optional[Periodic]):
-    """the minimum-image form of the displacements `d` [..., 2] (any integer multiple of the box length removed on the periodic axes); `d` itself without periodicity."""
-    if periodic is None:
-        return d
-    L = periodic.length(d)
-    return d - L * torch.round(d / torch.where(L > 0, L, torch.ones_like(L)))
 
 
 def pair_delta(pos, i, j, periodic: Optional[Periodic] = None):
