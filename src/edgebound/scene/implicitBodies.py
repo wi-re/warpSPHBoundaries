@@ -205,6 +205,16 @@ class TierPolicy:
     maxPolygonEdgeOverH: float = 1.0 / 16.0
 
 
+def _device_const(obj, name, device):
+    """`obj.<name>` as a float64 tensor on `device`, converted once per (value, device)."""
+    cache = obj.__dict__.setdefault("_dev", {})
+    val = getattr(obj, name)
+    key = (name, str(device), tuple(val) if not isinstance(val, torch.Tensor) else None)
+    if key not in cache:
+        cache[key] = torch.as_tensor(val, dtype=torch.float64, device=device)
+    return cache[key]
+
+
 @dataclass
 class DiskBody:
     center: Tuple[float, float]
@@ -214,7 +224,7 @@ class DiskBody:
 
     def signed(self, pos):
         """(d, n, kappa): signed distance (positive in the fluid), unit normal pointing into the fluid, curvature."""
-        c = torch.as_tensor(self.center, dtype=torch.float64, device=pos.device)
+        c = _device_const(self, "center", pos.device)            # cached: a host tensor would be copied (a synchronisation, forbidden while a graph is captured) on every call
         v = pos - c
         r = v.norm(dim=1).clamp(min=1e-300)
         e = v / r[:, None]
@@ -242,8 +252,8 @@ class HalfPlaneBody:
     bodyId: int = 0
 
     def signed(self, pos):
-        n = torch.as_tensor(self.normal, dtype=torch.float64, device=pos.device)
-        p = torch.as_tensor(self.point, dtype=torch.float64, device=pos.device)
+        n = _device_const(self, "normal", pos.device)
+        p = _device_const(self, "point", pos.device)
         d = ((pos - p) * n).sum(1)
         return d, n.expand_as(pos), 0.0
 

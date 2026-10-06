@@ -232,7 +232,7 @@ class FusedWall:
         self.N = adjacency.numQueries
         self.items = []                                       # per (body, rep) with pairs / rows: dict(bi, rep, topo, ba, rows, keep, ind, w, R); topo is None for the table rows of a box, c is None for a polygon item that only serves cone_area
         for bi, ba in enumerate(adjacency.bodies):
-            for rep, topo in zip(ba.body.reps, ba.reps):
+            for rep, topo in zip(ba.repList if ba.repList is not None else ba.body.reps, ba.reps):
                 if not len(ba.cand):
                     continue
                 if isinstance(rep, SurfaceRep):
@@ -241,7 +241,7 @@ class FusedWall:
                 elif isinstance(rep, BoxRep):
                     self._add_box(bi, ba, rep)
                 else:
-                    raise NotImplementedError("FusedWall: surface and box representations only (got %s)" % type(rep).__name__)
+                    raise NotImplementedError("FusedWall: surface and box representations only (got %s; implicit / SDF bodies need the fixed-capacity adjacency, `fixedadj`)" % type(rep).__name__)
 
     def _item(self, bi, ba, rep, topo, c, perm, start, ind0):
         rows = len(ba.cand)
@@ -300,7 +300,10 @@ class FusedWall:
             self._add_item(bi, ba, surf, topo, exact, ind0=True)
 
     @staticmethod
-    def supported(scene):
+    def supported(scene, lowering=True):
+        """surface and box bodies; with `lowering` (the fixed-capacity adjacency builds the polygons) also disks of `ImplicitRep` and `SdfRep` bodies, which are integrated as their exact tier-2 polygon."""
+        if lowering:
+            return all(b.fusable() for b in scene.bodies)
         return all(isinstance(r, (SurfaceRep, BoxRep)) for b in scene.bodies for r in b.reps)
 
     def evaluate(self, outputs, a1=None):

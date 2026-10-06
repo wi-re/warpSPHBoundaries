@@ -146,8 +146,9 @@ def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
         lpos = body.pose.toLocal(pos)
         d = (lo - lpos).clamp(min=0) + (lpos - hi).clamp(min=0)
         valid = (d.norm(dim=1) < sup) & allowed
-        reps = [fixed_topology(rep, lpos, sup, valid, supportMax) if isinstance(rep, SurfaceRep) else None for rep in body.reps]
-        bodies.append(BodyAdjacency(body, cand, lpos, sup, reps, valid))
+        replist = body.fusedReps(supportMax, dev) or body.reps                  # implicit / SDF bodies as their exact polygon
+        reps = [fixed_topology(rep, lpos, sup, valid, supportMax) if isinstance(rep, SurfaceRep) else None for rep in replist]
+        bodies.append(BodyAdjacency(body, cand, lpos, sup, reps, valid, replist))
     adj = SceneAdjacency(N, bodies, {"candidates": None}, queryParticles)
     adj.supportMax = float(supportMax)
     return adj

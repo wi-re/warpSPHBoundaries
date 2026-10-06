@@ -16,7 +16,7 @@ import torch
 import warp as wp
 from warpSPHCore import ParticleState, deferVerletChecks
 
-from ..scene.scene import BoxRep, SurfaceRep
+from ..scene.fused import FusedWall
 
 F64 = torch.float64
 
@@ -39,9 +39,8 @@ def graphable(sim):
         return False
     if cfg.wallViscosity and cfg.viscosity and cfg.wallViscosityForm == "pairwise":
         return False
-    for b in sim.scene.bodies:
-        if any(not isinstance(r, (SurfaceRep, BoxRep)) for r in b.reps):
-            return False
+    if not FusedWall.supported(sim.scene, cfg.fixedAdjacency):
+        return False
     return torch.cuda.is_available() and str(sim.dev).startswith("cuda")
 
 

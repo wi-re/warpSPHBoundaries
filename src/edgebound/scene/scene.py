@@ -505,6 +505,10 @@ class ImplicitRep:
         big = 1e8
         return torch.full((2,), -big, dtype=F64), torch.full((2,), big, dtype=F64)
 
+    def lowered(self, hmin, device):
+        """the exact-integral form of this body for the fused wall evaluation (scene/fused.py): the tier-2 polygon of a disk (area preserving, edges <= h/16), None for primitives without one (half plane)."""
+        return self.fallbackSurface(hmin, device) if isinstance(self.shape, DiskBody) else None
+
     def fallbackSurface(self, hmin, device):
         s = self.shape
         if not isinstance(s, DiskBody):
@@ -544,7 +548,21 @@ class SdfRep:
         if self.fallback is not None:
             self.fallback.to(device)
         self._nodes = None
+        self._contour = None
         return self
+
+    def contour(self):
+        """the zero level set of the sampled distance as a `SurfaceRep` (marching squares, linear interpolation on the grid edges; solid = d < 0 on the left of every edge).  The grid must cover the body
+        with a margin: either every border node is fluid (d >= 0: the solid is enclosed, counter-clockwise loops, `background = 0`) or every border node is solid (a tank: clockwise loops around the fluid,
+        `background = 1`).  Error: the sagitta of the linear pieces, O(spacing^2 kappa), plus the bilinear sampling of the distance itself."""
+        if getattr(self, "_contour", None) is None:
+            self._contour = _marching_squares(self.d.cpu().numpy(), self.origin.cpu().numpy(), self.spacing).to(self.d.device)
+        return self._contour
+
+    def lowered(self, hmin, device):
+        """the exact-integral form of this body for the fused wall evaluation: the given `fallback` surface, else the extracted contour."""
+        fb = self.fallback if self.fallback is not None else self.contour()
+        return fb.to(device)
 
     def bounds(self):
         ext = torch.as_tensor(self.d.shape, dtype=F64, device=self.d.device) - 1
@@ -579,6 +597,52 @@ class SdfRep:
         gn = torch.sqrt(gx * gx + gy * gy).clamp(min=1e-300)
         kappa = lap / (1.0 - d * lap)
         return d, torch.stack([gx, gy], 1) / gn[:, None], kappa, gn
+
+
+def _marching_squares(d, origin, spacing):
+    """closed polylines of the zero level set of the node values `d` [nx, ny] (positive = fluid) as a `SurfaceRep` with the solid (d < 0) on the left of every edge (see `SdfRep.contour`)."""
+    nx, ny = d.shape
+    inside = d < 0
+    border = np.concatenate([inside[0], inside[-1], inside[1:-1, 0], inside[1:-1, -1]])
+    if border.any() and not border.all():
+        raise ValueError("SdfRep.contour: the sampled grid must cover the body with a margin (all border nodes fluid, or all solid)")
+    background = 1 if border.all() else 0
+    verts, vid, edges = [], {}, []
+
+    def vertex(i0, j0, i1, j1):
+        key = (i0, j0, i1, j1)
+        if key not in vid:
+            t = d[i0, j0] / (d[i0, j0] - d[i1, j1])
+            vid[key] = len(verts)
+            verts.append([origin[0] + spacing * (i0 + t * (i1 - i0)), origin[1] + spacing * (j0 + t * (j1 - j0))])
+        return vid[key]
+
+    for i in range(nx - 1):
+        for j in range(ny - 1):
+            c = [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)]              # counter-clockwise
+            f = [bool(inside[a]) for a in c]
+            if all(f) or not any(f):
+                continue
+            exits, entries = [], []                                            # crossings in counter-clockwise order along the cell boundary: solid -> fluid (exit), fluid -> solid (entry)
+            for k in range(4):
+                a, b = c[k], c[(k + 1) % 4]
+                if f[k] != f[(k + 1) % 4]:
+                    (exits if f[k] else entries).append((len(exits) + len(entries), vertex(a[0], a[1], b[0], b[1])))
+            order = sorted(exits + entries)
+            kind = {v: ("x" if (n, v) in exits else "e") for n, v in order}
+            seq = [(kind[v], v) for _, v in order]
+            solidCentre = bool(d[i:i + 2, j:j + 2].mean() < 0)
+            m = len(seq)
+            for k in range(m):
+                if seq[k][0] == "x":                                           # exit -> the next entry (cuts off the solid corner), or, for a connected solid across a saddle, the previous one
+                    step = -1 if (m == 4 and solidCentre) else 1
+                    q = (k + step) % m
+                    while seq[q][0] != "e":
+                        q = (q + step) % m
+                    edges.append([seq[k][1], seq[q][1]])
+    if not edges:
+        raise ValueError("SdfRep.contour: no zero level set in the sampled grid")
+    return SurfaceRep(np.asarray(verts, dtype=float), np.asarray(edges, dtype=np.int32), background=background)
 
 
 # ----------------------------------------------------------------------------------------------------------------------- bodies, scene
@@ -635,10 +699,41 @@ class Body:
         self.linearVelocity = self.linearVelocity + dt * self.linearAcceleration.to(self.linearVelocity.device)
         self.angularVelocity = float(self.angularVelocity) + dt * float(self.angularAcceleration)
 
+    def fusedReps(self, hmin, device):
+        """the representations of this body in the form the fused wall evaluation integrates exactly: `SurfaceRep` and `BoxRep` as they are, `ImplicitRep` (disks) and `SdfRep` as their tier-2 polygon
+        (`lowered`: edges <= h/16 resp. the contour of the sampled distance); None when some representation has no such form (the sceneOperation path serves the body).  Cached per `hmin`."""
+        cache = self.__dict__.setdefault("_fusedCache", {})
+        key = (float(hmin), str(device))
+        if key not in cache:
+            out = []
+            for r in self.reps:
+                if isinstance(r, (SurfaceRep, BoxRep)):
+                    out.append(r)
+                elif isinstance(r, (ImplicitRep, SdfRep)):
+                    low = r.lowered(hmin, device)
+                    if low is None:
+                        out = None
+                        break
+                    out.append(low)
+                else:
+                    out = None
+                    break
+            cache[key] = out
+        return cache[key]
+
+    def fusable(self):
+        """True when `fusedReps` exists (whatever the support: the tier-2 polygon of a disk needs a size only for its resolution)."""
+        return all(isinstance(r, (SurfaceRep, BoxRep, SdfRep)) or (isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody)) for r in self.reps)
+
     def obb(self):
+        """the bounding box of the representations in the body frame; the representations are static, so it is computed once per device (reading it may synchronise)."""
         dev = self.center.device
-        los, his = zip(*[r.bounds() for r in self.reps])
-        return torch.stack([a.to(dev) for a in los]).amin(0), torch.stack([a.to(dev) for a in his]).amax(0)
+        cache = self.__dict__.setdefault("_obbCache", {})
+        key = (str(dev), len(self.reps), tuple(id(r) for r in self.reps))
+        if key not in cache:
+            los, his = zip(*[r.bounds() for r in self.reps])
+            cache[key] = (torch.stack([a.to(dev) for a in los]).amin(0), torch.stack([a.to(dev) for a in his]).amax(0))
+        return cache[key]
 
     def velocityAt(self, world):
         w = self.angularVelocity
@@ -656,6 +751,7 @@ class BodyAdjacency:
     lsup: torch.Tensor              # [C]
     reps: list
     valid: Optional[torch.Tensor] = None     # [C] bool, fixed-capacity adjacency only (`fixedadj`): rows are all queries, `valid` marks the candidates
+    repList: Optional[list] = None           # fixed-capacity adjacency only: the representations `reps` is aligned with (`Body.fusedReps`: implicit / SDF bodies as their polygon); None = `body.reps`
 
 
 @dataclass

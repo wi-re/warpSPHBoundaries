@@ -86,11 +86,11 @@ def test_fused_outputs_equal_scene_operations(device, constant):
 
 
 @pytest.mark.parametrize("device", DEVICES)
-def test_fused_rejects_other_representations(device):
+def test_fused_rejects_other_representations_on_the_oracle_adjacency(device):
     from edgebound.scene.implicitBodies import DiskBody
     from edgebound.scene.scene import ImplicitRep
     sc = Scene([Body(bodyId=0, reps=[ImplicitRep(DiskBody(center=(0.5, 0.5), radius=0.2))])], device)
-    assert not FusedWall.supported(sc)
+    assert FusedWall.supported(sc) and not FusedWall.supported(sc, lowering=False)         # a disk is integrated as its polygon only on the fixed-capacity adjacency (tests/scene/test_fused_implicit.py)
     pos = torch.tensor([[0.5, 0.5]], dtype=F64, device=device)
     ps = ParticleState(positions=pos, supports=torch.full((1,), 0.3, dtype=F64, device=device), masses=torch.ones(1, dtype=F64, device=device), kinds=torch.zeros(1, dtype=torch.int32, device=device),
                        densities=torch.ones(1, dtype=F64, device=device))

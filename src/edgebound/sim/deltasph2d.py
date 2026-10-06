@@ -174,7 +174,7 @@ class DeltaSPH2D:
         ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
         poses = None if self._graphMode else [(b.center.clone(), float(b.angle)) for b in self.scene.bodies]      # (float(angle) is a host read, the cache is off in graph mode)
         c = self._wallCache
-        fused = self.cfg.fusedWall and FusedWall.supported(self.scene)
+        fused = self.cfg.fusedWall and FusedWall.supported(self.scene, self.cfg.fixedAdjacency)
         if self._carryNext:                                     # graph step, first RHS: the wall evaluation the previous step's no-penetration law made at these very positions (graphstep.py)
             self._carryNext = False
             adj = self._carry
@@ -466,7 +466,7 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None:
             ps = ParticleState(positions=x, supports=self.Hvec, masses=torch.full_like(rho, self.m), kinds=self.kinds, densities=rho)
-            if self.cfg.fusedWall and FusedWall.supported(self.scene) and self._constSupport():
+            if self.cfg.fusedWall and FusedWall.supported(self.scene, self.cfg.fixedAdjacency) and self._constSupport():
                 adj = self._fused_state(ps)
                 lam, G, Mw = self.cfg.wallMass * adj.out["lam"], self.cfg.wallMass * adj.out["G"], self.cfg.wallMass * adj.out["Cov"]
             else:
