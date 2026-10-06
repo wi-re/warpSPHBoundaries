@@ -147,13 +147,16 @@ After step 5 the scene path is a handful of launches per position set on a fixed
 
 ## 7. Open decisions (user)
 
-* **Merge `wall-eval` into `main`** (and push?): seven commits, suite 836, harness PASS; `main` currently only has the paper audit on top of the layout.
-* **`cfg.fusedWall` default is True** (set today after the equivalence runs: outputs 1e-16, solver positions ≤ 5e-15, harness PASS); `False` is the `sceneOperation` reference path, kept for the representations the fused path does not cover and as the oracle.
-* **Float32 as the production precision of the solver itself:** today only the wall kernels follow `warpSPHCore_PRECISION`; the rest of `DeltaSPH2D` is float64 torch. Whether to move the fluid side too is phase 3/4 of the port.
+Decided 2026-10-06 (user):
+* **`wall-eval` merged into `main`** (fast-forward to `02e19e3`, local only, NOT pushed; push is still the user's call). Work continues on `step5-adjacency`.
+* **Step 5: a small harness margin > 0 from reordered sums is accepted** (no bit-identity requirement; the harness tolerance stays the gate, report the margins).
+* **Float32 on the fluid side too:** the fluid terms follow the warpSPH precision mechanism (`warpSPHCore_PRECISION`, `scalar_t`), i.e. the solver must support float32 end to end, not only the wall kernels. Consequence for phase 3 / step 5: new kernels are written against `real` / `torch_real`, no float64-only host torch in the step.
+* **mDBC stays as an alternative boundary provider** next to the analytic wall (phase 3 decision 2). Still open: which warpSPH commit to pin per baseline (phase 3 decision 1).
+
+* `cfg.fusedWall` default is True (set 2026-10-05 after the equivalence runs); `False` is the `sceneOperation` reference path, kept for the representations the fused path does not cover and as the oracle.
 
 * ~~Step 2 names~~ Decided: `PairMoments` / `precompute` / `evaluate` stand (user, 2026-10-05).
 * ~~Keep `PairMoments` public?~~ Decided: by benchmark (step 6). Evaluation is the default for all solvers; precompute is public only if it measurably wins.
-* Step 5: accept a harness margin > 0 from reordered sums, or insist on bit-identity (then no skin, only the sync-free rebuild)?
 * Whether `Scene.inside` / `signed_distance` move into the adjacency step (both are brute force over edges; `signed_distance` is 0.7 ms/step now, negligible until large scenes).
 
 ## 8. Facts and files
