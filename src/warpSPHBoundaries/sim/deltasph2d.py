@@ -86,6 +86,8 @@ class DeltaSPHConfig:
     bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
     wallFrictionLever: str = "particle"  # where the no-slip wall friction acts for the TORQUE on the body: "particle" (where the fluid loses the momentum: the fluid angular momentum balance, torque conserved between walls: measured 1.000 on Taylor-Couette) or "contact" (the wall point: 0.83 to 1.2 off)
     backgroundPressure: float = 0.0      # P = c0^2 (rho - rho0) + P_b: a uniform pressure offset (the density, hence the volumes and the viscosity, are untouched); with the Antuono switch and the wall clamp the level matters, with `pressureConsistent` it must not
+    fluidViscosity: str = "alpha"        # fluid-pair viscous operator: "alpha" (Monaghan alpha form, central pair force, nu = alpha c0 H / (8 xi), anisotropic on a square lattice) | "morris" (Morris 1997, warpSPH's morris branch, nu = alpha c0 H / (8 xi) / morrisCalibration: isotropic, not angular-momentum conserving; the WALL closures are still those of the alpha weight)
+    morrisCalibration: float = 1.0       # nu_eff / nu of the Morris operator on the lattice (Wendland C2: 0.985 = eta^2 bias 0.9714 x lattice 1.0139, kernel_viscosity_table.py --morris); the operator is divided by it
     pressureConsistent: bool = False     # the pressure force is exact for a uniform pressure near a wall: the part of it a uniform P exerts through the wall-consistency residual S_i of the layout is removed (difference form)
     wallPressureViscous: bool = False    # the wall pressure condition carries the viscous term, grad p = rho (g + f - a_wall) + rho nu lap u (the particle's own viscous acceleration extends the ghost pressure): matters where the pressure is viscous-dominated (flow past a curved wall at low Re)
     bodyForceAtWall: bool = True        # the body force enters the wall pressure condition dp/dn = rho (g + f - a_wall) . n (a uniform force acts on the fluid at a wall like gravity; it is not hydrostatic in the density diffusion)
@@ -342,6 +344,8 @@ class DeltaSPH2D:
         near = torch.zeros(0, dtype=torch.long, device=self.dev)
         if self.scene is not None and (not isinstance(adj, WallAggregate) or not self._graphMode):         # the index list is only needed by the non-fused and the 'pairwise' paths (and diagnostics); a graph capture has none
             near = torch.nonzero(lam.sum(0) > 1e-9).flatten()
+        if cfg.fluidViscosity not in ("alpha", "morris"):
+            raise ValueError("fluidViscosity must be 'alpha' or 'morris', got %r" % (cfg.fluidViscosity,))
         if cfg.viscosity and cfg.wallViscosity and cfg.wallViscosityForm not in ("laplacian", "pairwise", "noslip", "noslipMirror", "noslipCurv", "noslipMoment"):
             raise ValueError("wallViscosityForm must be 'laplacian', 'pairwise', 'noslip', 'noslipMirror', 'noslipCurv' or 'noslipMoment', got %r" % (cfg.wallViscosityForm,))
         self.surface = self._detect_surface(x, None if fk else i, None if fk else j, None if fk else r, lam, adj, fk)
@@ -405,9 +409,14 @@ class DeltaSPH2D:
                 acc = acc + viscf
             else:
                 vij = v[i] - v[j]
-                mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
-                fac = cfg.alpha * cfg.c0 * H / self.xi
-                acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
+                if cfg.fluidViscosity == "morris":                                                 # Morris et al. 1997 Eq. 8 as warpSPH's morris branch: V_j nu (rho_i + rho_j) / rho_i (x_ij . gW) / (r^2 + 0.0025 H^2) v_ij
+                    nu = cfg.alpha * cfg.c0 * H / (8.0 * self.xi) / cfg.morrisCalibration
+                    wgt = V[j] * nu * (rho[i] + rho[j]) / rho[i] * (d * gW).sum(1) / (r * r + 0.0025 * H * H)
+                    acc = acc + self._sum(torch.where(nz, wgt, torch.zeros_like(r))[:, None] * vij, i)
+                else:
+                    mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
+                    fac = cfg.alpha * cfg.c0 * H / self.xi
+                    acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
         visc = lever = None
         vsum = torch.zeros_like(v)                                                                  # the wall viscous acceleration summed over the bodies (fused branch)
         if want_forces and self.nb and cfg.viscosity and cfg.wallViscosity:
@@ -416,6 +425,8 @@ class DeltaSPH2D:
         if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip", "noslipMirror", "noslipCurv", "noslipMoment"):
             fac = cfg.alpha * cfg.c0 * H / self.xi                                                  # full-length form: the near-wall rows are a mask, not an index list (no host sync)
             nearm = (lam.sum(0) > 1e-9).to(F64)
+            if cfg.fluidViscosity == "morris" and cfg.wallViscosityForm not in ("noslip", "noslipMoment"):
+                raise NotImplementedError("fluidViscosity='morris': the wall closures 'noslip' and 'noslipMoment' only (the others are built for the alpha pair weight), got %r" % (cfg.wallViscosityForm,))
             for bi, b in enumerate(self.scene.bodies):
                 gm = G[bi].norm(dim=1)
                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
@@ -499,22 +510,69 @@ class DeltaSPH2D:
             acc = acc * (1.0 - cfg.pinned.weight(x, cfg.periodic))[:, None]                    # the band is prescribed, not integrated
         if forces is not None:
             forces = torch.stack([forces, self._load(visc, lever) if visc is not None else torch.zeros_like(forces)])      # [2, B, 3]: pressure, wall viscous; (Fx, Fy, torque about the centre)
+            if visc is not None and cfg.fluidViscosity == "morris":
+                # Morris is the non-symmetric stress mu grad v: same force density as mu (grad v + grad v^T) for incompressible flow, but the wall traction differs by mu (grad v^T) n = -mu Omega t on a rigid no-slip wall
+                # (any shape): no net force, torque -mu Omega oint (r x t) ds = -2 mu Omega A, A = the signed area enclosed by the solid's boundary (positive for an obstacle, negative for a cavity)
+                mu = cfg.rho0 * cfg.alpha * cfg.c0 * H / (8.0 * self.xi)
+                for bi, b in enumerate(self.scene.bodies):
+                    forces[1, bi, 2] = forces[1, bi, 2] - 2.0 * mu * self._solid_area(b) * b.angularVelocity
         return acc, drho, forces
+
+    def _solid_area(self, b):
+        """signed area enclosed by the boundary of the body's solid, oriented with the solid on the left (+ for an obstacle, - for a cavity / a domain); cached per body (host float)."""
+        from ..scene.implicitBodies import DiskBody
+        from ..scene.scene import BoxRep, DiskArrayRep, ImplicitRep, SdfRep, SurfaceRep
+        cache = self.__dict__.setdefault("_areaCache", {})
+        if id(b) in cache:
+            return cache[id(b)]
+
+        def area(r):
+            if isinstance(r, DiskArrayRep):
+                return math.pi * float((r.radii.double() ** 2).sum())
+            if isinstance(r, SurfaceRep):
+                P, E = r.vertices.double().cpu(), r.edges.long().cpu()
+                a, c = P[E[:, 0]], P[E[:, 1]]
+                return 0.5 * float((a[:, 0] * c[:, 1] - c[:, 0] * a[:, 1]).sum())
+            if isinstance(r, BoxRep):
+                A = (r.hi_h[0] - r.lo_h[0]) * (r.hi_h[1] - r.lo_h[1])
+                return A if r.solid == "inside" else -A
+            if isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody):
+                A = math.pi * r.shape.radius ** 2
+                return A if r.shape.solid == "inside" else -A
+            if isinstance(r, SdfRep) and r.fallback is not None:
+                return area(r.fallback)
+            raise NotImplementedError("Morris torque correction: no enclosed area for %s" % type(r).__name__)
+
+        cache[id(b)] = sum(area(r) for r in b.reps)
+        return cache[id(b)]
 
     def _moment_wall_term(self, bi, x, w, n, d, viscf, rho, fac):
         """the wall part of the viscous acceleration of a no-slip wall from the moments of the pair weight over the solid (sim/wallmoments.py): the velocity relative to the wall is a polynomial of the wall distance,
         w(s) = a s + (L / 2) s^2 (a, L per component in the frame (n, t)), with  w(d) = w_i  and the viscous balance of the particle (the fluid pair sum `viscf` plus this wall term = nu_p (lap w [+ 2 grad div w]),
         nu_p = fac / 8; the normal component carries the factor 3 of the pair form, the tangential one the curvature terms of the wall kappa = div n: lap w_t = w_t'' + kappa w_t' - kappa^2 w_t)."""
-        if getattr(self, "_wpm", None) is None:
-            self._wpm = CurvedWallMoments(self.dW, self.H, self.dev)
+        morris = self.cfg.fluidViscosity == "morris"
+        cache = self.__dict__.setdefault("_wpmCache", {})
+        if morris not in cache:
+            cache[morris] = CurvedWallMoments(self.dW, self.H, self.dev, weight="morris" if morris else "alpha")
         t = torch.stack([-n[:, 1], n[:, 0]], 1)
         kap = self._curvature(bi, x, n, t)                                                       # div n at the particle: 1 / (R + d) convex, -1 / (R - d) concave
-        T = self._wpm.eval(d, kap / (1.0 - kap * d))                                             # [2 (n, t), 3, N]: moments over the actual circular solid of curvature kappa_w = 1 / R (signed)
-        bn = 8.0 * self.cfg.wallMass / rho                                                       # beta / nu_p
-        beta = fac * self.cfg.wallMass / rho
+        T = cache[morris].eval(d, kap / (1.0 - kap * d))                                         # [2 (n, t), 3, N]: moments over the actual circular solid of curvature kappa_w = 1 / R (signed)
+        if morris:                                                                               # Morris pair weight 2 nu_used V_w K(r) (identity), rho_w = rho_i; its discrete operator realises nu_used * morrisCalibration
+            nu_used = fac / 8.0 / self.cfg.morrisCalibration
+            beta = 2.0 * nu_used * self.cfg.wallMass / rho
+            nup = nu_used * self.cfg.morrisCalibration
+            cn = 1.0                                                                             # no grad div part: the normal component has no factor 3
+        else:
+            beta = fac * self.cfg.wallMass / rho
+            nup = fac / 8.0
+            cn = 3.0
+        bn = beta / nup                                                                          # beta / nu_p
         wn, wt = (w * n).sum(1), (w * t).sum(1)
         fn, ft = (viscf * n).sum(1), (viscf * t).sum(1)
-        nup = fac / 8.0
+        rot = None
+        if morris:                                                                               # a rigid rotation Omega of the wall: the Morris weight does not annihilate it.  Wall part: -beta Omega x M1 = -beta Omega M1_n t;
+            rot = beta * self.scene.bodies[bi].angularVelocity * T[0][3]                         # the fluid sum carries the opposite (the full-plane integral vanishes), removed before the balance of w
+            ft = ft - rot
 
         def solve(Tk, f, wc, c, curved):
             g1 = Tk[1] / d - Tk[0]
@@ -528,8 +586,10 @@ class DeltaSPH2D:
             L = rhs / den
             return -beta * (g1 * wc + h * L)
 
-        Awn = solve(T[0], fn, wn, 3.0, False)
+        Awn = solve(T[0], fn, wn, cn, False)
         Awt = solve(T[1], ft, wt, 1.0, True)
+        if rot is not None:
+            Awt = Awt - rot
         return Awn[:, None] * n + Awt[:, None] * t
 
     def _curvature(self, bi, x, n, t):

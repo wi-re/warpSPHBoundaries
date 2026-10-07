@@ -86,8 +86,12 @@ class FluidWarp:
         """alpha c0 H / xi sum_j V_j / mean(rho) mu_ij grad W (all neighbours, `approachOnly=False`)."""
         cfg, s = self.sim.cfg, self.sim
         ps.velocities = v.to(self.tp)
-        out = computeVelocityDiffusionDeltaSPH(ps, OperationProperties(kernel=cfg.kernel, operation=WarpOperation.Laplacian, supportMode=SupportScheme.SuperSymmetric, operationMode=OperationDirection.AllToAll),
-                                               self.domain, adjacency=adj, queryVelocities=ps.velocities, inviscid=True, c_s=cfg.c0, alpha=cfg.alpha * self.xiWarp / s.xi, nu=0.0, approachOnly=False)
+        op = OperationProperties(kernel=cfg.kernel, operation=WarpOperation.Laplacian, supportMode=SupportScheme.SuperSymmetric, operationMode=OperationDirection.AllToAll)
+        if cfg.fluidViscosity == "morris":                                                         # Morris 1997 (warpSPH's morris branch), the same nominal nu as the alpha form, divided by the lattice calibration
+            nu = cfg.alpha * cfg.c0 * float(s.H) / (8.0 * s.xi) / cfg.morrisCalibration
+            out = computeVelocityDiffusionDeltaSPH(ps, op, self.domain, adjacency=adj, queryVelocities=ps.velocities, inviscid=False, morris=True, nu=nu, approachOnly=False)
+        else:
+            out = computeVelocityDiffusionDeltaSPH(ps, op, self.domain, adjacency=adj, queryVelocities=ps.velocities, inviscid=True, c_s=cfg.c0, alpha=cfg.alpha * self.xiWarp / s.xi, nu=0.0, approachOnly=False)
         return out.to(F64)
 
     def kernels(self, ps, adj):

@@ -64,14 +64,20 @@ def _gl(n, device):
     return torch.as_tensor(x, dtype=F64, device=device), torch.as_tensor(w, dtype=F64, device=device)
 
 
-def curved_moments(dW, H, d, kw, nth=160, nr=48):
+MORRIS_ETA2 = 0.0025                                                             # eta^2 / H^2 of the Morris pair weight (warpSPH wp_viscosityDelta)
+
+
+def curved_moments(dW, H, d, kw, nth=160, nr=48, weight="alpha"):
     """T_k^{c' c}(d, kappa_w) for a circular wall of signed curvature `kw` (> 0: solid disk of radius 1/kw, fluid outside; < 0: cavity of radius 1/|kw|, fluid inside; 0: the plane) at the distance `d` of the particle, by a
     polar quadrature of the actual solid region about the particle.  The continuation of the velocity relative to the wall is  w_ext(x') = sum_c (a_c s' + L_c s'^2 / 2) e_c(x')  with s' the signed distance and e_c(x') the (n, t) frame AT x'
     (the frame turns with the position, as in a flow along the wall); the tensor entries are  T_k^{c'c} = int_S L(r) (e_c' . y_hat)(y_hat . e_c(x')) s'^k dA'  with the fixed frame of the particle on the left;  k = 0 uses the fixed frame
-    on both sides (the particle's own velocity).  Diagonal by the mirror symmetry t -> -t.  Returns [B, 3 (k), 2 (n, t)].  `d`, `kw` are [B] tensors, d in [0, H)."""
+    on both sides (the particle's own velocity).  Diagonal by the mirror symmetry t -> -t.  Returns [B, 3 (k), 2 (n, t)].  `d`, `kw` are [B] tensors, d in [0, H).
+    `weight = "morris"`: the scalar Morris pair weight K(r) = W'(r) r / (r^2 + eta^2) times the identity instead of L(r) y_hat (x) y_hat: T_k^{c'c} = int_S K(r) (e_c' . e_c(x')) s'^k dA' (k = 0: int_S K dA' on both components).
+    Slot k = 3 is the first moment of the solid M1_n = int_S K (y . n) dA' (Morris only; the tangential part vanishes by symmetry): the Morris weight does not annihilate a rigid ROTATION of the wall (the alpha weight does),
+    the wall integral of v_wall(x_i + y) - v_wall(x_i) = Omega x y is Omega x M1.  Returns [B, 4, 2]."""
     dev = d.device
     B = d.shape[0]
-    out = torch.zeros((B, 3, 2), dtype=F64, device=dev)
+    out = torch.zeros((B, 4, 2), dtype=F64, device=dev)
     xr, wr = _gl(nr, dev)
     xt, wt = _gl(nth, dev)
     flat = kw.abs() * H < 1e-6
@@ -107,7 +113,10 @@ def curved_moments(dW, H, d, kw, nth=160, nr=48):
             ok = r_lo < H
         r = r_lo[:, :, None] + 0.5 * (r_hi - r_lo).clamp(min=0.0)[:, :, None] * (xr[None, None, :] + 1.0)      # [nb, nth, nr]
         wrr = 0.5 * (r_hi - r_lo).clamp(min=0.0)[:, :, None] * wr[None, None, :]
-        L = dW(r.reshape(-1), H).reshape(r.shape) / r
+        if weight == "morris":
+            L = dW(r.reshape(-1), H).reshape(r.shape) * r / (r * r + MORRIS_ETA2 * H * H)
+        else:
+            L = dW(r.reshape(-1), H).reshape(r.shape) / r
         ct, st = torch.cos(th)[:, :, None], torch.sin(th)[:, :, None]
         if sign >= 0:                                                               # y = r (-cos, -sin) (towards the solid); c = -(R + d) n; frame at x': n' = (y - c) / |y - c|
             yx, yy = -r * ct, -r * st
@@ -125,9 +134,13 @@ def curved_moments(dW, H, d, kw, nth=160, nr=48):
             nn_x, nn_y = -ux / rho, -uy / rho                                       # towards the centre = into the fluid
         yh_x, yh_y = yx / r, yy / r
         tt_x, tt_y = -nn_y, nn_x                                                    # tau' = J n'
-        enn = yh_x * (yh_x * nn_x + yh_y * nn_y)                                    # (e_n . y_hat)(y_hat . n')
-        ett = yh_y * (yh_x * tt_x + yh_y * tt_y)                                    # (e_t . y_hat)(y_hat . tau')
-        f0n, f0t = yh_x * yh_x, yh_y * yh_y                                         # fixed frame (k = 0)
+        if weight == "morris":
+            enn, ett = nn_x, tt_y                                                   # e_n . n', e_t . tau'
+            f0n = f0t = torch.ones_like(yh_x)
+        else:
+            enn = yh_x * (yh_x * nn_x + yh_y * nn_y)                                # (e_n . y_hat)(y_hat . n')
+            ett = yh_y * (yh_x * tt_x + yh_y * tt_y)                                # (e_t . y_hat)(y_hat . tau')
+            f0n, f0t = yh_x * yh_x, yh_y * yh_y                                     # fixed frame (k = 0)
         w = (jac[:, :, None] * wrr * L * r) * ok[:, :, None]
         for k in range(3):
             sk = sp ** k
@@ -137,23 +150,25 @@ def curved_moments(dW, H, d, kw, nth=160, nr=48):
             else:
                 out[sel, k, 0] = (w * enn * sk).sum((1, 2))
                 out[sel, k, 1] = (w * ett * sk).sum((1, 2))
+        if weight == "morris":
+            out[sel, 3, 0] = (w * yx).sum((1, 2))                                   # y . n with n = e_x of the particle frame
     return out
 
 
 class CurvedWallMoments:
     """`curved_moments` on a grid (d / H, kappa_w H) built once, bilinear lookup; kappa_w H in [-kmax, kmax] (R / H >= 1 / kmax)."""
 
-    def __init__(self, dW, H, device, nd=65, nk=29, kmax=0.7):
-        self.H, self.kmax, self.nd, self.nk = float(H), float(kmax), nd, nk
+    def __init__(self, dW, H, device, nd=65, nk=29, kmax=0.7, weight="alpha"):
+        self.H, self.kmax, self.nd, self.nk, self.weight = float(H), float(kmax), nd, nk, weight
         dg = torch.linspace(0.0, 1.0, nd, dtype=F64, device=device) * H
         kg = torch.linspace(-kmax, kmax, nk, dtype=F64, device=device) / H
         D, K = torch.meshgrid(dg, kg, indexing="ij")
-        tab = curved_moments(dW, H, D.reshape(-1), K.reshape(-1)).reshape(nd, nk, 3, 2)
-        self.table = tab.permute(3, 2, 0, 1).contiguous()                            # [2 (n, t), 3 (k), nd, nk]
+        tab = curved_moments(dW, H, D.reshape(-1), K.reshape(-1), weight=weight).reshape(nd, nk, 4, 2)
+        self.table = tab.permute(3, 2, 0, 1).contiguous()                            # [2 (n, t), 4 (k = 0, 1, 2; 3 = M1), nd, nk]
         self.table[:, :, -1, :] = 0.0                                                # d = H: no solid within the support
 
     def eval(self, d, kw):
-        """[2, 3, N] at distances `d` and wall curvatures `kw` (clamped to the grid)."""
+        """[2, 4, N] at distances `d` and wall curvatures `kw` (clamped to the grid)."""
         fd = (d / self.H).clamp(0.0, 1.0) * (self.nd - 1)
         fk = ((kw * self.H).clamp(-self.kmax, self.kmax) + self.kmax) / (2 * self.kmax) * (self.nk - 1)
         i0 = fd.floor().long().clamp(max=self.nd - 2)

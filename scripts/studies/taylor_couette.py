@@ -35,6 +35,8 @@ def main():
     ap.add_argument("--wall", default="noslipCurv")
     ap.add_argument("--lever", default="particle", help="wallFrictionLever: contact | particle")
     ap.add_argument("--ring", action="store_true", help="wall-fitted packing: concentric rings at r1 + (k + 1/2) dr, tiling the annulus up to both walls (default: the square lattice cut at distance dx/2)")
+    ap.add_argument("--visc", default="alpha", choices=("alpha", "morris"), help="fluid viscous operator (cfg.fluidViscosity)")
+    ap.add_argument("--cal", type=float, default=1.0, help="cfg.morrisCalibration (Wendland C2: 0.985)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -53,10 +55,10 @@ def main():
             th = 2 * np.pi * (np.arange(Nk) + 0.5 * (k % 2)) / Nk
             rings.append(np.stack([rk * np.cos(th), rk * np.sin(th)], 1))
         pos = np.concatenate(rings)
-    nu = shear_nu(a.n, alpha, a.c0, a.device, a.H)
+    nu = shear_nu(a.n, alpha, a.c0, a.device, a.H, visc=a.visc, cal=a.cal)
     inner = Body(bodyId=0, center=(0.0, 0.0), angularVelocity=a.omega, reps=[DiskArrayRep([(0.0, 0.0)], [a.r1])])
     outer = Body(bodyId=1, center=(0.0, 0.0), reps=[ImplicitRep(DiskBody(center=(0.0, 0.0), radius=a.r2, solid="outside"))])
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=alpha, graphStep=False, shifting=True, wallViscosityForm=a.wall, wallFrictionLever=a.lever)
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=alpha, graphStep=False, shifting=True, wallViscosityForm=a.wall, wallFrictionLever=a.lever, fluidViscosity=a.visc, morrisCalibration=a.cal)
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, Scene([inner, outer], a.device), cfg, a.device, support=a.H * dx)
     hist = LoadHistory()
     while sim.time < a.time:

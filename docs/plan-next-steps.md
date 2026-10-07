@@ -114,7 +114,7 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
 * **Viscosity under periodicity** (shear-wave decay, no walls): nu_eff = 0.955 +- 0.01 of alpha c0 H / (8 xi), linear in alpha, independent of n at fixed H/dx.
 * **Reference for rung 4**: the Sangani-Acrivos square-array expansion K = 4 pi / (-1/2 ln c - 0.738 + c - 0.887 c^2 + 2.038 c^3) = 30.30 at c = 0.1257 is confirmed by an independent Fourier volume-penalisation Stokes
   solve (K = 31.9, 30.7, 30.4 at 128, 256, 384 points, converging to 29.8-30.3; the momentum balance of the solve is exact).
-* **Rung 4, the drag is 8 % low and does not converge away**: K (flux-form `noslip` wall, fixed nu) = 28.26, 27.80, 27.71 at n = 32, 64, 96 (R/dx = 6.4 ... 19), i.e. 0.915 of the reference; with the exact antisymmetric-mirror wall
+* **[CORRECTED 2026-10-07, see "Reference correction" below: the reference here was the per-cell drag; for the fluid-only body force it is (1 - c) K_SA = 26.49, so every K in this section is 4-8 % TOO HIGH, not low.]** **Rung 4, the drag is 8 % low and does not converge away**: K (flux-form `noslip` wall, fixed nu) = 28.26, 27.80, 27.71 at n = 32, 64, 96 (R/dx = 6.4 ... 19), i.e. 0.915 of the reference; with the exact antisymmetric-mirror wall
   Laplacian (`wallViscosityForm="noslipMirror"`, new: the `laplacian` integral with the whole relative velocity flipped) 28.6 at n = 48 (0.943).  Resolution does not remove it, so it is a wall-model offset, not sampling.
 * **Rung 3, plane Poiseuille between periodic-spanning plates** (new: `Body._checkCompact` accepts a body that spans the box): the profile amplitude over the parabola of the bulk viscosity is 0.898 / 0.913 / 0.927 (mirror,
   n = 32 / 48 / 64) and 0.950 / 0.961 / 0.966 (flux form `noslip`): first order or slower in dx, equivalent to a no-slip plane 0.4-0.6 dx inside the fluid.  The channel is too slow while the cylinder array is too permeable,
@@ -207,6 +207,92 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
 * **Wall renormalisation (Kulasegaram gamma, Ferrand / Mayrhofer)** does not remove this inconsistency: gamma is the ZEROTH-order partition of unity (`gamma_i = sum V W + lambda_wall`) and divides the operators; the uniform-pressure force is the FIRST-order
   consistency `S_i = sum V grad W + mu grad lambda`, which gamma does not enforce.  What does is a renormalised gradient in difference form (`L_i sum V (P_j - P_i) grad W`, `L = (sum V (x_j - x_i) (x) grad W)^{-1}`, the matrix `Mf + Mw` the shifting already assembles): exact for uniform AND linear fields (hydrostatics included),
   at the cost of non-conservative forces.  Ferrand's gamma form keeps symmetric forces through its boundary term, but needs a layout that satisfies the discrete identity (what `pack` cannot reach on a curved wall).
+
+### Reference correction (2026-10-07): the drag of a fluid-only body force
+
+* **The comparison above used the wrong reference.**  Sangani-Acrivos (and the Fourier solve of `stokes_array_ref.py`, which applied the force to the whole cell) define the drag as F = G L^2: a mean pressure gradient acts on the fluid AND on the solid (its
+  surface integral over the cylinder adds G c L^2).  The SPH driver `cfg.bodyForce` acts on the fluid only; the flow is identical (same U) but the drag is F = f (1 - c) L^2.  Checked with the Fourier solve, force on the fluid only: U unchanged to 1e-5,
+  K ratio 0.8743 = 1 - c exactly (N = 256 / 384).  Reference for the SPH driver: K_ref = (1 - c) K_SA = 26.49 (c = 0.1257).  `periodic_cylinder_array.py` now prints that; `stokes_array_ref.py --fluid-only` computes it.
+* **Earlier results against the corrected reference** (n = 48 unless noted; K / K_ref): flux `noslip` 1.067 / 1.049 / 1.046 (n = 32 / 64 / 96), `noslipMirror` 1.079, `noslipMoment` plane tables 1.070, curved tables 1.053, curved at rho = 1.02 1.140,
+  `noslipMoment` + `pressureConsistent` 1.025.  Every closure has TOO MUCH drag (flow too slow): the same sign as the plane channel (amplitude 0.97-0.98 with `noslipMoment`).  The earlier statements "8-10 % low", "the two errors do not have one sign" and
+  "K = 30.2 at rho = 1.02 matches the reference" are void.
+* **Inertia**: `noslipMoment` + `pressureConsistent`, f = 0.03 / 0.015 / 0.0075 (Re_D ~ 1.2 / 0.6 / 0.3): K = 27.13 / 27.07 / 27.12, ratio 1.022-1.024: no Re dependence, the residual is not inertia.
+* **Grid-aligned square** (`--shape square --a 1/3`: walls half a spacing from the lattice rows, no curvature, no cut lattice, the particles fill the fluid area exactly; four convex corners).  Reference from the Fourier solve (`stokes_array_ref.py --square --fluid-only`):
+  K = 26.60 / 26.10 / 25.98 at N = 192 / 384 / 576, extrapolated 25.84, used 25.91 (+-0.3 %).  n = 48: flux `noslip` 1.076, `noslipMoment` 1.092 (SQUARE_RESULTS).  The square is FURTHER off than the disk although its layout is ideal: candidate cause the corners
+  (both closures assume one wall per particle; the moment tables are half-plane / circle moments, a convex 90 deg corner has a quarter-plane of solid).
+
+### Lattice anisotropy of the alpha viscosity: discrete Fourier analysis (2026-10-07, `scripts/studies/viscosity_lattice_fourier.py`)
+
+* **Analysis**: the alpha form (all pairs) on a lattice has the symbol `A(k) = -fac sum_r V W'/r^3 (r (x) r)(1 - cos k.r)`; its long-wave limit is a FOURTH-rank lattice moment.  A square lattice makes second-rank tensors isotropic but not fourth-rank ones,
+  so the alpha form has two shear viscosities on a square lattice, nu(theta) = A + B cos 4 theta (axis minimum, diagonal maximum, the angular mean = the continuum value to < 0.1 %).  The Morris form (second-rank moment) is isotropic
+  at long waves (0.985 of nu at every H/dx, the eta^2 regulariser); a hexagonal lattice makes the alpha form isotropic too (0.998 at H = 4 dx).
+* **Numbers** (Wendland C2, long waves, nu / continuum, axis / diagonal): H/dx = 3: 0.886 / 1.109; 4: 0.959 / 1.039; 5: 0.983 / 1.017; 6: 0.991 / 1.009; 8: 0.997 / 1.003.  Wendland C4 is about 1.5x more anisotropic (4: 0.939 / 1.058).
+* **Validation**: at the wave numbers of the shear-wave measurements (n = 48, |k| dx = 0.131 axis, 0.185 diagonal) the prediction is 0.9560 / 1.0328 (H = 4 dx; measured 0.9579 / 1.0313) and 0.9840 / 0.9945 (H = 6 dx; measured
+  0.9844 / 0.9942): the lattice sum explains the measured anisotropy to 0.2 %.  The calibration "nu_eff = 0.955 alpha c0 H / (8 xi)" used in this section is the AXIS value, not a mean viscosity.
+* **Stokes array with the long-wave anisotropic operator** (Fourier penalisation, body force on the fluid only; what a PERFECT wall would give with this bulk operator), reported the way `periodic_cylinder_array.py` reports
+  (divided by the axis nu): disk 1.019 (H = 4 dx) / 1.004 (6 dx), square 1.0125 / 1.003.  Against the measurements at H = 4 dx: the disk (noslipMoment + pressureConsistent 1.022-1.024) is the bulk anisotropy plus 0.3-0.5 % from the
+  wall; the square (1.064-1.067 at n = 48 / 96) has a wall error of about 5 % that the bulk does not explain (corners, slow convergence).
+* **All standard kernels** (`scripts/studies/kernel_viscosity_table.py`, warpSPHCore's own kernel functions; kernels compared at equal resolution sigma / dx, sigma = the kernel's standard deviation): the anisotropy is set by the
+  resolution, hardly by the kernel.  Spread diag / axis - 1 at the sigma of Wendland C2 with H = 3 / 4 / 5 / 6 dx: cubic 0.21 / 0.063 / 0.029 / 0.010, quartic 0.21 / 0.069 / 0.025 / 0.012, quintic 0.23 / 0.065 / 0.027 / 0.013,
+  B7 0.23 / 0.068 / 0.027 / 0.013, B8 0.24 / 0.070 / 0.028 / 0.013, Wendland C2 0.25 / 0.083 / 0.035 / 0.018, C4 0.24 / 0.074 / 0.030 / 0.015, C6 0.24 / 0.073 / 0.029 / 0.014, HOCT4 0.26 / 0.090 / 0.042 / 0.028 (worst; also the
+  largest lattice density error E0 = 2e-2 at the H = 4 dx resolution), poly6 0.16 / 0.007 / -0.001 / 0.010 (non-monotone: a lattice-sum coincidence, not isotropy).  Morris form: isotropic, 0.97-0.99 of nu for every kernel (the
+  eta^2 regulariser).  At warpSPH's default packing (H / dx = xi) the spread is large for the low-order kernels: cubic 0.55, quartic 0.84, Wendland C2 0.31, C4 0.21, quintic / B7 / B8 / C6 0.12-0.13, HOCT4 0.08; poly6 has
+  kernelScale = packing = 1 in warpSPHCore (H / dx = 1, 3 neighbours: placeholder constants, not usable as configured).  2D Fourier transform: negative lobes for the B-splines (cubic -6e-4 ... B8 -1e-6 of W^(0), pairing instability
+  at large neighbour numbers, Dehnen & Aly 2012) and poly6 (-1.6e-2); Wendland C2 / C4 / C6 and HOCT4 non-negative to the quadrature accuracy (|min| < 1e-7 for Wendland).
+  Usable for viscous flow on near-lattice layouts: the Wendland family (stable at any neighbour number) at H >= 6 dx (C2: spread 1.8 %, 113 neighbours) or the Morris form at the usual H; the cubic is cheapest per spread but pairs at
+  the neighbour numbers needed.
+* **Literature**: no WCSPH paper found that quantifies the direction dependence; the fixed-h/dx quadrature-error floor is Quinlan, Basa & Lastiwka (2006, IJNME); Maciá et al. (2011, IJNMF) see the non-converging floor in vortex flows;
+  Violeau & Leroy (2014) use the continuous kernel transform (no lattice), Chaussonnet et al. (arXiv:1807.02315) a 1D lattice.
+
+### Morris viscosity instead of the alpha form (2026-10-07, `kernel_viscosity_table.py --morris`)
+
+* **Isotropic at every wave number** on a square lattice (axis / diagonal equal to ~1e-4 up to |k| dx = 1 for all kernels except poly6); the alpha form at |k| dx = 0.5, H = 4 dx: 0.914 / 0.994.
+* **Calibratable**: nu_Morris / nu = (continuum bias of eta^2 = 0.0025 H^2) x (lattice factor).  Wendland C2: 0.9714 x 1.0139 = 0.985, constant to 0.06 % over H = 3-6 dx (the lattice does not resolve r < eta, hence the factor);
+  Wendland C4 / C6 constant to 0.1-0.2 %; the B-splines and HOCT4 vary by 0.3-2 % with H / dx (cubic 1.006-1.029).  So one constant per kernel, no large support needed.
+* **Model costs**: the pair force is along v_ij, not r_ij: linear momentum is conserved, angular momentum is NOT conserved exactly (the alpha form is central); no bulk part (the alpha form is nu (lap v + 2 grad div v), Morris
+  nu lap v: less damping of compressive / acoustic modes); every wall closure here is built for the alpha weight (exact wall Laplacian, `noslipMoment` planar and curved tables, fused channels) and needs a Morris version
+  (the Morris weight is a scalar: one table per k instead of nn / tt).
+* warpSPH has the fluid operator (`wp_viscosityDelta`, `inviscid=False, morris=True`).
+* **Implemented (2026-10-07)**: `cfg.fluidViscosity = "morris"` (Warp module and torch oracle, nu = alpha c0 H / (8 xi) / `cfg.morrisCalibration`), the `noslipMoment` closure with the Morris weight (`curved_moments(weight="morris")`,
+  planar + curved tables, no normal factor 3, nu_p = the calibrated nu), the alpha-specific wall forms refuse it; `tests/sim/test_morris_viscosity.py` (operator = lattice symbol to 1e-9 for both forms, Warp and torch;
+  isotropy of the symbols; tables = brute-force solid integral; refusals).  Shear wave n = 48, H = 4 dx: axis 0.9803 / diagonal 0.9748 measured vs 0.9802 / 0.9755 predicted (the difference is the larger |k| of the diagonal wave).
+* **Results, H = 4 dx, cal = 0.985, noslipMoment (+ pressureConsistent for the arrays)**: disk array n = 48 K / K_ref = 0.995 (alpha 1.024); square array n = 48 1.022 (alpha 1.064); plane channel amplitude 0.979 / 0.993 at
+  n = 32 / 64 (alpha 0.967 / 0.981), plate loads / body force 1.000 / 0.999.  The remaining square error (2 %) is the corners.
+* **Rotating walls (bug found and fixed)**: the Morris weight annihilates a rigid TRANSLATION of the wall but not a rigid ROTATION (the alpha weight annihilates both): over the truncated solid,
+  int_S K(y) (Omega x y) dA = Omega x M1, M1 = the first moment of the solid.  Without it the Taylor-Couette fluid overtook the rotating wall (amplitude 1.136, u at the inner wall 0.227 for a wall speed 0.2).  Fix: slot k = 3 of the
+  Morris tables holds M1_n = int_S K (y . n) dA, the closure adds -beta Omega M1_n t and removes the opposite artefact from the fluid sum before the balance of w.  After the fix (n = 32, cut lattice): amplitude 0.9935, uniform in
+  radius, u at the inner wall 0.1987.
+* **Torque bookkeeping (model cost, open)**: Morris is the non-symmetric stress nu grad v.  For incompressible flow its force density equals that of the symmetric stress nu (grad v + grad v^T), so the flow is right, but the wall
+  traction differs by nu (grad v^T) n, on a curved no-slip wall -nu kappa v_wall,t: the booked torque on a ROTATING body misses 2 pi nu Omega R^2 per disk (Taylor-Couette n = 32: inner 0.51 of the exact torque, 0.93 with that
+  correction added; the static outer wall needs none, 0.76 = the packing-dependent family of the alpha form, 0.81 / 1.09).  Ring packing: amplitude 0.993, outer torque 1.015, inner 0.675 (1.095 with the correction).  Forces (drag,
+  lift) are not affected; torques of rotating bodies need the traction correction.
+* **Torque correction implemented**: on a rigid no-slip wall the traction difference is mu (grad v^T) n = -mu Omega t for ANY wall shape (the tangential derivatives are those of the rigid motion), so no net force and a torque
+  -2 mu Omega A, A = the signed area enclosed by the solid's boundary (`DeltaSPH2D._solid_area`: disks, polygons, boxes, implicit disks, SDF fallback; + obstacle, - cavity), added to the booked wall-viscous torque when
+  fluidViscosity = "morris".  Taylor-Couette n = 32: inner torque 0.513 -> 0.938 (cut lattice), 0.675 -> 1.100 (ring); outer 0.76 / 1.015; the packing dependence remains (alpha form: 0.81 / 1.09).
+* **Cost**: cylinder array n = 48, graph step: alpha 6.01 / 3.80 ms/step (f64 / f32), Morris 6.06 / 3.86 (+1 %).
+* **Verification 2026-10-07**: full suite 994 passed (before the torque correction; Morris + torque tests 14 passed after), `deltasph_regress.py check --cases tank,dambreak` OVERALL PASS with margin 0.000 (default alpha path bit-identical).
+* **H = 6 dx diagnostics (alpha form, noslipMoment + pressureConsistent, n = 72)**: disk 1.0115 (perfect-wall prediction 1.004; H 4 -> 6 dx moved it by 1.25 points, predicted 1.5), square 1.049 (flux `noslip` 1.037; prediction 1.003): the
+  square's wall error (~4.6 %) does not shrink with H, the corners are the open item.
+
+### Decisions and order after the viscosity study (user, 2026-10-07)
+
+* `fluidViscosity = "morris"` stays opt-in (not the default; free-surface cases stay on the alpha form).
+* Corners and sharp features (e.g. an airfoil trailing edge) matter as much as the fibre application: the corner wall error (square array: Morris ~2 %, alpha 4-5 %, not shrinking with H) is the next model item.
+  Diagnostic (square, n = 48): 52 of 308 near-wall particles (17 %) lie in a vertex quadrant (nearest point = the vertex); their curvature estimate is kappa_w H = 80-120 (the distance field is radial there), all clamped to the
+  table edge 0.7 (= a disk of radius 1.4 H instead of a 90 deg wedge); face particles within H of a vertex get kappa = 0 (a full half-plane although the solid ends at the vertex).
+* The wake rung (Re 20 / 40 / 100, blockage study, verified square-cylinder references) runs after the warpSPH port in its harness (numbers and video from one run).  Partial numbers from here (8.3 % blockage, D / dx = 20, f32):
+  disk Re 100 alpha C_D 1.40, C_L amplitude 0.333, St 0.171; disk Re 40 alpha C_D 1.717, L_w / D 2.06, Morris C_D 1.694, L_w / D 2.13; square Re 100 alpha C_D 1.60, C_L amplitude 0.255, St 0.150.
+* Order: verify (full suite, regression harness, Morris timing) and commit; Morris torque (traction) correction; corner closure; then the plan items (BC closures, DFSPH fused) and the warpSPH patch series.
+
+### Open problem (not part of this plan): sampling quality of relaxed / glass particle distributions
+
+* The viscosity anisotropy above is a property of the regular lattice; in a flow the particles disorder, and shifting drives them towards a glass-like relaxed state.  What that does to the effective viscosity (anisotropy
+  -> noise), to E0 / the first-order consistency residual, and to the wall-consistency residual S_i near bodies is not measured.  Needed: a noise measure for relaxed distributions (e.g. the spread of the operator response to
+  smooth fields over an ensemble of shifted states) as a function of H / dx and kernel.
+* Sampling around bodies is the outstanding part: a cut lattice (S_i != 0 on curved walls, ~1 % mass deficit), ring packing (case-specific), `pack` (stalls on curved walls).  Hexagonal lattices fix only the initial
+  long-wave isotropy of the alpha form, not the sampling at the body.
+* Reference for generating initial conditions: Diehl, Rockefeller, Fryer, Riethmiller & Statler, "Generating Optimal Initial Conditions for Smoothed Particle Hydrodynamics Simulations", PASA (arXiv:1211.0525): iterative
+  placement by neighbour proximity and target resolution, inspired by weighted-Voronoi adaptive binning; written for compressible astrophysics, possibly applicable to obstacle-conforming initial conditions here.
 
 ### Risks
 

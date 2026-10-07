@@ -33,6 +33,8 @@ def main():
     ap.add_argument("--time", type=float, default=12.0)
     ap.add_argument("--H", type=float, default=4.0)
     ap.add_argument("--wall", default="noslipMirror")
+    ap.add_argument("--visc", default="alpha", choices=("alpha", "morris"), help="fluid viscous operator (cfg.fluidViscosity)")
+    ap.add_argument("--cal", type=float, default=1.0, help="cfg.morrisCalibration (Wendland C2: 0.985)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -40,12 +42,12 @@ def main():
     W = ny * dx
     X, Y = np.meshgrid(dx * (np.arange(nx) + .5), dx * (np.arange(ny) + .5), indexing="ij")
     pos = np.stack([X.ravel(), Y.ravel()], 1)
-    nu = shear_nu(a.n, a.alpha, a.c0, a.device, a.H)
+    nu = shear_nu(a.n, a.alpha, a.c0, a.device, a.H, visc=a.visc, cal=a.cal)
     plate = lambda yc: Body(bodyId=0, center=(0.5, yc), reps=[BoxRep((-0.8, -0.15), (0.8, 0.15))])
     scene = Scene([plate(-0.15), plate(W + 0.15)], a.device)
     for i, b in enumerate(scene.bodies):
         b.bodyId = i
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, -9), (1, 9), (True, False)), bodyForce=(a.f, 0.0), graphStep=True, shifting=True, wallViscosityForm=a.wall)
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, -9), (1, 9), (True, False)), bodyForce=(a.f, 0.0), graphStep=True, shifting=True, wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal)
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=a.H * dx)
     hist = LoadHistory()
     while sim.time < a.time:
