@@ -37,6 +37,7 @@ def main():
     ap.add_argument("--cal", type=float, default=1.0, help="cfg.morrisCalibration (Wendland C2: 0.985)")
     ap.add_argument("--complement", action="store_true", help="force cfg.complementMoments on (automatic with --visc morris)")
     ap.add_argument("--tables", action="store_true", help="force the table closure (cfg.complementMoments = False)")
+    ap.add_argument("--noShift", action="store_true", help="particle shifting off")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -49,7 +50,7 @@ def main():
     scene = Scene([plate(-0.15), plate(W + 0.15)], a.device)
     for i, b in enumerate(scene.bodies):
         b.bodyId = i
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, -9), (1, 9), (True, False)), bodyForce=(a.f, 0.0), graphStep=True, shifting=True, wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, complementMoments=(False if a.tables else (True if a.complement else None)))
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, -9), (1, 9), (True, False)), bodyForce=(a.f, 0.0), graphStep=True, shifting=not a.noShift, wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, complementMoments=(False if a.tables else (True if a.complement else None)))
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=a.H * dx)
     hist = LoadHistory()
     while sim.time < a.time:
@@ -66,6 +67,9 @@ def main():
     Fbal = a.f * len(pos) * dx * dx
     print(f"n={a.n} W={W:.4f} N={len(pos)} nu_shear={nu:.5f} wall={a.wall}")
     print(f"profile amplitude / parabola(nu_shear) = {amp:.4f}   (1 = the wall is no-slip at y=0, W with the bulk viscosity)")
+    nu_lw = a.alpha * a.c0 * a.H * dx / (8 * 2.821384729) if a.visc == "morris" else None      # Morris (calibrated): the long-wave viscosity is the nominal one; a parabola sees the long-wave value, the shear wave k = 2 pi a little less
+    if nu_lw is not None:
+        print(f"profile amplitude / parabola(nu long-wave = nominal) = {amp * nu_lw / nu:.4f}   (nu_shear / nu_long-wave = {nu / nu_lw:.5f})")
     print(f"u/umax over 10 bins: {np.round(prof, 3).tolist()}  (parabola: {np.round([(4 * ((i + .5) / 10) * (1 - (i + .5) / 10)) for i in range(10)], 3).tolist()})")
     print(f"plate loads F = {F:.5f}   body force on the fluid = {Fbal:.5f}   ratio {F / Fbal:.4f}")
 
