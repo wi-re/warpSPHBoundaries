@@ -86,17 +86,26 @@ class AnalyticBoundary:
             self._layouts[key] = (tuple(groups), idx)
         return self._layouts[key]
 
-    def aggregate(self, ps, support, kernel=KernelFunctions.Wendland2, laplacian=False, fixedAdjacency=True):
+    def aggregate(self, ps, support, kernel=KernelFunctions.Wendland2, laplacian=False, fixedAdjacency=True, lean=False):
         """the fused wall evaluation at the positions of `ps`: adjacency (one launch per body and representation when `fixedAdjacency`, else `Scene.adjacency`, the oracle), one stage-1 launch family for the kernels
-        of the layout, and every static output of this position set in `.out` (lam, G, Cov, cover, lap, tens; raw: the scheme applies its factors).  `support`: host float >= every support of `ps`."""
-        groups, idx = self.layout(kernel, laplacian, fixedAdjacency)
+        of the layout, and every static output of this position set in `.out` (lam, G, Cov, cover, lap, tens; raw: the scheme applies its factors).  `support`: host float >= every support of `ps`.
+        `lean`: only the scheme kernel's group (lam, G, Cov in `.out`; m1 / a1g1 on request): for schemes without the delta+ detector, tensile shifting and wall Laplacian (DFSPH)."""
+        if lean:
+            key = ("lean", kernel, bool(fixedAdjacency))
+            if key not in self._layouts:
+                self._layouts[key] = ((FusedGroup(kernelName(kernel)),), {"w": 0})
+            groups, idx = self._layouts[key]
+        else:
+            groups, idx = self.layout(kernel, laplacian, fixedAdjacency)
         props = self.properties(kernel)
         adj = fixed_adjacency(self.scene, ps, props, support) if fixedAdjacency else self.scene.adjacency(ps, props)
         fw = FusedWall(self.scene, adj, groups)
-        outs = [WallOutput("lam", 0, "lam"), WallOutput("G", 0, "g0"), WallOutput("Cov", 0, "cov"), WallOutput("cover", idx["cone"], "g0")]
-        if "lap" in idx:
-            outs.append(WallOutput("lap", idx["lap"], "lap"))
-        outs.append(WallOutput("tens", idx["tens"], "g0"))
+        outs = [WallOutput("lam", 0, "lam"), WallOutput("G", 0, "g0"), WallOutput("Cov", 0, "cov")]
+        if not lean:
+            outs.append(WallOutput("cover", idx["cone"], "g0"))
+            if "lap" in idx:
+                outs.append(WallOutput("lap", idx["lap"], "lap"))
+            outs.append(WallOutput("tens", idx["tens"], "g0"))
         fw.out = fw.evaluate(outs)
         return fw
 

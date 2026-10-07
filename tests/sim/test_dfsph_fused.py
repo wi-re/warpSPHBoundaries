@@ -87,3 +87,22 @@ def test_dfsph_fused_backend_equals_the_oracle(omega):
     xf, ff = out["fused"]
     assert float((xs - xf).abs().max()) < 1e-11
     assert float((fs - ff).abs().max()) <= 1e-9 * float(fs.abs().max())
+
+
+@pytest.mark.parametrize("wallPressure", ["hydrostatic", "linear"])
+def test_graphed_iterates_equal_the_eager_solve(wallPressure):
+    """D2: the pressure iterates replayed as CUDA graphs (fused Warp kernels for hydrostatic / mirror, the torch iterate for linear) give the eager trajectories and iteration counts; two captures (one per solve)."""
+    out = {}
+    for graphs in (False, True):
+        sim, _ = tank_with_obstacle(omega=3.0, r=0.008)
+        sim.cfg.graphIterations = graphs
+        sim.cfg.wallPressure = wallPressure
+        its = []
+        for _ in range(15):
+            sim.step()
+            its.append(sim.iters)
+        assert sim.balance < 1e-14
+        out[graphs] = (sim.x.clone(), its, sim.stats.get("graphCaptures", 0))
+    assert out[True][1] == out[False][1]
+    assert float((out[True][0] - out[False][0]).abs().max()) < 1e-11
+    assert out[True][2] <= 4

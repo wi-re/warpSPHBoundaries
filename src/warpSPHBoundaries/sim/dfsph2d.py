@@ -16,6 +16,7 @@ gradient and works for every representation, including SDF and primitives).  For
 
 All fluid-fluid sums are plain torch pair sums (cell list neighbours, `warpSPHBoundaries.scene.buildCellList`) and are checked against `warpSPHCore.warpOperation`.
 """
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -155,6 +156,10 @@ class DFSPHConfig:
     kernel: KernelFunctions = KernelFunctions.Wendland2
     wallPressure: str = "hydrostatic"       # 'hydrostatic' (p_b = p_i + rho g.(x'-x_i): dp/dn = rho (g - a_wall).n), 'linear' (MLS gradient of the neighbours' pressure), 'mirror' (p_b = p_i)
     wallMass: float = 1.0                   # mass per area of the wall continuum (1 = omniSPH; 1/S for a calibrated lattice)
+    graphIterations: bool = True            # replay each pressure iterate as a CUDA graph (persistent per-step buffers, recaptured when a buffer changes shape, i.e. the Verlet list is rebuilt); the host keeps
+                                            # omniSPH's convergence test (one scalar read per iterate); needs fluidPairs = 'verlet' and CUDA
+    fluidPairs: str = "verlet"              # 'verlet': warpSPHCore's Verlet list (reused while no particle has moved beyond the margin; pairs beyond the support carry W = grad W = 0); 'cells': a fresh torch cell list every step
+    verletScale: float = 1.2
     wallBackend: str = "auto"               # 'fused': the wall terms from the boundary provider (AnalyticBoundary / FusedWall: lam, grad lam, the first-moment tensor int y (x) grad W, m1 = int y W, per body; one
                                             # evaluation per position set, the iterates contract the stored tensor); 'scene': the oracle `sceneOperation`; 'auto': fused when every body is supported (surface, box,
                                             # disks, implicit / SDF lowered), else scene (VolumeRep: the omniSPH slabs)
@@ -188,9 +193,32 @@ class DFSPH2D:
         self.kinds = torch.zeros(n, dtype=torch.int32, device=device)
 
     # ---- geometry-dependent data, valid for the current positions
+    def _pairs(self):
+        """(i, j, r) of the fluid pairs at the current positions: the Verlet list (fixed arrays while it stays valid) or a fresh cell list."""
+        x, h = self.x, self.h
+        if self.cfg.fluidPairs == "cells":
+            return neighbor_pairs(x, h)
+        from warpSPHCore import DomainDescription, SupportScheme, buildVerletList
+        if getattr(self, "_domain", None) is None:
+            pts = [x]
+            for b in (self.scene.bodies if self.scene is not None else []):
+                lo, hi = b.obb()
+                pts.append(b.pose.toWorld(torch.stack([lo, hi])))
+            P = torch.cat(pts)
+            H = float(h.max())
+            self._domain = DomainDescription(P.amin(0) - 20.0 * H, P.amax(0) + 20.0 * H, torch.zeros(2, dtype=torch.bool, device=self.dev), 2)
+            self._prior = None
+        ps = ParticleState(positions=x, supports=h, masses=self.V, kinds=self.kinds, densities=torch.ones_like(self.V))
+        adj = buildVerletList(ps, self._domain, verletScale=self.cfg.verletScale, supportMode=SupportScheme.SuperSymmetric, priorNeighborhood=self._prior, verbose=False)
+        self._prior = adj
+        self._csr = (adj.edgeOffsets, adj.numNeighbors)                                         # CSR rows of the pairs (i sorted): the fused iterate kernels loop over them
+        i, j = adj.i.long(), adj.j.long()
+        r = (x[i] - x[j]).norm(dim=1)
+        return i, j, r
+
     def _prepare(self):
         x, h = self.x, self.h
-        i, j, r = neighbor_pairs(x, h)
+        i, j, r = self._pairs()
         hij = 0.5 * (h[i] + h[j])
         self.pi, self.pj = i, j
         self.W = wendland2(r, hij)
@@ -227,7 +255,10 @@ class DFSPH2D:
             self.gkb = torch.zeros((0,) + self.x.shape, dtype=F64, device=self.dev)
             self.sClose = torch.ones_like(self.V)
             self.wallDiv = None
-        # moment matrix of the pressure reconstruction
+        # moment matrix of the pressure reconstruction (only the MLS wall pressure uses it)
+        if self.cfg.wallPressure != "linear":
+            self.Minv = self.wy = None
+            return
         w = self.V[j] * self.W
         y = x[j] - x[i]
         M = torch.zeros((len(x), 2, 2), dtype=F64, device=self.dev).index_add_(0, i, (w[:, None, None] * y[:, :, None] * y[:, None, :]))
@@ -267,7 +298,7 @@ class DFSPH2D:
 
     def _aggregate(self, ps):
         """the provider's wall aggregate at the positions of `ps` (lam, G, Cov in `.out`)."""
-        return self._provider.aggregate(ps, float(self.h.max()), kernel=self.cfg.kernel)
+        return self._provider.aggregate(ps, float(self.h.max()), kernel=self.cfg.kernel, lean=True)
 
     def _particleState(self, rho):
         return ParticleState(positions=self.x, supports=self.h, masses=self.V.clone(), kinds=self.kinds, densities=rho)
@@ -349,7 +380,9 @@ class DFSPH2D:
             return torch.zeros_like(self.gkb)
         if mode == "hydrostatic" and self._out1 is not None:
             return self._out1
-        g = torch.tensor(self.cfg.gravity, dtype=F64, device=self.dev)[None]
+        if getattr(self, "_gT", None) is None:
+            self._gT = torch.tensor(self.cfg.gravity, dtype=F64, device=self.dev)               # made once (a host-to-device copy cannot be captured)
+        g = self._gT[None]
         flds = []
         for b in self.scene.bodies:
             if mode == "hydrostatic":
@@ -386,7 +419,174 @@ class DFSPH2D:
                 s = s + dt * self.wallDiv
         return s
 
+    # ---- CUDA-graph replay of the pressure iterates
+    def _graphs_on(self):
+        ok = bool(self.cfg.graphIterations and self.cfg.fluidPairs == "verlet" and str(self.dev).startswith("cuda") and torch.cuda.is_available())
+        if ok and self.cfg.wallPressure == "linear" and self.scene is not None and not self._fused():
+            ok = False                                                                          # the MLS wall term per iterate is an oracle scene operation there (not capturable)
+        return ok
+
+    def _pin(self, name, t):
+        """copy `t` into the persistent buffer `name` (same shape and dtype: in place; else a new buffer, and the captured graphs are dropped): the tensors a captured iterate reads must not move."""
+        st = self.__dict__.setdefault("_static", {})
+        buf = st.get(name)
+        if buf is None or buf.shape != t.shape or buf.dtype != t.dtype:
+            st[name] = t.clone()
+            self.__dict__.setdefault("_graphs", {}).clear()
+            return st[name]
+        buf.copy_(t)
+        return buf
+
+    def _pin_pairs(self):
+        """the pair arrays (pi, pj, gW, W, and the MLS weights wy of the 'linear' wall pressure) in persistent buffers of a fixed CAPACITY (padding: pair (0, 0) with W = grad W = 0, which adds exactly zero): a Verlet rebuild changes the number of pairs, the
+        capacity keeps the buffers (and the captured graphs) unless it is exceeded (then 25 % headroom on the new count)."""
+        st = self.__dict__.setdefault("_static", {})
+        P = len(self.pi)
+        cap = st["pi"].shape[0] if "pi" in st else 0
+        if P > cap:
+            cap = int(math.ceil(1.25 * P / 1024.0) * 1024)
+            st["pi"] = torch.zeros(cap, dtype=self.pi.dtype, device=self.dev)
+            st["pj"] = torch.zeros(cap, dtype=self.pj.dtype, device=self.dev)
+            st["gW"] = torch.zeros((cap, 2), dtype=F64, device=self.dev)
+            st["W"] = torch.zeros(cap, dtype=F64, device=self.dev)
+            st["wy"] = torch.zeros((cap, 2), dtype=F64, device=self.dev)
+            self.__dict__.setdefault("_graphs", {}).clear()
+        names = ("pi", "pj", "gW", "W") + (("wy",) if getattr(self, "wy", None) is not None else ())
+        for name in names:
+            buf = st[name]
+            buf[:P].copy_(getattr(self, name))
+            buf[P:].zero_()
+            setattr(self, name, buf)
+
+    def _pin_step(self):
+        """the per-step tensors of the iterates in persistent buffers (called after `rho` is set)."""
+        self._pin_pairs()
+        for name in ("rho", "V"):
+            setattr(self, name, self._pin(name, getattr(self, name)))
+        self._off = self._pin("off", self._csr[0].to(torch.int32))
+        self._cnt = self._pin("cnt", self._csr[1].to(torch.int32))
+        if self.scene is not None:
+            for name in ("gk", "gkb", "sClose"):
+                setattr(self, name, self._pin(name, getattr(self, name)))
+            if self.cfg.wallPressure == "hydrostatic":
+                pp0 = torch.zeros_like(self.V)
+                self._out1 = None
+                self._out1 = self._pin("out1", self._a1_part(pp0))
+                if self.cfg.clampWallPressure:
+                    self._theta_q = None
+                    self._wall_excess(pp0)
+                    self._theta_q = self._pin("theta_q", self._theta_q)
+            elif self.cfg.wallPressure == "linear":
+                self.Minv = self._pin("Minv", self.Minv)                                          # wy: with the pair buffers
+                if self._fused():
+                    self.covb = self._pin("covb", self.covb)
+
+    def _iterate(self, B, density, wall, clampP, clampWall):
+        """one omniSPH pressure iterate on the persistent buffers B (p2 updated in place, err written): two fused Warp kernels (dfsph_kernels.py) for the hydrostatic / mirror wall pressure, the torch
+        expressions for the MLS ('linear') one."""
+        if self.cfg.wallPressure != "linear":
+            return self._iterate_fused(B, wall, clampP, clampWall)
+        i, j = self.pi, self.pj
+        p2 = B["p2"]
+        pred = (self._boundary_accel(p2, clampWall) if wall else torch.zeros_like(self.x)) + self._fluid_accel(p2)
+        ks = B["dt2"] * self._sum(B["Vt"][j] * ((pred[i] - pred[j]) * self.gW).sum(1))
+        if wall:
+            ks = ks + B["dt2"] * (pred * self.gk).sum(1)
+        pn = p2 + self.cfg.omega / B["alpha"] * (B["src"] - ks)
+        if clampP:
+            pn = pn.clamp(min=0)
+        bad = (B["alpha"].abs() < 1e-25) | ~torch.isfinite(pn) | (pn > 1e25)
+        p2.copy_(torch.where(bad, torch.zeros_like(pn), pn))
+        res = torch.where(bad, torch.zeros_like(ks), ks - B["src"])
+        B["err"].copy_(torch.maximum(res, torch.full_like(res, -0.001)).mean())
+
+    def _iterate_fused(self, B, wall, clampP, clampWall):
+        import warp as wp
+        from .dfsph_kernels import dfsph_accel_kernel, dfsph_update_kernel
+        N = len(self.x)
+        if "acc" not in B:
+            B["acc"] = self._pin("acc_it", torch.zeros((N, 2), dtype=F64, device=self.dev))
+            B["res"] = self._pin("res_it", torch.zeros(N, dtype=F64, device=self.dev))
+        f1 = lambda t: wp.from_torch(t.reshape(-1).contiguous(), dtype=wp.float64)
+        f2 = lambda t: wp.from_torch(t.reshape(-1, 2).contiguous(), dtype=wp.vec2d)
+        hasWall = wall and self.scene is not None and self.nb > 0
+        if hasWall:
+            gkb, out1 = self.gkb, (self._out1 if self._out1 is not None else torch.zeros_like(self.gkb))
+            excess = bool(self.cfg.clampWallPressure and self.cfg.wallPressure == "hydrostatic")
+            q = self._theta_q if excess else torch.zeros(self.gkb.shape[:2], dtype=F64, device=self.dev)
+            nb = self.nb
+        else:
+            gkb = out1 = torch.zeros((1, 1, 2), dtype=F64, device=self.dev)
+            q = torch.zeros((1, 1), dtype=F64, device=self.dev)
+            excess, nb = False, 0
+        gk = self.gk if hasWall else torch.zeros((N, 2), dtype=F64, device=self.dev)
+        sC = self.sClose if hasWall else torch.ones(N, dtype=F64, device=self.dev)
+        import contextlib
+        ctx = contextlib.nullcontext() if torch.cuda.is_current_stream_capturing() else wp.ScopedStream(wp.stream_from_torch(torch.cuda.current_stream()))   # inside a capture the Warp stream is set by the caller
+        with ctx:
+            wp.launch(dfsph_accel_kernel, dim=N, inputs=[wp.from_torch(self._off, dtype=wp.int32), wp.from_torch(self._cnt, dtype=wp.int32), wp.from_torch(self.pj, dtype=wp.int64), f2(self.gW),
+                                                         f1(self.V), f1(self.rho), f1(B["p2"]), int(hasWall), int(clampWall), int(excess), f1(sC), f2(gkb), f2(out1), f1(q), nb, N, f2(B["acc"])])
+            wp.launch(dfsph_update_kernel, dim=N, inputs=[wp.from_torch(self._off, dtype=wp.int32), wp.from_torch(self._cnt, dtype=wp.int32), wp.from_torch(self.pj, dtype=wp.int64), f2(self.gW),
+                                                          f1(B["Vt"]), f2(B["acc"]), f2(gk), int(hasWall), f1(B["dt2"].reshape(1)), float(self.cfg.omega), f1(B["alpha"]), f1(B["src"]), int(clampP),
+                                                          f1(B["p2"]), f1(B["res"])])
+        B["err"].copy_(torch.maximum(B["res"], torch.full_like(B["res"], -0.001)).mean())
+
     def _solve(self, acc, density):
+        if self._graphs_on():
+            return self._solve_graphed(acc, density)
+        return self._solve_eager(acc, density)
+
+    def _solve_graphed(self, acc, density):
+        cfg, dt = self.cfg, self.dt
+        Vt = self.V / self.rho
+        vp = self.v + dt * acc
+        wall = bool(density or self._bdiv)
+        clampP = bool(density or cfg.divergenceClamp)
+        clampWall = bool(density or clampP or self._clampWallDiv)
+        B = {"Vt": self._pin("Vt", Vt), "alpha": self._pin("alpha", self._alpha(dt, Vt, wall)), "src": self._pin("src", self._source(dt, Vt, vp, density, wall)),
+             "p2": self._pin("p2", 0.5 * self.p if density else torch.zeros_like(self.V)), "dt2": self._pin("dt2", torch.tensor(dt * dt, dtype=F64, device=self.dev)),
+             "err": self._pin("err", torch.zeros((), dtype=F64, device=self.dev))}
+        graphs = self.__dict__.setdefault("_graphs", {})
+        key = (bool(density), wall, clampP, clampWall)
+        g = graphs.get(key)
+        if g is None:
+            p_init = B["p2"].clone()
+            side = torch.cuda.Stream()
+            side.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(side):                                                       # warm-up (lazy initialisations) on a side stream, then restore the iterate
+                self._iterate(B, density, wall, clampP, clampWall)
+            torch.cuda.current_stream().wait_stream(side)
+            B["p2"].copy_(p_init)
+            import warp as wp
+            g = torch.cuda.CUDAGraph()
+            cap = torch.cuda.Stream()
+            cap.wait_stream(torch.cuda.current_stream())
+            with wp.ScopedStream(wp.stream_from_torch(cap)), torch.cuda.graph(g, stream=cap, capture_error_mode="thread_local"):
+                self._iterate(B, density, wall, clampP, clampWall)
+            torch.cuda.current_stream().wait_stream(cap)
+            graphs[key] = g
+            self.stats["graphCaptures"] = self.stats.get("graphCaptures", 0) + 1
+        eta = cfg.densityEta if density else cfg.divergenceEta
+        maxit = cfg.maxIterations if density else cfg.divergenceMaxIterations
+        counter = 0
+        while True:
+            g.replay()
+            counter += 1
+            if counter >= cfg.minIterations and not (float(B["err"]) > eta and counter < maxit):
+                break
+        p2 = B["p2"].clone()
+        pred = self._fluid_accel(p2)
+        if wall and self.scene is not None:
+            ab = self._boundary_accel(p2, clampWall, perBody=True)
+            pred = pred + ab.sum(0)
+            self.forcePressure = self.forcePressure - (self.V[None, :, None] * ab).sum(1)
+        if density:
+            self.wallForce = self.forcePressure.sum(0) if self.scene is not None else self.wallForce
+            self.p = p2
+        self.err = float(B["err"])
+        return acc + pred, counter
+
+    def _solve_eager(self, acc, density):
         cfg, dt = self.cfg, self.dt
         i, j = self.pi, self.pj
         Vt = self.V / self.rho
@@ -437,6 +637,9 @@ class DFSPH2D:
         i, j = self.pi, self.pj
         v0 = self.v.clone()
         self.rho = self._sum(self.V[j] * self.W) + self.lam
+        if self._graphs_on():
+            self._pin_step()
+            i, j = self.pi, self.pj
         g = torch.tensor(cfg.gravity, dtype=F64, device=self.dev)
         acc = g.expand(len(self.x), 2).clone()
         nd = 0
