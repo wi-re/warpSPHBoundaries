@@ -9,6 +9,7 @@
     "cov"   sum of g1 = int y (x) grad_x W (+ indicator * I), world frame                       [B, N, 2, 2]
     "a1g1"  sum_d a1_d g1_dj for a per-query world vector a1 (the hydrostatic field term A)    [B, N, 2]
     "lap"   sum of (2 lam - tr g1) (the wall Laplacian of the registered `lw2`; the indicator cancels)   [B, N]
+    "m1"    sum of m1 = int y W, world frame (no indicator: the full-plane integral vanishes)    [B, N, 2]
 exactly the arithmetic of `sceneOperation` (Density, Gradient of a constant, Covariance, Gradient with a per-query a1) on the moments of the same kernel, without the per-pair torch
 operations: the pairs of a row are summed by one thread in a fixed order (deterministic), rotated to the world frame once per query.  Surface representations only; other
 representations raise (callers keep the `sceneOperation` path for them).  `evaluate` can be called repeatedly on one `FusedWall` (new a1, other outputs): stage 1 is not repeated.
@@ -26,7 +27,7 @@ from .fixedadj import fixed_topology
 from .scene import BOX_EXACT_KERNELS, BoxRep, DiskArrayRep, SurfaceRep, boxTables
 
 F64 = torch.float64
-KINDS = {"lam": (0, 1), "g0": (1, 2), "cov": (2, 4), "a1g1": (3, 2), "lap": (4, 1)}
+KINDS = {"lam": (0, 1), "g0": (1, 2), "cov": (2, 4), "a1g1": (3, 2), "lap": (4, 1), "m1": (5, 2)}
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,17 @@ def _wall_contract_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=i
             vy = vy / h
             pool[base] = pool[base] + R00 * vx + R01 * vy
             pool[base + 1] = pool[base + 1] + R10 * vx + R11 * vy
+        elif kind == 5:
+            ux = real(0.0)
+            uy = real(0.0)
+            for i in range(i0, i1):
+                p = perm[i]
+                ux += c[p, g + 1]
+                uy += c[p, g + 2]
+            ux = ux * h
+            uy = uy * h
+            pool[base] = pool[base] + R00 * ux + R01 * uy
+            pool[base + 1] = pool[base + 1] + R10 * ux + R11 * uy
         else:
             m00 = real(0.0)
             m01 = real(0.0)
@@ -480,7 +492,7 @@ class FusedWall(WallAggregate):
         for o, b0 in zip(outputs, base):
             dim = KINDS[o.kind][1]
             t = pool[b0:b0 + B * N * dim].to(F64)
-            shape = {"lam": (B, N), "lap": (B, N), "g0": (B, N, 2), "a1g1": (B, N, 2), "cov": (B, N, 2, 2)}[o.kind]
+            shape = {"lam": (B, N), "lap": (B, N), "g0": (B, N, 2), "a1g1": (B, N, 2), "cov": (B, N, 2, 2), "m1": (B, N, 2)}[o.kind]
             res[o.name] = t.reshape(shape)
         return res
 

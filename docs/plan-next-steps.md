@@ -386,9 +386,23 @@ frame need it).
 * Unwrapped positions grow with time, which costs float32 resolution in the minimum image.  Not a risk in practice (user, 2026-10-06): runs last a few domain-passing times; only very long runs or fast flow in a small domain would see it, and neither is used.  No mitigation planned.
 * Time step at Re ≪ 1 is viscous-limited; the graph step handles a constant dt, an adaptive dt is item 7.
 
+## DFSPH track (user, 2026-10-07): omniSPH-style DFSPH as the incompressible reference, scheme-agnostic boundary operators
+
+The omniSPH-style solver (`sim/dfsph2d.py`, validated in docs/dfsph-validation.md: front 0.3 % / mean height 0.5 % of omniSPH at 8k particles, exact momentum bookkeeping) is the reference incompressible scheme for now
+(omniSPH uses an integral boundary and works; warpSPH's own DFSPH variants are in troubleshooting).  Improve, expand and validate it; the boundary operators must serve every scheme (delta+, DFSPH, later ones) through
+one provider interface.
+
+| step | content | gate |
+|---|---|---|
+| D1 | wall terms through the provider (`AnalyticBoundary` / `FusedWall`) instead of the oracle `sceneOperation`: lam, grad lam (g0), the first-moment tensor int y (x) grad W (cov: the wall pressure p_b = p_i + a1 . y and the divergence of a rigid wall velocity, once per step for all iterates), a new `m1` output (int y W: the wall velocity of the friction); per body; the oracle stays the fallback (VolumeRep) and the check | dfsph tests + validation tables unchanged within the solve tolerance; fused = oracle per term |
+| D1 status | **DONE 2026-10-07**: `DFSPHConfig.wallBackend` ('auto' = fused where every body is supported, else the oracle; 'fused'; 'scene'); new fused output `m1` (channels 1-2, all representations: polygon, disk element, box tables; = brute force to 1e-6 abs); DFSPH fused = oracle to 1e-13 in positions / 1e-10 in velocities after 30 steps (fixed and 3 rad/s hexagon), forces identical, momentum balance exact; `tests/sim/test_dfsph.py` 12 + `test_dfsph_fused.py` 8 pass; `dfsph_validation.py obstacle`: fixed hexagon 0.09190 / 1.00008 unchanged, spinning within the chaos of repeated runs; `reps`: the SDF domain now on the fused exact polygon (8e-13 from the surface run at t = 0.1, was 5e-6 on tier 3) | — |
+| D2 | fluid sums on the Warp adjacency (warpSPH modules / generated modules), float32-capable; CUDA graph with chunked pressure iterations (residual checked between chunks) | same trajectories (tolerance), ms/step |
+| D3 | viscosity: Morris + the complement no-slip closure (shared with delta+), torque bookkeeping, periodic domains | channel, Taylor-Couette, periodic arrays (disk, square), corner rig |
+| D4 | validation expansion: tank / dam break / hexagon vs omniSPH (existing), hydrostatic column with corners, dam break vs the delta+ path, buoyancy, Stokes arrays (no c0: no pressure-level issue) | tables in docs/dfsph-validation.md |
+
 ## Remaining items (short notes)
 
-2. **DFSPH fused.**  The fused contraction already produces lam, G, Cov, A; DFSPH additionally needs the boundary mass-flux terms (m1), the force and the torque on the body.
+2. **DFSPH fused.**  Superseded by the DFSPH track above.  The fused contraction already produces lam, G, Cov, A; DFSPH additionally needs the boundary mass-flux terms (m1), the force and the torque on the body.
    Add the outputs to `FusedWall` for the DFSPH kernel groups, move `dfsph2d.py` onto `AnalyticBoundary`, keep `dfsph_validation.py` as the gate.
 3. **Per-body loops.**  `_wall_terms` and `_body_pack` loop over bodies in torch (~0.3 ms each).  Segment-reduce with `index_add_` / a Warp kernel over (body, row); gate: bit-level
    harness unchanged, 16 separate bodies < 2× a bundle.
