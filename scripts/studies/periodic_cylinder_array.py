@@ -73,7 +73,8 @@ def main():
     ap.add_argument("--noWallForce", action="store_true", help="leave the body force out of the wall pressure condition (the old behaviour)")
     ap.add_argument("--visc", default="alpha", choices=("alpha", "morris"), help="fluid viscous operator (cfg.fluidViscosity)")
     ap.add_argument("--cal", type=float, default=1.0, help="cfg.morrisCalibration (Wendland C2: 0.985)")
-    ap.add_argument("--complement", action="store_true", help="cfg.complementMoments (discrete-complement wall moments, prototype: eager)")
+    ap.add_argument("--complement", action="store_true", help="force cfg.complementMoments on (automatic with --visc morris)")
+    ap.add_argument("--tables", action="store_true", help="force the table closure (cfg.complementMoments = False)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -95,7 +96,7 @@ def main():
     nu = shear_nu(a.n, a.alpha, a.c0, a.device, a.H, visc=a.visc, cal=a.cal)
     print(f"{a.shape} N={len(pos)} c={c:.4f} nu_eff={nu:.5f} (alpha c0 H / 8 xi = {a.alpha * a.c0 * a.H * dx / (8 * 2.821384729):.5f})  K_ref={Kref:.3f}")
     scene = Scene([Body(bodyId=0, center=(0.5, 0.5), reps=[rep])], a.device)
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(a.f, 0.0), bodyForceAtWall=not a.noWallForce, wallPressureViscous=a.wpv, pressureConsistent=a.consistent, backgroundPressure=a.Pb, graphStep=True, shifting=True, wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, complementMoments=a.complement)
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(a.f, 0.0), bodyForceAtWall=not a.noWallForce, wallPressureViscous=a.wpv, pressureConsistent=a.consistent, backgroundPressure=a.Pb, graphStep=True, shifting=True, wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, complementMoments=(False if a.tables else (True if a.complement else None)))
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=a.H * dx)
     sim.rho = sim.rho * a.rho
     if a.pack:

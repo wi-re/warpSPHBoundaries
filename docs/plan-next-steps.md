@@ -343,6 +343,8 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
 * **Convergence (complement, U_x / U_ref, n = 48 -> 72)**: 64-gon 0.990 -> 0.994, square 1.014 -> 1.009, 30 deg triangle 1.023 -> 1.014: first order for every shape (error ratios 1.5-1.7 for a refinement of 1.5); the corner
   excess over the 64-gon falls from +2.4 / +3.3 % to +1.5 / +2.0 %.  The corner error is a local first-order error with a larger constant, not a structural defect of the complement; no corner-specific model found that
   improves it (curved-clamped tables, wedge tables, hybrid, viscous wall pressure all tried).  Remedies with a known effect would be local resolution at sharp corners (not in this plan).
+* **Decision (user, 2026-10-07)**: the complement is the default `noslipMoment` closure with the Morris viscosity (`complementMoments = None` = automatic; True / False force it, the study scripts take `--tables`); the
+  alpha form keeps the curved tables; Morris itself stays opt-in; the wedge tables / hybrid remain experimental options.
 
 ### After the warpSPH port (user, 2026-10-07): application cases
 

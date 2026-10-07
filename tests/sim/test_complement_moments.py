@@ -47,3 +47,13 @@ def test_complement_is_exact_for_a_quadratic_wall_profile(device):
     assert float((ax[near] - target).abs().max()) <= 1e-9 * abs(target)
     ax0, _, _, _ = channel(device, False)
     assert float((ax0[first] - target).abs().max()) > 1e-2 * abs(target)                      # the continuum tables are not exact on the discrete neighbourhood
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_complement_is_automatic_with_morris(device):
+    """complementMoments = None (the default) uses the complement with the Morris viscosity: the same acceleration as forcing it on."""
+    assert DeltaSPHConfig().complementMoments is None
+    a_auto, target, near, _ = channel(device, None)
+    a_on, _, _, _ = channel(device, True)
+    assert float((a_auto - a_on).abs().max()) == 0.0
+    assert float((a_auto[near] - target).abs().max()) <= 1e-9 * abs(target)

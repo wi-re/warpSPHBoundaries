@@ -35,7 +35,8 @@ def main():
     ap.add_argument("--wall", default="noslipMirror")
     ap.add_argument("--visc", default="alpha", choices=("alpha", "morris"), help="fluid viscous operator (cfg.fluidViscosity)")
     ap.add_argument("--cal", type=float, default=1.0, help="cfg.morrisCalibration (Wendland C2: 0.985)")
-    ap.add_argument("--complement", action="store_true", help="cfg.complementMoments (discrete-complement wall moments, prototype: eager)")
+    ap.add_argument("--complement", action="store_true", help="force cfg.complementMoments on (automatic with --visc morris)")
+    ap.add_argument("--tables", action="store_true", help="force the table closure (cfg.complementMoments = False)")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     dx = 1.0 / a.n
@@ -48,7 +49,7 @@ def main():
     scene = Scene([plate(-0.15), plate(W + 0.15)], a.device)
     for i, b in enumerate(scene.bodies):
         b.bodyId = i
-    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, -9), (1, 9), (True, False)), bodyForce=(a.f, 0.0), graphStep=True, shifting=True, wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, complementMoments=a.complement)
+    cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=a.alpha, periodic=Periodic((0, -9), (1, 9), (True, False)), bodyForce=(a.f, 0.0), graphStep=True, shifting=True, wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, complementMoments=(False if a.tables else (True if a.complement else None)))
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=a.H * dx)
     hist = LoadHistory()
     while sim.time < a.time:
