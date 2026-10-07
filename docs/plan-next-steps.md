@@ -332,6 +332,18 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
   side of the particle's tangent plane, where the fixed-frame continuation assigns fluid-like velocities.  Candidate fix: at corner particles only, the turning-frame wedge continuation with the discrete quadrature correction,
   T = T_wedge,turning + (T_complement - T_wedge,fixed) (needs fixed-frame wedge moments from the same quadrature).
 
+### Hybrid corner closure (2026-10-07, `complementMoments` + `cornerWedgeTables`)
+
+* **What**: at corner particles T_k = T_k,complement + (T_k,wedge,turning - T_k,wedge,fixed) for k = 1, 2 (k = 0 and M1 do not depend on the continuation), the turning-frame curvature; `wedge_moments(fixed=True)` returns the
+  fixed-frame moments (s~ = y . n + d) from the same quadrature (brute force <= 1.4e-3; beta = pi: T = Tf exactly).
+* **Result**: static (layers) worse than the plain complement near corners (near-vertex face row 0 0.26 -> 0.35 square, 0.42 -> 0.77 triangle; vertex quadrant row 1 0.17 -> 0.29); integrated U_x / U_ref square 1.038,
+  triangle 1.048 = the wedge tables alone (1.038 / 1.049).  The integrated corner drag is set by the continuation model at the corner: curved-clamped 0.986 / 0.989, fixed-frame complement 1.014 / 1.023, turning-frame wedge
+  1.038 / 1.048 (target: the 64-gon baseline ~0.990).  The hybrid does not fix the corners; kept in the code path as an option.
+* **Pressure side checked**: `wallPressureViscous` (the viscous term in the wall pressure condition, nu lap u = 10-40 f at corners) with the complement: square 1.014 -> 1.016, triangle 1.023 -> 1.023, 64-gon 0.990 -> 0.993: not the corner deficit.  
+* **Convergence (complement, U_x / U_ref, n = 48 -> 72)**: 64-gon 0.990 -> 0.994, square 1.014 -> 1.009, 30 deg triangle 1.023 -> 1.014: first order for every shape (error ratios 1.5-1.7 for a refinement of 1.5); the corner
+  excess over the 64-gon falls from +2.4 / +3.3 % to +1.5 / +2.0 %.  The corner error is a local first-order error with a larger constant, not a structural defect of the complement; no corner-specific model found that
+  improves it (curved-clamped tables, wedge tables, hybrid, viscous wall pressure all tried).  Remedies with a known effect would be local resolution at sharp corners (not in this plan).
+
 ### After the warpSPH port (user, 2026-10-07): application cases
 
 Run in the warpSPH harness (numbers and video from one run), not here:

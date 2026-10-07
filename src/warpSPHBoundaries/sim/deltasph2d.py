@@ -88,7 +88,7 @@ class DeltaSPHConfig:
     backgroundPressure: float = 0.0      # P = c0^2 (rho - rho0) + P_b: a uniform pressure offset (the density, hence the volumes and the viscosity, are untouched); with the Antuono switch and the wall clamp the level matters, with `pressureConsistent` it must not
     complementMoments: bool = False      # noslipMoment + Morris (PROTOTYPE): the wall moments as the full-plane value minus the particle's own DISCRETE fluid moments (fixed particle frame), so fluid + wall is exact for linear
                                         # and quadratic fields on the actual neighbourhood (docs/plan-next-steps.md "first row"); replaces the curved / wedge tables
-    cornerWedgeTables: bool = False      # noslipMoment: wedge moment tables at polygon corners (EXPERIMENTAL: rows 1-2 near corners improve, the first row and the integrated drag get worse, docs/plan-next-steps.md "Wedge tables")
+    cornerWedgeTables: bool = False      # noslipMoment: wedge moment tables at polygon corners (alone: EXPERIMENTAL, rows 1-2 near corners improve, the first row and the integrated drag get worse; with complementMoments: the HYBRID corner closure)
     cornerAngleTol: float = 20.0         # with cornerWedgeTables: vertices whose solid angle differs from 180 deg by more than this (degrees) are corners; the others are smooth (curved tables)
     fluidViscosity: str = "alpha"        # fluid-pair viscous operator: "alpha" (Monaghan alpha form, central pair force, nu = alpha c0 H / (8 xi), anisotropic on a square lattice) | "morris" (Morris 1997, warpSPH's morris branch, nu = alpha c0 H / (8 xi) / morrisCalibration: isotropic, not angular-momentum conserving; the WALL closures are still those of the alpha weight)
     morrisCalibration: float = 1.0       # nu_eff / nu of the Morris operator on the lattice (Wendland C2: 0.985 = eta^2 bias 0.9714 x lattice 1.0139, kernel_viscosity_table.py --morris); the operator is divided by it
@@ -568,12 +568,19 @@ class DeltaSPH2D:
         T[:, :, 0, 0] = Tc[0, :3].T
         T[:, :, 1, 1] = Tc[1, :3].T
         M1 = torch.stack([Tc[0, 3], torch.zeros_like(Tc[0, 3])], 1)
-        corner = self._corner_moments(bi, x, morris) if self.cfg.cornerWedgeTables and not self.cfg.complementMoments else None
+        corner = self._corner_moments(bi, x, morris, fixed=self.cfg.complementMoments) if self.cfg.cornerWedgeTables else None
         if self.cfg.complementMoments:
             if not morris:
                 raise NotImplementedError("complementMoments: Morris viscosity only (the alpha weight needs the lattice-anisotropic full-plane moments)")
             T, M1 = self._complement_moments(x, n, d, rho)
             kap = torch.zeros_like(kap)                                                          # fixed-frame continuation: no curvature terms
+            if corner is not None:                                                               # HYBRID at corners: the complement (discrete quadrature) plus the continuum difference of the turning-frame and the fixed-frame
+                cm, Tw, _, kw, Tf = corner                                                       # continuation over the wedge solid (k = 1, 2; k = 0 and M1 do not depend on the continuation), the turning-frame curvature
+                dT = torch.zeros_like(T)
+                dT[:, 1:] = Tw[:, 1:] - Tf[:, 1:]
+                T = T + torch.where(cm[:, None, None, None], dT, torch.zeros_like(dT))
+                kap = torch.where(cm, kw, kap)
+            corner = None
             # the complement is the particle's WHOLE missing region: it belongs to the nearest body only, and only within the support (prototype: several bodies inside one support share one missing region)
             dall = torch.stack([self.scene.signed_distance(x, body=k, supportMax=self.H)[0] for k in range(len(self.scene.bodies))])
             own = (dall.argmin(0) == bi) & (dall[bi] < self.H)
@@ -693,8 +700,9 @@ class DeltaSPH2D:
         cache[id(b)] = None if not V else (torch.stack(V).to(self.dev), torch.stack(E).to(self.dev), betas, torch.tensor(betas, dtype=F64, device=self.dev))   # device copy made once (graph capture)
         return cache[id(b)]
 
-    def _corner_moments(self, bi, x, morris):
-        """for the particles within H of a corner of body `bi` (nearest corner): (mask [N], T [N, 3, 2, 2], M1 [N, 2], kappa [N]) from the wedge tables of that corner's angle; None without corners."""
+    def _corner_moments(self, bi, x, morris, fixed=False):
+        """for the particles within H of a corner of body `bi` (nearest corner): (mask [N], T [N, 3, 2, 2], M1 [N, 2], kappa [N]) from the wedge tables of that corner's angle, with `fixed` also the fixed-frame
+        moments Tf [N, 3, 2, 2] (for the hybrid with the complement closure); None without corners."""
         b = self.scene.bodies[bi]
         cs = self._corners(b)
         if cs is None:
@@ -713,13 +721,18 @@ class DeltaSPH2D:
         T = torch.zeros((len(x), 3, 2, 2), dtype=F64, device=self.dev)
         M1 = torch.zeros((len(x), 2), dtype=F64, device=self.dev)
         kap = torch.zeros(len(x), dtype=F64, device=self.dev)
+        Tf = torch.zeros((len(x), 3, 2, 2), dtype=F64, device=self.dev)
         bk = betaDev[k]
         for beta in sorted(set(round(v, 6) for v in betas)):
             key = (beta, morris)
             if key not in tabs:
                 tabs[key] = WedgeWallMoments(self.dW, self.H, self.dev, beta, weight="morris" if morris else "alpha")
             sel = (bk - beta).abs() < 1e-6
-            Tg, Mg = tabs[key].eval(rho, phi)
+            if fixed:
+                Tg, Mg, Tfg = tabs[key].eval(rho, phi, fixed=True)
+                Tf = torch.where(sel[:, None, None, None], Tfg, Tf)
+            else:
+                Tg, Mg = tabs[key].eval(rho, phi)
             T = torch.where(sel[:, None, None, None], Tg, T)
             M1 = torch.where(sel[:, None], Mg, M1)
             a = math.pi - 0.5 * beta                                                             # the vertex region of the fluid: both projections on the face rays negative (convex corners only)
@@ -727,6 +740,8 @@ class DeltaSPH2D:
             pb = rho * torch.cos(phi + a)
             vq = (pa < 0) & (pb < 0)
             kap = torch.where(sel & vq, 1.0 / rho.clamp(min=0.25 * self.dx), kap)
+        if fixed:
+            return mask, T, M1, kap, Tf
         return mask, T, M1, kap
 
     def _curvature(self, bi, x, n, t):

@@ -203,17 +203,19 @@ def _wedge_nearest(P, beta):
     return torch.where(solid, -r, r), n, solid
 
 
-def wedge_moments(dW, H, rho, phi, beta, weight="alpha", nth=1440, ng=24):
+def wedge_moments(dW, H, rho, phi, beta, weight="alpha", nth=1440, ng=24, fixed=False):
     """T_k^{c'c} (k = 0, 1, 2; full 2 x 2 in the particle frame (n, t), t = J n) and the first moment M1 (Morris) of the pair weight over the wedge solid within the support, for particles at polar coordinates (rho, phi)
     about the vertex (fluid bisector phi = 0).  Same continuation as `curved_moments`: w_ext(x') = sum_c (a_c s' + L_c s'^2 / 2) e_c(x') with s' the signed distance to the wedge boundary and e_c(x') the frame of its
     nearest boundary point; k = 0 uses the particle's frame on both sides.  Polar quadrature about the particle: midpoint in theta, Gauss-Legendre on the radial pieces between the crossings with the lines through the vertex
-    where the integrand is not smooth (the two faces, the solid bisector, the face normals through the vertex).  Returns T [B, 3, 2, 2] (k, c', c), M1 [B, 2]."""
+    where the integrand is not smooth (the two faces, the solid bisector, the face normals through the vertex).  Returns T [B, 3, 2, 2] (k, c', c), M1 [B, 2]; with `fixed=True` also Tf [B, 3, 2, 2], the same moments
+    for the FIXED-frame continuation (the particle's frame on both sides, s~ = y . n + d: the continuation of the complement closure), so that T - Tf is the continuum difference of the two continuation models over
+    the actual solid (the hybrid corner closure adds it to the complement moments)."""
     dev = rho.device
     B = rho.shape[0]
     xg, wg = _gl(ng, dev)
     a = math.pi - 0.5 * beta
     P0 = torch.stack([rho * torch.cos(phi), rho * torch.sin(phi)], 1)                # [B, 2]
-    _, n0, _ = _wedge_nearest(P0, beta)
+    s0, n0, _ = _wedge_nearest(P0, beta)
     t0 = torch.stack([-n0[:, 1], n0[:, 0]], 1)
     th = (torch.arange(nth, dtype=F64, device=dev) + 0.5) * (2 * math.pi / nth)
     e = torch.stack([torch.cos(th), torch.sin(th)], 1)                               # [nth, 2]
@@ -254,7 +256,20 @@ def wedge_moments(dW, H, rho, phi, beta, weight="alpha", nth=1440, ng=24):
             T[:, 1, c1, c2] = (w * g * s).sum((1, 2, 3))
             T[:, 2, c1, c2] = (w * g * s * s).sum((1, 2, 3))
     M1 = torch.stack([(w * (y * fr[c]).sum(-1)).sum((1, 2, 3)) for c in range(2)], 1) if weight == "morris" else torch.zeros((B, 2), dtype=F64, device=dev)
-    return T, M1
+    if not fixed:
+        return T, M1
+    sf = (y * n0[:, None, None, None, :]).sum(-1) + s0[:, None, None, None]                  # s~ = y . n + d (fixed frame)
+    Tf = torch.zeros((B, 3, 2, 2), dtype=F64, device=dev)
+    Tf[:, 0] = T[:, 0]
+    for c1 in range(2):
+        for c2 in range(2):
+            if weight == "morris":
+                g = torch.full_like(L, 1.0 if c1 == c2 else 0.0)
+            else:
+                g = (fr[c1] * yh).sum(-1) * (yh * fr[c2]).sum(-1)
+            Tf[:, 1, c1, c2] = (w * g * sf).sum((1, 2, 3))
+            Tf[:, 2, c1, c2] = (w * g * sf * sf).sum((1, 2, 3))
+    return T, M1, Tf
 
 
 class WedgeWallMoments:
@@ -269,16 +284,18 @@ class WedgeWallMoments:
         self.pscale = (1.0 - 1e-3) * self.phimax
         R, Pp = torch.meshgrid(rg, pg, indexing="ij")
         R, Pp = R.reshape(-1), Pp.reshape(-1)
-        Ts, Ms = [], []
+        Ts, Ms, Tfs = [], [], []
         for i in range(0, len(R), chunk):
-            T, M = wedge_moments(dW, H, R[i:i + chunk], Pp[i:i + chunk], beta, weight)
+            T, M, Tf = wedge_moments(dW, H, R[i:i + chunk], Pp[i:i + chunk], beta, weight, fixed=True)
             Ts.append(T)
             Ms.append(M)
+            Tfs.append(Tf)
         self.T = torch.cat(Ts).reshape(nr, nphi, 3, 2, 2)
         self.M1 = torch.cat(Ms).reshape(nr, nphi, 2)
+        self.Tf = torch.cat(Tfs).reshape(nr, nphi, 3, 2, 2)
 
-    def eval(self, rho, phi):
-        """(T [N, 3, 2, 2], M1 [N, 2]) at signed angle phi (mirrored below the bisector)."""
+    def eval(self, rho, phi, fixed=False):
+        """(T [N, 3, 2, 2], M1 [N, 2]) at signed angle phi (mirrored below the bisector); with `fixed` also the fixed-frame moments Tf."""
         neg = phi < 0
         fr = (rho / self.H).clamp(0.0, 1.0) * (self.nr - 1)
         fp = (phi.abs() / self.pscale).clamp(0.0, 1.0) * (self.nphi - 1)
@@ -293,8 +310,15 @@ class WedgeWallMoments:
 
         T, M = lerp(self.T), lerp(self.M1)
         sgn = torch.where(neg, -1.0, 1.0).to(F64)
-        T = T.clone()
-        T[:, :, 0, 1] = T[:, :, 0, 1] * sgn[:, None]
-        T[:, :, 1, 0] = T[:, :, 1, 0] * sgn[:, None]
+
+        def mirror(t):
+            t = t.clone()
+            t[:, :, 0, 1] = t[:, :, 0, 1] * sgn[:, None]
+            t[:, :, 1, 0] = t[:, :, 1, 0] * sgn[:, None]
+            return t
+
+        T = mirror(T)
         M = torch.stack([M[:, 0], M[:, 1] * sgn], 1)
+        if fixed:
+            return T, M, mirror(lerp(self.Tf))
         return T, M

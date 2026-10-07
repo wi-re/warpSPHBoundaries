@@ -242,7 +242,7 @@ def setup(a, V, f, consistent=False):
     alpha = a.nu * 8 * XI / (a.c0 * H)                                                  # nominal nu = alpha c0 H / (8 xi) (Morris: calibrated to it; alpha form: the angular mean)
     scene = Scene([Body(bodyId=0, center=(0.5, 0.5), reps=[SurfaceRep.polygon(V + 0.0)])], a.device)
     cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(f, 0.0), pressureConsistent=consistent, graphStep=not a.eager, shifting=True,
-                         wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, cornerWedgeTables=a.wedge, complementMoments=a.complement)
+                         wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, cornerWedgeTables=a.wedge, complementMoments=a.complement, wallPressureViscous=a.wpv)
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=H)
     return sim, pos, dx, H
 
@@ -349,7 +349,8 @@ def main():
     ap.add_argument("--consistent", action="store_true")
     ap.add_argument("--eager", action="store_true")
     ap.add_argument("--wedge", action="store_true", help="cfg.cornerWedgeTables (wedge moment tables at the corners)")
-    ap.add_argument("--complement", action="store_true", help="cfg.complementMoments (discrete-complement wall moments, prototype, eager)")
+    ap.add_argument("--complement", action="store_true", help="cfg.complementMoments (discrete-complement wall moments)")
+    ap.add_argument("--wpv", action="store_true", help="cfg.wallPressureViscous (the viscous term in the wall pressure condition)")
     ap.add_argument("--layers", type=int, default=0, help="body-fitted sampling: this many offset-curve layers at (k + 1/2) dx (0: the cut lattice); > H / dx keeps the seam out of the wall particles' support")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
