@@ -40,7 +40,7 @@ from ..scene.tensile import tensile_factor, tensile_vector_scene
 from ..scene.viscosity import lap_factor, lap_lambda_scene
 from ..scene.periodic import Periodic, min_image
 from .pinned import Pinned
-from .wallmoments import CurvedWallMoments
+from .wallmoments import CurvedWallMoments, WedgeWallMoments
 from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
@@ -86,6 +86,8 @@ class DeltaSPHConfig:
     bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
     wallFrictionLever: str = "particle"  # where the no-slip wall friction acts for the TORQUE on the body: "particle" (where the fluid loses the momentum: the fluid angular momentum balance, torque conserved between walls: measured 1.000 on Taylor-Couette) or "contact" (the wall point: 0.83 to 1.2 off)
     backgroundPressure: float = 0.0      # P = c0^2 (rho - rho0) + P_b: a uniform pressure offset (the density, hence the volumes and the viscosity, are untouched); with the Antuono switch and the wall clamp the level matters, with `pressureConsistent` it must not
+    cornerWedgeTables: bool = False      # noslipMoment: wedge moment tables at polygon corners (EXPERIMENTAL: rows 1-2 near corners improve, the first row and the integrated drag get worse, docs/plan-next-steps.md "Wedge tables")
+    cornerAngleTol: float = 20.0         # with cornerWedgeTables: vertices whose solid angle differs from 180 deg by more than this (degrees) are corners; the others are smooth (curved tables)
     fluidViscosity: str = "alpha"        # fluid-pair viscous operator: "alpha" (Monaghan alpha form, central pair force, nu = alpha c0 H / (8 xi), anisotropic on a square lattice) | "morris" (Morris 1997, warpSPH's morris branch, nu = alpha c0 H / (8 xi) / morrisCalibration: isotropic, not angular-momentum conserving; the WALL closures are still those of the alpha weight)
     morrisCalibration: float = 1.0       # nu_eff / nu of the Morris operator on the lattice (Wendland C2: 0.985 = eta^2 bias 0.9714 x lattice 1.0139, kernel_viscosity_table.py --morris); the operator is divided by it
     pressureConsistent: bool = False     # the pressure force is exact for a uniform pressure near a wall: the part of it a uniform P exerts through the wall-consistency residual S_i of the layout is removed (difference form)
@@ -556,7 +558,18 @@ class DeltaSPH2D:
             cache[morris] = CurvedWallMoments(self.dW, self.H, self.dev, weight="morris" if morris else "alpha")
         t = torch.stack([-n[:, 1], n[:, 0]], 1)
         kap = self._curvature(bi, x, n, t)                                                       # div n at the particle: 1 / (R + d) convex, -1 / (R - d) concave
-        T = cache[morris].eval(d, kap / (1.0 - kap * d))                                         # [2 (n, t), 3, N]: moments over the actual circular solid of curvature kappa_w = 1 / R (signed)
+        Tc = cache[morris].eval(d, kap / (1.0 - kap * d))                                        # [2 (n, t), 4, N]: moments over the actual circular solid of curvature kappa_w = 1 / R (signed)
+        N = x.shape[0]
+        T = torch.zeros((N, 3, 2, 2), dtype=F64, device=self.dev)                                # full tensors T_k^{c'c} (k, c', c): diagonal from the curved tables, full at corners
+        T[:, :, 0, 0] = Tc[0, :3].T
+        T[:, :, 1, 1] = Tc[1, :3].T
+        M1 = torch.stack([Tc[0, 3], torch.zeros_like(Tc[0, 3])], 1)
+        corner = self._corner_moments(bi, x, morris) if self.cfg.cornerWedgeTables else None
+        if corner is not None:                                                                   # particles within H of a polygon corner: the wedge tables, and the curvature of the distance field (1 / rho where the nearest point is the vertex, 0 on faces)
+            cm, Tw, Mw, kw = corner
+            T = torch.where(cm[:, None, None, None], Tw, T)
+            M1 = torch.where(cm[:, None], Mw, M1)
+            kap = torch.where(cm, kw, kap)
         if morris:                                                                               # Morris pair weight 2 nu_used V_w K(r) (identity), rho_w = rho_i; its discrete operator realises nu_used * morrisCalibration
             nu_used = fac / 8.0 / self.cfg.morrisCalibration
             beta = 2.0 * nu_used * self.cfg.wallMass / rho
@@ -567,30 +580,105 @@ class DeltaSPH2D:
             nup = fac / 8.0
             cn = 3.0
         bn = beta / nup                                                                          # beta / nu_p
-        wn, wt = (w * n).sum(1), (w * t).sum(1)
-        fn, ft = (viscf * n).sum(1), (viscf * t).sum(1)
+        wv = torch.stack([(w * n).sum(1), (w * t).sum(1)], 1)                                    # [N, 2] in (n, t)
+        fv = torch.stack([(viscf * n).sum(1), (viscf * t).sum(1)], 1)
         rot = None
-        if morris:                                                                               # a rigid rotation Omega of the wall: the Morris weight does not annihilate it.  Wall part: -beta Omega x M1 = -beta Omega M1_n t;
-            rot = beta * self.scene.bodies[bi].angularVelocity * T[0][3]                         # the fluid sum carries the opposite (the full-plane integral vanishes), removed before the balance of w
-            ft = ft - rot
-
-        def solve(Tk, f, wc, c, curved):
-            g1 = Tk[1] / d - Tk[0]
-            h = 0.5 * (Tk[2] - d * Tk[1])
-            if curved:
-                den = 1.0 + bn * h + 0.5 * kap * d
-                rhs = f / nup - bn * g1 * wc - kap * wc / d + kap * kap * wc
-            else:
-                den = c + bn * h
-                rhs = f / nup - bn * g1 * wc
-            L = rhs / den
-            return -beta * (g1 * wc + h * L)
-
-        Awn = solve(T[0], fn, wn, cn, False)
-        Awt = solve(T[1], ft, wt, 1.0, True)
+        if morris:                                                                               # a rigid rotation Omega of the wall: the Morris weight does not annihilate it.  Wall part: -beta Omega J M1 (J M1 = M1_n t - M1_t n);
+            Om = beta * self.scene.bodies[bi].angularVelocity                                    # the fluid sum carries the opposite (the full-plane integral vanishes), removed before the balance of w
+            rot = torch.stack([-Om * M1[:, 1], Om * M1[:, 0]], 1)
+            fv = fv - rot
+        # w(s) = a s + L s^2 / 2 per component, w(d) = w_i  ->  a = w / d - L d / 2;  wall term A = -beta (G1 w + Hm L), G1 = T1 / d - T0, Hm = (T2 - d T1) / 2 (2 x 2);  balance f + A = nu_p lap w with
+        # lap w = (cn L_n, (1 + kappa d / 2) L_t + kappa w_t / d - kappa^2 w_t):  (D + bn Hm) L = f / nu_p - bn G1 w - r.  Diagonal T (no corner) = the former per-component solve.
+        dd = d[:, None, None]
+        G1 = T[:, 1] / dd - T[:, 0]
+        Hm = 0.5 * (T[:, 2] - dd * T[:, 1])
+        Dm = torch.zeros_like(Hm)
+        Dm[:, 0, 0] = cn
+        Dm[:, 1, 1] = 1.0 + 0.5 * kap * d
+        rv = torch.stack([torch.zeros_like(d), kap * wv[:, 1] / d - kap * kap * wv[:, 1]], 1)
+        rhs = fv / nup - bn[:, None] * (G1 @ wv[:, :, None])[:, :, 0] - rv
+        Mm = Dm + bn[:, None, None] * Hm                                                         # 2 x 2 by Cramer's rule (torch.linalg.solve checks singularity on the host: not capturable)
+        det = Mm[:, 0, 0] * Mm[:, 1, 1] - Mm[:, 0, 1] * Mm[:, 1, 0]
+        Lv = torch.stack([Mm[:, 1, 1] * rhs[:, 0] - Mm[:, 0, 1] * rhs[:, 1], Mm[:, 0, 0] * rhs[:, 1] - Mm[:, 1, 0] * rhs[:, 0]], 1) / det[:, None]
+        Av = -beta[:, None] * ((G1 @ wv[:, :, None])[:, :, 0] + (Hm @ Lv[:, :, None])[:, :, 0])
         if rot is not None:
-            Awt = Awt - rot
-        return Awn[:, None] * n + Awt[:, None] * t
+            Av = Av - rot
+        return Av[:, 0:1] * n + Av[:, 1:2] * t
+
+    def _corners(self, b):
+        """the sharp corners of a body (body frame, cached): vertices of its polygon loops (`SurfaceRep`, `BoxRep` via its polygon) whose solid angle beta differs from pi by more than cfg.cornerAngleTol, as
+        (V [m, 2] vertex, E [m, 2] unit bisector into the fluid, betas [m] host floats, the same on the device); None without corners.  The loops have the solid on the left (counter-clockwise around an obstacle, clockwise around a cavity)."""
+        from ..scene.scene import BoxRep, SurfaceRep
+        cache = self.__dict__.setdefault("_cornerCache", {})
+        if id(b) in cache:
+            return cache[id(b)]
+        tol = math.radians(self.cfg.cornerAngleTol)
+        V, E, betas = [], [], []
+        for r in b.reps:
+            if isinstance(r, BoxRep):
+                r = r.surface()
+            if not isinstance(r, SurfaceRep):
+                continue
+            P, ed = r.vertices.double().cpu(), r.edges.long().cpu()
+            nxt = {int(e[0]): k for k, e in enumerate(ed)}
+            for k, e in enumerate(ed):
+                k2 = nxt.get(int(e[1]))
+                if k2 is None:
+                    continue
+                v = P[e[1]]
+                tin = P[e[1]] - P[e[0]]
+                tout = P[ed[k2][1]] - P[ed[k2][0]]
+                tin, tout = tin / tin.norm(), tout / tout.norm()
+                turn = math.atan2(float(tin[0] * tout[1] - tin[1] * tout[0]), float((tin * tout).sum()))      # left turn > 0: a convex corner of the solid
+                beta = math.pi - turn
+                if abs(beta - math.pi) <= tol:
+                    continue
+                nin = torch.stack([tin[1], -tin[0]])                                                      # outward (into the fluid): right-hand normal, the solid is on the left
+                nout = torch.stack([tout[1], -tout[0]])
+                bis = nin + nout
+                if float(bis.norm()) < 1e-9:
+                    continue
+                V.append(v)
+                E.append(bis / bis.norm())
+                betas.append(beta)
+        cache[id(b)] = None if not V else (torch.stack(V).to(self.dev), torch.stack(E).to(self.dev), betas, torch.tensor(betas, dtype=F64, device=self.dev))   # device copy made once (graph capture)
+        return cache[id(b)]
+
+    def _corner_moments(self, bi, x, morris):
+        """for the particles within H of a corner of body `bi` (nearest corner): (mask [N], T [N, 3, 2, 2], M1 [N, 2], kappa [N]) from the wedge tables of that corner's angle; None without corners."""
+        b = self.scene.bodies[bi]
+        cs = self._corners(b)
+        if cs is None:
+            return None
+        Vc, Ec, betas, betaDev = cs
+        lx = b.toLocal(x)                                                                        # body frame, nearest periodic image
+        rel = lx[:, None, :] - Vc[None]                                                          # [N, m, 2]
+        dist = rel.norm(dim=2)
+        k = dist.argmin(1)
+        rho = dist.gather(1, k[:, None])[:, 0]
+        mask = rho < self.H
+        e = Ec[k]
+        r = rel[torch.arange(len(x), device=self.dev), k]
+        phi = torch.atan2(e[:, 0] * r[:, 1] - e[:, 1] * r[:, 0], (e * r).sum(1))                 # signed angle from the fluid bisector
+        tabs = self.__dict__.setdefault("_wedgeCache", {})
+        T = torch.zeros((len(x), 3, 2, 2), dtype=F64, device=self.dev)
+        M1 = torch.zeros((len(x), 2), dtype=F64, device=self.dev)
+        kap = torch.zeros(len(x), dtype=F64, device=self.dev)
+        bk = betaDev[k]
+        for beta in sorted(set(round(v, 6) for v in betas)):
+            key = (beta, morris)
+            if key not in tabs:
+                tabs[key] = WedgeWallMoments(self.dW, self.H, self.dev, beta, weight="morris" if morris else "alpha")
+            sel = (bk - beta).abs() < 1e-6
+            Tg, Mg = tabs[key].eval(rho, phi)
+            T = torch.where(sel[:, None, None, None], Tg, T)
+            M1 = torch.where(sel[:, None], Mg, M1)
+            a = math.pi - 0.5 * beta                                                             # the vertex region of the fluid: both projections on the face rays negative (convex corners only)
+            pa = rho * torch.cos(phi - a)
+            pb = rho * torch.cos(phi + a)
+            vq = (pa < 0) & (pb < 0)
+            kap = torch.where(sel & vq, 1.0 / rho.clamp(min=0.25 * self.dx), kap)
+        return mask, T, M1, kap
 
     def _curvature(self, bi, x, n, t):
         """kappa = div n of the signed distance at the particles (tangential derivative of the wall normal, central difference over half a spacing): 1 / r for a convex circle, -1 / r concave, 0 on a plane."""

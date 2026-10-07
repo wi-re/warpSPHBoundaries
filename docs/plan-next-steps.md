@@ -284,6 +284,39 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
   disk Re 100 alpha C_D 1.40, C_L amplitude 0.333, St 0.171; disk Re 40 alpha C_D 1.717, L_w / D 2.06, Morris C_D 1.694, L_w / D 2.13; square Re 100 alpha C_D 1.60, C_L amplitude 0.255, St 0.150.
 * Order: verify (full suite, regression harness, Morris timing) and commit; Morris torque (traction) correction; corner closure; then the plan items (BC closures, DFSPH fused) and the warpSPH patch series.
 
+### Sharp-corner rig (2026-10-07, `scripts/studies/corner_rig.py`)
+
+* **Cases**: a periodic array of one polygon (square, isosceles triangle of apex angle beta pointing downstream = a trailing-edge stand-in, rhombus with two sharp edges, any rotation), Stokes flow driven by a body force on the fluid.
+  **Reference**: Fourier volume penalisation with a polygon indicator (`fourier`, cached in .tmp): K converges at order ~1.5 in 1 / N (30 deg triangle, c = 0.08: 18.75 / 18.38 / 18.30 at N = 192 / 384 / 576), N = 576 is the default.
+  Two fixes of the reference were needed for the near-wall check: (1) the spectral Laplacian rings from the kink of u at the wall (-0.81 instead of -1.11 half a spacing from a face) -> 4th-order finite differences, |FD4 - FD2| as
+  the local uncertainty; (2) the penalised flow vanishes 0.26 grid cells inside the smoothed indicator (0.021 dx at N = 576, n = 48) -> the indicator is shifted outward by 0.26 cells (measured offset after: 0.002 dx).
+* **`operator` (static)**: the reference field on the particles (uniform density: no pressure force), SPH viscous acceleration (fluid sum + wall closure) vs nu lap u, medians per class (face, face within H of a vertex,
+  vertex quadrant) and wall row, with the partition-of-unity deficit 1 - (sum V W + lambda) as the sampling check.  **`array` (dynamic)**: superficial velocity (both components), K / K_ref.
+* **Finding 1, sampling dominates on a cut lattice**: a wall not on a half-spacing line leaves an unsampled layer (square of side 13.6 dx: first row at 0.71 dx, PU deficit +5.9 %, first-row error 1.5 x |exact|; the aligned square
+  of side 16 dx: 0.50 dx, -0.8 %, 0.55 x).  The closure assumes a sampled fluid side, so the static check needs body-fitted sampling: `--layers K` puts K offset curves of the (convex) polygon at (k + 1/2) dx, arc spacing dx, the
+  lattice beyond (the seam lies outside the support of the wall particles for K dx > H).  This is the sampling open problem below in its simplest form (convex polygons, static check).
+* **Finding 2, with layers (n = 48, H = 4 dx, Morris + noslipMoment)**: interior error 1e-4 f; faces: first row 0.57-0.66 x |exact| (also on the flat faces, not corner-specific; rows 1-3: 0.07-0.28); vertex quadrant rows 0 / 1:
+  0.33-0.43 x |exact| with |exact| = 10-44 f (absolute 4-15 f): square and 30 deg triangle alike.  These are the targets of the corner closure (and the first-row face error a separate item).
+* **Finding 3, integrated effect (`array`, Morris + noslipMoment + pressureConsistent, n = 48, c = 0.08)**: superficial velocity U_x / U_ref (the consistent metric; K mixes in the particle fill): 64-gon (corner-free baseline)
+  0.993 (cut lattice and layers), square 0.986 / 0.986, 30 deg triangle 0.988 / 0.989, aligned square (c = 1/9) 0.988.  The dynamic result does not depend on the initial sampling (shifting relaxes it); the corners cost
+  0.5-0.7 % of the flow on top of a general wall error of ~0.7 %.  The square reference used earlier (25.91, unshifted indicator) was ~1 % too permeable: the aligned square is K / K_ref = 1.010 against the corrected one.
+
+### Wedge tables at corners (2026-10-07, `cfg.cornerWedgeTables`, experimental, default off)
+
+* **What**: `wedge_moments` / `WedgeWallMoments` (sim/wallmoments.py): T_k (k = 0, 1, 2) as FULL 2 x 2 tensors in the particle frame (a wedge couples n and t) and M1 of the pair weight over the wedge solid of angle beta (convex and
+  re-entrant), the turning-frame continuation of the curved tables, polar quadrature split at every line through the vertex where the integrand kinks; indexed by (rho, |phi|) about the vertex, mirrored particles flip the
+  n-t couplings and M1_t.  Checked against a brute-force solid integral (30 / 90 / 270 deg, alpha and Morris: 1e-4 ... 5e-3, the latter the brute grid) and against the planar table for beta = 180 deg (1e-7, couplings 0).
+  The closure solves a 2 x 2 system per particle (Cramer's rule: `torch.linalg.solve` is not capturable); diagonal T = the former per-component solve (results identical).  Corners from `SurfaceRep` loops / `BoxRep` (cached,
+  tolerance `cornerAngleTol` = 20 deg), the distance-field curvature analytic (1 / rho in the vertex quadrant, 0 on faces).
+* **Result (corner rig, Morris, n = 48)**: static, with layers: rows 1-2 near corners much better (vertex quadrant row 1 0.36 -> 0.25, row 2 0.13 -> 0.017; triangle alike) but row 0 worse (vertex quadrant 0.33 -> 0.93,
+  near-vertex face 0.38 -> 0.66); integrated: U_x / U_ref square 0.986 -> 1.038, 30 deg triangle 0.989 -> 1.049 (the corners now drag too little).  Kept as an option, not the default.
+* **Diagnosis of the first row (item 2)**: not ill-conditioning (the closure amplifies a fluid-sum error by 1 / (c + bn h) = 1.48 at d = dx / 2, 1.09 at 1.5 dx), and not resolution (square, n = 72: face row 0 still 0.46,
+  rows 1-3 0.13 / 0.09 / 0.006).  Cancellation: next to the wall the fluid pair sum and the wall term are each O(nu tau / d) ~ 20 f, their sum O(f); the wall term is continuum-exact, the discrete fluid sum carries a lattice
+  quadrature error of a few % (rows 0-1: 0.79-0.87 of the continuum value for a quadratic field, measured earlier), i.e. O(f) at the first row.  The same mechanism limits the corners' first row.
+* **Proposed next (first row and corners together)**: discrete-complement moments: the wall moments as (full-plane continuum moment) - (the particle's own DISCRETE fluid moment sum_j V_j K(r_ij) (y . e)^k ...), so that fluid
+  + wall is exact for linear and quadratic fields on the actual particle neighbourhood (the partition-of-unity idea of lambda = 1 - sum V W, one order up); geometry (corners, curvature, sampling gaps) then enters through the
+  real neighbours.  Open choice: the continuation frame (fixed particle frame: complement-exact; turning frame: needed the curved tables for Taylor-Couette).
+
 ### Open problem (not part of this plan): sampling quality of relaxed / glass particle distributions
 
 * The viscosity anisotropy above is a property of the regular lattice; in a flow the particles disorder, and shifting drives them towards a glass-like relaxed state.  What that does to the effective viscosity (anisotropy
