@@ -242,7 +242,7 @@ def setup(a, V, f, consistent=False):
     alpha = a.nu * 8 * XI / (a.c0 * H)                                                  # nominal nu = alpha c0 H / (8 xi) (Morris: calibrated to it; alpha form: the angular mean)
     scene = Scene([Body(bodyId=0, center=(0.5, 0.5), reps=[SurfaceRep.polygon(V + 0.0)])], a.device)
     cfg = DeltaSPHConfig(gravity=(0, 0), c0=a.c0, alpha=alpha, periodic=Periodic((0, 0), (1, 1)), bodyForce=(f, 0.0), pressureConsistent=consistent, graphStep=not a.eager, shifting=True,
-                         wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, cornerWedgeTables=a.wedge)
+                         wallViscosityForm=a.wall, fluidViscosity=a.visc, morrisCalibration=a.cal, cornerWedgeTables=a.wedge, complementMoments=a.complement)
     sim = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, scene, cfg, a.device, support=H)
     return sim, pos, dx, H
 
@@ -295,7 +295,7 @@ def operator(a):
         print(f"  seam of layers / lattice (excluded from interior): n={int(seam.sum())}  err {np.median(err[seam]):.4f}  PU deficit {np.median(pu[seam]):+.4f}")
     cl = np.where(seam & (cl == 0), -1, cl)
     mag = np.linalg.norm(exact, axis=1) / fscale
-    print(f"{a.shape} beta={a.beta:g} rot={a.rot:g} c={a.c:g} n={a.n} H/dx={a.H:g} {a.visc}/{a.wall} {'layers ' + str(a.layers) if a.layers else 'cut lattice'}: medians per class and wall row, in units of the body force f "
+    print(f"{a.shape} beta={a.beta:g} rot={a.rot:g} c={a.c:g} n={a.n} H/dx={a.H:g} {a.visc}/{a.wall}{' complement' if a.complement else ''}{' wedge' if a.wedge else ''} {'layers ' + str(a.layers) if a.layers else 'cut lattice'}: medians per class and wall row, in units of the body force f "
           f"(|exact| = |nu lap u|, err = |a_sph - nu lap u|, ref unc = |FD4 - FD2| of the reference)")
     print(f"  {'interior':17s} n={int((cl == 0).sum()):5d}  err {np.median(err[cl == 0]):7.4f}  (90 % {np.percentile(err[cl == 0], 90):.4f})  PU deficit {np.median(pu[cl == 0]):+.4f}")
     for k in (1, 2, 3):
@@ -349,6 +349,7 @@ def main():
     ap.add_argument("--consistent", action="store_true")
     ap.add_argument("--eager", action="store_true")
     ap.add_argument("--wedge", action="store_true", help="cfg.cornerWedgeTables (wedge moment tables at the corners)")
+    ap.add_argument("--complement", action="store_true", help="cfg.complementMoments (discrete-complement wall moments, prototype, eager)")
     ap.add_argument("--layers", type=int, default=0, help="body-fitted sampling: this many offset-curve layers at (k + 1/2) dx (0: the cut lattice); > H / dx keeps the seam out of the wall particles' support")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()

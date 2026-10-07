@@ -317,6 +317,37 @@ Setup of every run: Wendland C2, H = 4 dx, c0 = 10, alpha chosen for nu = 0.0185
   + wall is exact for linear and quadratic fields on the actual particle neighbourhood (the partition-of-unity idea of lambda = 1 - sum V W, one order up); geometry (corners, curvature, sampling gaps) then enters through the
   real neighbours.  Open choice: the continuation frame (fixed particle frame: complement-exact; turning frame: needed the curved tables for Taylor-Couette).
 
+### Complement moments, prototype results (2026-10-07, `cfg.complementMoments`, Morris + noslipMoment)
+
+* **Implementation**: `_complement_moments` (fixed particle frame; I_0 cancels in the closure, I_2 = -2 cal), the discrete sums as Warp modules on the fluid adjacency (`sim/modules/wallComplement`, generated with
+  docs/work/refs/gen_wp_modules.py; = the torch oracle to 2e-15), graph-capturable (replay = eager bit for bit; 6.7 ms/step vs 6.1 for Morris with tables, cylinder array n = 48 f64).  The complement belongs to the particle's
+  nearest body within the support only (found by the exactness test: a far plate got a copy of the near plate's term).  `tests/sim/test_complement_moments.py`: fluid + wall = nu u'' to 1e-9 on a wall-quadratic profile
+  (the tables miss it by > 1 %).  Also fixed: the torch fluid path (fluidWarp = False) never set `viscf`, which `noslipMoment` needs.
+* **Static (corner rig, layers)**: face first row 0.66 -> 0.11 (square), 0.57 -> 0.17 (triangle); vertex quadrant row 1 0.36 -> 0.17 / 0.42 -> 0.21; vertex quadrant row 0 (4 particles at the singularity, |exact| ~ 40 f,
+  reference uncertainty 0.2-0.7 f) 0.33 -> 0.67.
+* **Integrated (tables -> complement)**: 64-gon U_x / U_ref 0.993 -> 0.990; square 0.986 -> 1.014; 30 deg triangle 0.989 -> 1.023; disk array K / K_ref 0.995 -> 0.998; channel amplitude unchanged 0.979 / 0.993 (n = 32 / 64:
+  the remaining channel deficit is not the wall closure; candidate: the finite-k shear-wave nu used for the reference parabola, ~0.5 %); Taylor-Couette n = 32 profile 0.9935 -> 1.0001 (cut lattice), 0.993 -> 0.998 (ring),
+  torques unchanged (inner 0.943 / 1.103, outer 0.77 / 1.02).
+* **Reading**: the fixed-frame continuation is fine for curved walls down to R / H = 1.6 (Taylor-Couette improves), the convex corners now drag too little (+1.4 % / +2.3 %): behind a convex vertex part of the solid lies on the fluid
+  side of the particle's tangent plane, where the fixed-frame continuation assigns fluid-like velocities.  Candidate fix: at corner particles only, the turning-frame wedge continuation with the discrete quadrature correction,
+  T = T_wedge,turning + (T_complement - T_wedge,fixed) (needs fixed-frame wedge moments from the same quadrature).
+
+### After the warpSPH port (user, 2026-10-07): application cases
+
+Run in the warpSPH harness (numbers and video from one run), not here:
+* **Water entry / slamming at prescribed motion**: constant-velocity wedge entry (Zhao & Faltinsen 1993 similarity solution, 30 deg deadrise: pressure distribution and slamming force), cylinder entry.  Needs a wall-pressure
+  sampler built from the wall pressure condition (the MLS probe is erratic at impacts).  Caveats: the keel apex is a sharp corner (sampling, spray-jet resolution), single phase (no air cushion: deadrise >~ 10 deg),
+  the weakly compressible first-contact spike ~ rho c0 V.
+* **Floating and two-way coupled bodies**: free-fall entry (drop tests), floating bodies: the body acceleration from `wallLoads` instead of the prescribed `bodyAccelerations` (the extension point in sim/system.py), with the
+  added-mass stability of light bodies; time-dependent prescribed motion uses the same hook.
+* **Jet impingement**: transient (a finite slug onto a plate) as an initial condition; a steady jet needs inlets / outlets (below).
+* The wake rung (Re 20 / 40 / 100, blockage, square references), see "Decisions and order".
+
+### Open problem (not part of this plan): inlets and outlets
+
+Open-boundary inflow / outflow is a general open problem of the solver, independent of the solid boundaries (this code keeps a constant particle count; steady jets, channel flows with outflow and wakes without a periodic
+frame need it).
+
 ### Open problem (not part of this plan): sampling quality of relaxed / glass particle distributions
 
 * The viscosity anisotropy above is a property of the regular lattice; in a flow the particles disorder, and shifting drives them towards a glass-like relaxed state.  What that does to the effective viscosity (anisotropy

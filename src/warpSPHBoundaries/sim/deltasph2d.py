@@ -86,6 +86,8 @@ class DeltaSPHConfig:
     bodyForce: tuple = (0.0, 0.0)       # a uniform acceleration of the momentum equation only (a periodic pressure-gradient driver): unlike gravity it does not enter the hydrostatic term of the density diffusion, the wall pressure condition or the no-penetration law
     wallFrictionLever: str = "particle"  # where the no-slip wall friction acts for the TORQUE on the body: "particle" (where the fluid loses the momentum: the fluid angular momentum balance, torque conserved between walls: measured 1.000 on Taylor-Couette) or "contact" (the wall point: 0.83 to 1.2 off)
     backgroundPressure: float = 0.0      # P = c0^2 (rho - rho0) + P_b: a uniform pressure offset (the density, hence the volumes and the viscosity, are untouched); with the Antuono switch and the wall clamp the level matters, with `pressureConsistent` it must not
+    complementMoments: bool = False      # noslipMoment + Morris (PROTOTYPE): the wall moments as the full-plane value minus the particle's own DISCRETE fluid moments (fixed particle frame), so fluid + wall is exact for linear
+                                        # and quadratic fields on the actual neighbourhood (docs/plan-next-steps.md "first row"); replaces the curved / wedge tables
     cornerWedgeTables: bool = False      # noslipMoment: wedge moment tables at polygon corners (EXPERIMENTAL: rows 1-2 near corners improve, the first row and the integrated drag get worse, docs/plan-next-steps.md "Wedge tables")
     cornerAngleTol: float = 20.0         # with cornerWedgeTables: vertices whose solid angle differs from 180 deg by more than this (degrees) are corners; the others are smooth (curved tables)
     fluidViscosity: str = "alpha"        # fluid-pair viscous operator: "alpha" (Monaghan alpha form, central pair force, nu = alpha c0 H / (8 xi), anisotropic on a square lattice) | "morris" (Morris 1997, warpSPH's morris branch, nu = alpha c0 H / (8 xi) / morrisCalibration: isotropic, not angular-momentum conserving; the WALL closures are still those of the alpha weight)
@@ -328,6 +330,7 @@ class DeltaSPH2D:
                 self._fluidwarp = FluidWarp(self)
             fw = self._fluidwarp
             fps, fadj = fw.state(x, v, rho)
+            self._fluidState = (fps, fadj)                                                      # for the complement wall moments (same positions, same adjacency)
             fk = fw.kernels(fps, fadj)
         else:
             i, j, r = neighbor_pairs(x, self.Hvec, self.cfg.periodic)
@@ -414,11 +417,12 @@ class DeltaSPH2D:
                 if cfg.fluidViscosity == "morris":                                                 # Morris et al. 1997 Eq. 8 as warpSPH's morris branch: V_j nu (rho_i + rho_j) / rho_i (x_ij . gW) / (r^2 + 0.0025 H^2) v_ij
                     nu = cfg.alpha * cfg.c0 * H / (8.0 * self.xi) / cfg.morrisCalibration
                     wgt = V[j] * nu * (rho[i] + rho[j]) / rho[i] * (d * gW).sum(1) / (r * r + 0.0025 * H * H)
-                    acc = acc + self._sum(torch.where(nz, wgt, torch.zeros_like(r))[:, None] * vij, i)
+                    viscf = self._sum(torch.where(nz, wgt, torch.zeros_like(r))[:, None] * vij, i)
                 else:
                     mu = (vij * d).sum(1) / (r * r + 1e-14 * H * H)
                     fac = cfg.alpha * cfg.c0 * H / self.xi
-                    acc = acc + fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
+                    viscf = fac * self._sum(torch.where(nz, V[j] / (0.5 * (rho[i] + rho[j])) * mu, torch.zeros_like(r))[:, None] * gW, i)
+                acc = acc + viscf
         visc = lever = None
         vsum = torch.zeros_like(v)                                                                  # the wall viscous acceleration summed over the bodies (fused branch)
         if want_forces and self.nb and cfg.viscosity and cfg.wallViscosity:
@@ -564,7 +568,17 @@ class DeltaSPH2D:
         T[:, :, 0, 0] = Tc[0, :3].T
         T[:, :, 1, 1] = Tc[1, :3].T
         M1 = torch.stack([Tc[0, 3], torch.zeros_like(Tc[0, 3])], 1)
-        corner = self._corner_moments(bi, x, morris) if self.cfg.cornerWedgeTables else None
+        corner = self._corner_moments(bi, x, morris) if self.cfg.cornerWedgeTables and not self.cfg.complementMoments else None
+        if self.cfg.complementMoments:
+            if not morris:
+                raise NotImplementedError("complementMoments: Morris viscosity only (the alpha weight needs the lattice-anisotropic full-plane moments)")
+            T, M1 = self._complement_moments(x, n, d, rho)
+            kap = torch.zeros_like(kap)                                                          # fixed-frame continuation: no curvature terms
+            # the complement is the particle's WHOLE missing region: it belongs to the nearest body only, and only within the support (prototype: several bodies inside one support share one missing region)
+            dall = torch.stack([self.scene.signed_distance(x, body=k, supportMax=self.H)[0] for k in range(len(self.scene.bodies))])
+            own = (dall.argmin(0) == bi) & (dall[bi] < self.H)
+            T = T * own[:, None, None, None].to(F64)
+            M1 = M1 * own[:, None].to(F64)
         if corner is not None:                                                                   # particles within H of a polygon corner: the wedge tables, and the curvature of the distance field (1 / rho where the nearest point is the vertex, 0 on faces)
             cm, Tw, Mw, kw = corner
             T = torch.where(cm[:, None, None, None], Tw, T)
@@ -604,6 +618,41 @@ class DeltaSPH2D:
         if rot is not None:
             Av = Av - rot
         return Av[:, 0:1] * n + Av[:, 1:2] * t
+
+    def _complement_moments(self, x, n, d, rho):
+        """the Morris wall moments as complements of the particle's own discrete fluid moments, fixed particle frame (y = x_j - x_i, s~ = y . n + d, mu_j = V_j (rho_i + rho_j) / (2 rho_i), K = W' r / (r^2 + eta^2)):
+        T_0 = I_0 - sum mu K,  T_1 = d I_0 - sum mu K s~,  T_2 = (I_2 / 2 + d^2 I_0) - sum mu K s~^2,  M1 = - sum mu K y.  I_0 cancels in the closure (G1 = S_0 - S_1 / d, Hm = (I_2 / 2 - S_2 + d S_1) / 2); I_2 = -2 cal makes
+        the full-plane operator the calibrated bulk one.  Warp modules on the fluid adjacency (graph-capturable), the torch pair list with fluidWarp = False (oracle)."""
+        from .wallmoments import MORRIS_ETA2
+        H = self.H
+        N = len(x)
+        if self.cfg.fluidWarp:                                                                  # Warp modules on the fluid adjacency of this RHS (graph-capturable)
+            fps, fadj = self._fluidState
+            S0, S1, S2, SM = self._fluidwarp.complement_moments(fps, fadj, n, d, MORRIS_ETA2)
+        else:                                                                                   # torch oracle
+            i, j, r = neighbor_pairs(x, self.Hvec, self.cfg.periodic)
+            nz = i != j
+            i, j, r = i[nz], j[nz], r[nz]
+            y = -pair_delta(x, i, j, self.cfg.periodic)
+            K = self.dW(r, H) * r / (r * r + MORRIS_ETA2 * H * H)
+            mu = (self.m / rho[j]) * (rho[i] + rho[j]) / (2.0 * rho[i])
+            st = (y * n[i]).sum(1) + d[i]
+            w = mu * K
+            S0 = torch.zeros(N, dtype=F64, device=self.dev).index_add_(0, i, w)
+            S1 = torch.zeros(N, dtype=F64, device=self.dev).index_add_(0, i, w * st)
+            S2 = torch.zeros(N, dtype=F64, device=self.dev).index_add_(0, i, w * st * st)
+            SM = torch.zeros((N, 2), dtype=F64, device=self.dev).index_add_(0, i, w[:, None] * y)
+        I2 = -2.0 * self.cfg.morrisCalibration
+        T0 = -S0                                                                                # + I_0 (cancels)
+        T1 = -S1                                                                                # + d I_0 (cancels)
+        T2 = 0.5 * I2 - S2                                                                      # + d^2 I_0 (cancels)
+        T = torch.zeros((N, 3, 2, 2), dtype=F64, device=self.dev)
+        for k, Tk in enumerate((T0, T1, T2)):
+            T[:, k, 0, 0] = Tk
+            T[:, k, 1, 1] = Tk
+        t = torch.stack([-n[:, 1], n[:, 0]], 1)
+        M1 = torch.stack([-(SM * n).sum(1), -(SM * t).sum(1)], 1)
+        return T, M1
 
     def _corners(self, b):
         """the sharp corners of a body (body frame, cached): vertices of its polygon loops (`SurfaceRep`, `BoxRep` via its polygon) whose solid angle beta differs from pi by more than cfg.cornerAngleTol, as

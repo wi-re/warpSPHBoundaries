@@ -353,3 +353,43 @@ gen("shifting", "wp_minNeighbourNormalDot.py", "computeMinNeighbourNormalDot",
             continue
         out = wp.min(out, wp.dot(surfaceNormals[i], surfaceNormals[j]))
 """, "scalar", out0="outputValue + scalar_t(1.0e30)", accum="out = wp.min(out, partial)", tiled=False)
+
+gen("wallComplement", "wp_complementMoment.py", "computeComplementMoment",
+    "Discrete fluid moment of the Morris pair weight in the frame of a wall (the complement closure of docs/plan-next-steps.md \"first row\"): sum_{j != i, r <= h} mu_ij K_ij s_j^k with K = (x_ij . grad W_ij) / (r^2 + eta2 h_i^2),\nmu_ij = V_j (rho_i + rho_j) / (2 rho_i), s_j = (x_j - x_i) . n_i + d_i the distance coordinate of the neighbour in the frame of particle i's wall (`wallNormals`, `wallDistances`), k = `power` (0, 1, 2).",
+    [("wallNormals", "tensor", "wp.array(dtype = " + VEC + ")"), ("wallDistances", "tensor", "wp.array(dtype = scalar_t)"), ("eta2", "scalar", "scalar_t"), ("power", "int", "wp.int32")], """
+        if j == i:
+            continue
+        if r_ij > hij:
+            continue
+        gradw_ij = computeKernelGradientCRK(
+            xi, xj,
+            hi, hj,
+            kernelProperties, domainState,
+            useCRK, Ai, Bi, gradAi, gradBi
+        )
+        K = wp.dot(x_ij, gradw_ij) / (r_ij * r_ij + eta2 * hi * hi)
+        mu = mj / rhoj * (rhoi + rhoj) / (scalar_t(2.0) * rhoi)
+        s = wallDistances[i] - wp.dot(x_ij, wallNormals[i])
+        sk = scalar_t(1.0)
+        for p in range(power):
+            sk = sk * s
+        out += mu * K * sk
+""", "scalar")
+
+gen("wallComplement", "wp_complementFirstMoment.py", "computeComplementFirstMoment",
+    "Discrete fluid first moment of the Morris pair weight, sum_{j != i, r <= h} mu_ij K_ij (x_j - x_i) (the rotation term of the complement closure; K, mu as in `computeComplementMoment`).",
+    [("eta2", "scalar", "scalar_t")], """
+        if j == i:
+            continue
+        if r_ij > hij:
+            continue
+        gradw_ij = computeKernelGradientCRK(
+            xi, xj,
+            hi, hj,
+            kernelProperties, domainState,
+            useCRK, Ai, Bi, gradAi, gradBi
+        )
+        K = wp.dot(x_ij, gradw_ij) / (r_ij * r_ij + eta2 * hi * hi)
+        mu = mj / rhoj * (rhoi + rhoj) / (scalar_t(2.0) * rhoi)
+        out -= mu * K * x_ij
+""", "vector")

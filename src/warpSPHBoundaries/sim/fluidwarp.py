@@ -94,6 +94,15 @@ class FluidWarp:
             out = computeVelocityDiffusionDeltaSPH(ps, op, self.domain, adjacency=adj, queryVelocities=ps.velocities, inviscid=True, c_s=cfg.c0, alpha=cfg.alpha * self.xiWarp / s.xi, nu=0.0, approachOnly=False)
         return out.to(F64)
 
+    def complement_moments(self, ps, adj, n, d, eta2):
+        """(S0, S1, S2, SM): the discrete fluid moments sum_j mu K s^k (k = 0, 1, 2) and sum_j mu K (x_j - x_i) of the Morris weight in the frame (n_i, d_i) of each particle's wall (modules/wallComplement)."""
+        from .modules.wallComplement import computeComplementFirstMomentWarp, computeComplementMomentWarp
+        op = OperationProperties(kernel=self.sim.cfg.kernel, supportMode=SupportScheme.SuperSymmetric, operationMode=OperationDirection.AllToAll, gradientMode=GradientScheme.Naive)
+        nn, dd = n.to(self.tp).contiguous(), d.to(self.tp).contiguous()
+        S = [computeComplementMomentWarp(ps, op, self.domain, wallNormals=nn, wallDistances=dd, eta2=eta2, power=k, adjacency=adj).to(F64) for k in range(3)]
+        SM = computeComplementFirstMomentWarp(ps, op, self.domain, eta2=eta2, adjacency=adj).to(F64)
+        return S[0], S[1], S[2], SM
+
     def kernels(self, ps, adj):
         """the detector / shifting sums (`FluidSums`) of the fluid state `ps` on the adjacency `adj`."""
         return FluidSums(self, ps, adj)
