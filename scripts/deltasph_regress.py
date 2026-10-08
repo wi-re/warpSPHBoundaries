@@ -7,6 +7,7 @@ small set of scalar metrics per case.
 
     python scripts/deltasph_regress.py record [--cases tank,dambreak] [--baseline path]
     python scripts/deltasph_regress.py check  [--cases tank,dambreak] [--baseline path]
+    python scripts/deltasph_regress.py record|check --dtype f32     # float32 kernels (warpSPHCore_PRECISION=float32), its own baseline results/deltasph/regress_baseline_f32.json
 
 `record` runs each selected case twice (tank, tank, dambreak, dambreak, ...) in one
 process; the first run's metrics are the baseline and the per-metric absolute
@@ -15,7 +16,9 @@ run-to-run difference is the `spread`.  Tolerance per metric:
     tol = max(20 * spread, 1e-9 * |value|, 1e-12)
 
 (the solver is deterministic only up to GPU reduction order, so `spread` is the
-round-off floor and 20x it the guard).  `check` runs each case once and prints one
+round-off floor and 20x it the guard).  With `--dtype f32` the relative floor is 1e-4 instead of 1e-9 (float32 round-off, measured f32 against f64 ~1e-6 on the wall
+aggregates and growing with the number of steps), the baseline is a separate file, and `record` also stores the relative difference to the float64 baseline of the same metric
+(`vsF64`, information only: the f32 trajectory of a chaotic free-surface flow is not the f64 one).  `check` runs each case once and prints one
 line per metric (name, value, baseline, tol, margin=|value-baseline|/tol, PASS/FAIL),
 exiting 0 iff every metric is within tolerance.
 
@@ -40,6 +43,9 @@ import subprocess
 import sys
 import time
 
+if "--dtype" in sys.argv and sys.argv[sys.argv.index("--dtype") + 1:][:1] == ["f32"]:
+    os.environ["warpSPHCore_PRECISION"] = "float32"                  # fixed once per process, before warpSPHCore is imported
+
 import numpy as np
 import torch
 
@@ -49,7 +55,9 @@ from warpSPHBoundaries import paths
 
 REPO_ROOT = str(paths.REPO_ROOT)
 RESULTS_DIR = str(paths.results_dir() / "deltasph")
-DEFAULT_BASELINE = os.path.join(RESULTS_DIR, "regress_baseline.json")
+F32 = os.environ.get("warpSPHCore_PRECISION") == "float32"
+DEFAULT_BASELINE = os.path.join(RESULTS_DIR, "regress_baseline_f32.json" if F32 else "regress_baseline.json")
+F64_BASELINE = os.path.join(RESULTS_DIR, "regress_baseline.json")
 
 
 def _git_head():
@@ -179,7 +187,7 @@ def _gate_lines(case, m, series, base):
 
 
 def _tol(spread, value):
-    return max(20.0 * spread, 1e-9 * abs(value), 1e-12)
+    return max(20.0 * spread, (1e-4 if F32 else 1e-9) * abs(value), 1e-12)
 
 
 def cmd_record(cases, baseline_path, cfgkw=None):
@@ -189,14 +197,20 @@ def cmd_record(cases, baseline_path, cfgkw=None):
         m1, s1, w1 = _run_case(case, **cfgkw)
         m2, s2, w2 = _run_case(case, **cfgkw)
         entry = {}
+        ref64 = None
+        if F32 and os.path.exists(F64_BASELINE):
+            with open(F64_BASELINE) as f:
+                ref64 = json.load(f).get(case)
         for k, v in m1.items():
             spread = abs(m1[k] - m2[k])
             entry[k] = {"value": v, "spread": spread, "tol": _tol(spread, v)}
+            if ref64 is not None and k in ref64 and ref64[k]["value"] != 0:
+                entry[k]["vsF64"] = abs(v - ref64[k]["value"]) / abs(ref64[k]["value"])
         data[case] = entry
         meta_wall[case] = {"run1_s": w1, "run2_s": w2}
         for ln in _physics_lines(case, s1):
             print(ln, flush=True)
-    data["meta"] = {"gitHead": _git_head(), "date": time.strftime("%Y-%m-%d %H:%M:%S"), "wallSeconds": meta_wall,
+    data["meta"] = {"dtype": "float32" if F32 else "float64", "gitHead": _git_head(), "date": time.strftime("%Y-%m-%d %H:%M:%S"), "wallSeconds": meta_wall,
                     "torch": torch.__version__, "warp": getattr(__import__("warp"), "__version__", "unknown"), "cfg": cfgkw}
     os.makedirs(os.path.dirname(baseline_path), exist_ok=True)
     with open(baseline_path, "w") as f:
@@ -207,7 +221,7 @@ def cmd_record(cases, baseline_path, cfgkw=None):
         for k, e in data[case].items():
             rel = (e["tol"] / abs(e["value"])) if e["value"] != 0 else float("inf")
             flag = "  <-- WEAK rel tol > 5 %" if rel > 0.05 else ""
-            print("  %-9s %-18s value=% .10g spread=% .3e tol/|v|=% .3e%s" % (case, k, e["value"], e["spread"], rel, flag))
+            print("  %-9s %-18s value=% .10g spread=% .3e tol/|v|=% .3e%s%s" % (case, k, e["value"], e["spread"], rel, flag, ("  vs f64 %.2e" % e["vsF64"]) if "vsF64" in e else ""))
     return 0
 
 
@@ -247,6 +261,7 @@ def main(argv=None):
     ap.add_argument("mode", choices=["record", "check"])
     ap.add_argument("--cases", default="tank,dambreak")
     ap.add_argument("--baseline", default=DEFAULT_BASELINE)
+    ap.add_argument("--dtype", choices=["f64", "f32"], default="f64", help="kernel precision (f32: warpSPHCore_PRECISION=float32 for the whole process, separate baseline and a 1e-4 relative floor)")
     ap.add_argument("--perturb", action="store_true", help="negative control: run the dam break with shifting=False")
     ap.add_argument("--cfg", default="", help="config overrides key=value[,key=value...] (true/false -> bool, else float if parsable, else string), passed as **cfgkw to the runners")
     ap.add_argument("--physics", action="store_true", help="check: the exit code depends only on the physics gate (the bit-level lines are still printed)")
