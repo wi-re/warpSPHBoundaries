@@ -113,6 +113,21 @@ class ParticleAggregate(WallAggregate):
             rows.append(dA * torch.einsum("nd,npd,npj->nj", a1[lo:lo + 64], y, g))
         return torch.cat(rows)
 
+    def dir_extreme(self, vecs):
+        """[B, N]: the largest |cos| between the vector `vecs` [B, N, 2] of a body and a direction from the query to a wall particle of that body within one support (0 for none / a vanishing vector): the particle
+        quadrature of `FusedWall.dir_extreme` (a maximum over the wall particles instead of over the solid)."""
+        res = torch.zeros((len(self.provider.scene.bodies), self.N), dtype=F64, device=self.x.device)
+        for bi, (b, X, dA) in enumerate(self._bodies()):
+            w = vecs[bi].to(self.x.device, F64)
+            nw = w.norm(dim=1)
+            for lo in range(0, self.N, 64):
+                x = self.x[lo:lo + 64]
+                y = X[None, :, :] - x[:, None, :]
+                r = y.norm(dim=2)
+                c = (y * w[lo:lo + 64, None, :]).sum(2).abs() / (r.clamp(min=1e-300) * nw[lo:lo + 64, None].clamp(min=1e-300))
+                res[bi, lo:lo + 64] = torch.where(r < self.H, c, torch.zeros_like(c)).amax(1) * (nw[lo:lo + 64] > 0)
+        return res
+
     def cone_area(self, axes, half_angle):
         """[2, N]: area of the solid within one support and within `half_angle` of `axes` (row 0), and of the solid within one support (row 1), summed over the bodies."""
         ax = axes.to(self.x.device, F64)

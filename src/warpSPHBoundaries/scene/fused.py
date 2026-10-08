@@ -213,6 +213,70 @@ def _cone_area_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int),
     out[N + q] = out[N + q] + wp.float64(0.5) * H * H * two_pi * idv - a_full
 
 
+@wp.kernel
+def _dir_extreme_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int), pe: wp.array(dtype=int), cand: wp.array(dtype=int),
+                        lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64), ind: wp.array(dtype=wp.float64),
+                        verts: wp.array(dtype=wp.float64), edges: wp.array(dtype=int), vec: wp.array(dtype=wp.float64), vec_base: int, out_base: int, Rm: wp.array(dtype=wp.float64),
+                        out: wp.array(dtype=wp.float64)):
+    """per query row: max |w_hat . x_hat| over the directions x_hat from the query to the solid points within one support H = lsup[row] (w = the world vector vec[vec_base + 2 q] in the body frame; 0 for w = 0 or no solid in support).
+    The solid cap disk(p, H) is seen under the union of the angular intervals of the edge pieces inside the disk (a ray enters the solid exactly where it crosses an edge); |cos| is maximal where the interval contains the
+    line of w (value 1: the crossing of the line with the piece) or at an end of the piece (a vertex inside the disk or the intersection of the edge with the support circle).  max-accumulated into out[out_base + q]."""
+    row = wp.tid()
+    q = cand[row]
+    H = lsup[row]
+    px = lpos[2 * row]
+    py = lpos[2 * row + 1]
+    wx = vec[vec_base + 2 * q]
+    wy = vec[vec_base + 2 * q + 1]
+    bx = Rm[0] * wx + Rm[2] * wy                                                    # R^T w (R = (c, -s, s, c))
+    by = -Rm[2] * wx + Rm[0] * wy
+    nb = wp.sqrt(bx * bx + by * by)
+    if nb > wp.float64(0.0):
+        bx = bx / nb
+        by = by / nb
+        best = wp.float64(0.0)
+        if ind[row] > wp.float64(0.5):                                                    # a query inside the solid sees it in every direction
+            best = wp.float64(1.0)
+        for i in range(row_start[row], row_start[row + 1]):
+            e = pe[perm[i]]
+            if e < 0:                                                                  # an empty slot of a fixed-capacity adjacency
+                continue
+            v0 = edges[2 * e]
+            v1 = edges[2 * e + 1]
+            Ax = verts[2 * v0] - px
+            Ay = verts[2 * v0 + 1] - py
+            Dx = verts[2 * v1] - px - Ax
+            Dy = verts[2 * v1 + 1] - py - Ay
+            a = Dx * Dx + Dy * Dy
+            if a > wp.float64(0.0):
+                bq = Ax * Dx + Ay * Dy
+                disc = bq * bq - a * (Ax * Ax + Ay * Ay - H * H)
+                if disc > wp.float64(0.0):
+                    sq = wp.sqrt(disc)
+                    t0 = wp.max(wp.float64(0.0), (-bq - sq) / a)
+                    t1 = wp.min(wp.float64(1.0), (-bq + sq) / a)
+                    if t0 < t1:
+                        f = wp.float64(0.0)
+                        crd = Dx * by - Dy * bx
+                        if wp.abs(crd) > wp.float64(0.0):
+                            ts = -(Ax * by - Ay * bx) / crd
+                            if ts >= t0 and ts <= t1:
+                                f = wp.float64(1.0)
+                        if f < wp.float64(1.0):
+                            for k in range(2):
+                                t = t0
+                                if k == 1:
+                                    t = t1
+                                rx = Ax + t * Dx
+                                ry = Ay + t * Dy
+                                rr = wp.sqrt(rx * rx + ry * ry)
+                                if rr > wp.float64(0.0):
+                                    f = wp.max(f, wp.abs(rx * bx + ry * by) / rr)
+                        best = wp.max(best, f)
+        o = out_base + q
+        out[o] = wp.max(out[o], best)
+
+
 @wp.func
 def _disk_cum(D: wp.float64, R: wp.float64, psi: wp.float64):
     """I(psi) = int_0^psi (1/2)(hi^2 - lo^2) dpsi' for the solid disk (centre at distance D from the origin of the rays, radius R, support 1): the area of disk cap ball swept by the rays at angles in [0, psi] from the
@@ -336,6 +400,48 @@ def _disk_cone_area_kernel(slots: wp.array(dtype=int), K: int, cand: wp.array(dt
             tmp[slot, 1] = _disk_cum_any(D, R, g + al) * H * H
         else:
             tmp[slot, 2] = _disk_cum_any(D, R, g - al) * H * H
+
+
+@wp.kernel
+def _disk_dir_extreme_kernel(slots: wp.array(dtype=int), K: int, cand: wp.array(dtype=int), lpos: wp.array(dtype=wp.float64), lsup: wp.array(dtype=wp.float64),
+                             centres: wp.array(dtype=wp.float64), radii: wp.array(dtype=wp.float64), vec: wp.array(dtype=wp.float64), vec_base: int, Rm: wp.array(dtype=wp.float64),
+                             tmp: wp.array(dtype=wp.float64)):
+    """one thread per (query row, slot): the direction extreme of one disk.  The directions from the query p to the points of the disk (centre c, radius R) within the support H form the interval [-b, b] about
+    the direction of the centre: b = asin(R / d) when the tangent length sqrt(d^2 - R^2) is inside the support, else the angle where the disk's circle meets the support circle,
+    acos((d^2 + H^2 - R^2) / (2 d H)); with psi the angle between the line of w and the centre direction, max |cos| = cos(max(0, psi - b)).  A query inside the disk (d <= R) sees it in every direction."""
+    slot = wp.tid()
+    m = slots[slot]
+    if m < 0:
+        return
+    row = slot / K
+    q = cand[row]
+    H = lsup[row]
+    wx = vec[vec_base + 2 * q]
+    wy = vec[vec_base + 2 * q + 1]
+    bx = Rm[0] * wx + Rm[2] * wy
+    by = -Rm[2] * wx + Rm[0] * wy
+    nb = wp.sqrt(bx * bx + by * by)
+    if nb > wp.float64(0.0):
+        cx = centres[2 * m] - lpos[2 * row]
+        cy = centres[2 * m + 1] - lpos[2 * row + 1]
+        d = wp.sqrt(cx * cx + cy * cy)
+        R = radii[m]
+        f = wp.float64(0.0)
+        if d <= R:
+            f = wp.float64(1.0)
+        elif d - R < H:
+            beta = wp.float64(0.0)
+            if d * d - R * R <= H * H:
+                beta = wp.asin(wp.min(R / d, wp.float64(1.0)))
+            else:
+                beta = wp.acos(wp.clamp((d * d + H * H - R * R) / (wp.float64(2.0) * d * H), wp.float64(-1.0), wp.float64(1.0)))
+            cs = wp.abs(cx * bx + cy * by) / (d * nb)
+            psi = wp.acos(wp.min(cs, wp.float64(1.0)))
+            if psi <= beta:
+                f = wp.float64(1.0)
+            else:
+                f = wp.cos(psi - beta)
+        tmp[slot] = f
 
 
 _SPEC_CACHE = {}
@@ -534,6 +640,67 @@ class FusedWall(WallAggregate):
             it["ind0"] = None
             it["cone"] = None
 
+    def _poly_cache(self, it):
+        """float64 device copies of the inputs of the polygon kernels (cone area, direction extreme) of one item, built once per position set."""
+        if it.get("cone") is None:
+            ba, rep, dev = it["ba"], it["rep"], self.dev
+            lpos = ba.lpos.to(F64).contiguous().reshape(-1)
+            lsup = ba.lsup.to(F64).contiguous()
+            ind = it["topo"].indicator(rep, ba.lpos).to(F64).contiguous()
+            verts = rep.vertices.to(dev, F64).contiguous().reshape(-1)
+            edges = rep.edges.to(dev, torch.int32).contiguous().reshape(-1)
+            pe = it["topo"].e.to(torch.int32).contiguous()
+            it["cone"] = (lpos, lsup, ind, verts, edges, pe,
+                          tuple(wp.from_torch(t, dtype=dt) for t, dt in ((lpos, wp.float64), (lsup, wp.float64), (ind, wp.float64), (verts, wp.float64), (edges, wp.int32), (pe, wp.int32))))
+        return it["cone"]
+
+    def dir_extreme(self, vecs):
+        """[B, N] float64: for the world vectors `vecs` [B, N, 2] (one per body and query) the largest |cos| between the vector and a direction from the query to a solid point of that body within one support
+        (1 where the line of the vector meets the solid within the support, 0 where there is no solid in support or the vector vanishes): the geometry of a maximum over wall particles of |w . x_hat|.  Polygon bodies
+        (surface, box, implicit / SDF lowered to polygons) and disk arrays (closed form per disk)."""
+        N, dev = self.N, self.dev
+        B = len(self.scene.bodies)
+        out = torch.zeros(B * N, dtype=F64, device=dev)
+        wout = wp.from_torch(out, dtype=wp.float64)
+        wvec = wp.from_torch(vecs.to(F64).contiguous().reshape(-1), dtype=wp.float64)
+        for it in self.items:
+            if it["topo"] is None:
+                continue
+            _, perm, start, cand32, _ = it["keep"]
+            if isinstance(it["rep"], DiskArrayRep):
+                rep, ba = it["rep"], it["ba"]
+                if it.get("cone") is None:
+                    lpos = ba.lpos.to(F64).contiguous().reshape(-1)
+                    lsup = ba.lsup.to(F64).contiguous()
+                    cen = rep.centres.to(dev, F64).contiguous().reshape(-1)
+                    rad = rep.radii.to(dev, F64).contiguous()
+                    sl = it["topo"].e.to(torch.int32).contiguous()
+                    it["cone"] = (lpos, lsup, cen, rad, sl, tuple(wp.from_torch(t, dtype=dt) for t, dt in ((lpos, wp.float64), (lsup, wp.float64), (cen, wp.float64), (rad, wp.float64), (sl, wp.int32))))
+                wl, ws, wc, wr, wsl = it["cone"][5]
+                K = it["topo"].K
+                tmp = torch.zeros(it["rows"] * K, dtype=F64, device=dev)
+                wp.launch(_disk_dir_extreme_kernel, dim=it["rows"] * K, device=dev, inputs=[wsl, K, wp.from_torch(cand32, dtype=wp.int32), wl, ws, wc, wr, wvec, it["bi"] * N * 2, it["R"][3],
+                                                                                              wp.from_torch(tmp, dtype=wp.float64)])
+                rowmax = tmp.reshape(it["rows"], K).amax(1)
+                idx = it["bi"] * N + ba.cand.long()
+                out[idx] = torch.maximum(out[idx], rowmax)
+                continue
+            wl, ws, wi, wv, we, wpe = self._poly_cache(it)[6]
+            wp.launch(_dir_extreme_kernel, dim=it["rows"], device=dev, inputs=[
+                wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wpe, wp.from_torch(cand32, dtype=wp.int32),
+                wl, ws, wi, wv, we, wvec, it["bi"] * N * 2, it["bi"] * N, it["R"][3], wout])
+            if it["rep"].background:                                                  # a query outside the candidate list of a background rep is deep in its solid
+                ba = it["ba"]
+                if ba.valid is None:
+                    out_of = torch.ones(N, dtype=torch.bool, device=dev)
+                    out_of[ba.cand.long()] = False
+                else:
+                    out_of = ~ba.valid
+                seg = out[it["bi"] * N:(it["bi"] + 1) * N]
+                seg[out_of & (vecs[it["bi"]].to(F64).norm(dim=1) > 0)] = 1.0
+        _sync(dev)
+        return out.reshape(B, N)
+
     def cone_area(self, axes, half_angle):
         """[2, N] float64: area(solid cap disk(x, H) cap wedge(x, axis, half_angle)) (row 0, units length^2; `half_angle >= pi` = the full disk) and the full-disk area (row 1) for the world `axes` [N, 2]
         (only the direction matters), summed over the bodies (a query outside the candidate list of a background rep is deep in its solid: the full sector); one launch per (body, rep) over the pair topology of this position set (`scene/cone_area.py` is the reference).  The disk radius is the support of the
@@ -566,16 +733,7 @@ class FusedWall(WallAggregate):
                 out[ba.cand.long()] += sums[:, 0]
                 out[N + ba.cand.long()] += sums[:, 1]
                 continue
-            if it.get("cone") is None:
-                lpos = ba.lpos.to(F64).contiguous().reshape(-1)
-                lsup = ba.lsup.to(F64).contiguous()
-                ind = it["topo"].indicator(rep, ba.lpos).to(F64).contiguous()
-                verts = rep.vertices.to(dev, F64).contiguous().reshape(-1)
-                edges = rep.edges.to(dev, torch.int32).contiguous().reshape(-1)
-                pe = it["topo"].e.to(torch.int32).contiguous()
-                it["cone"] = (lpos, lsup, ind, verts, edges, pe,
-                              tuple(wp.from_torch(t, dtype=dt) for t, dt in ((lpos, wp.float64), (lsup, wp.float64), (ind, wp.float64), (verts, wp.float64), (edges, wp.int32), (pe, wp.int32))))
-            wl, ws, wi, wv, we, wpe = it["cone"][6]
+            wl, ws, wi, wv, we, wpe = self._poly_cache(it)[6]
             wp.launch(_cone_area_kernel, dim=it["rows"], device=dev, inputs=[
                 wp.from_torch(start, dtype=wp.int32), wp.from_torch(perm, dtype=wp.int32), wpe, wp.from_torch(cand32, dtype=wp.int32),
                 wl, ws, wi, wv, we, axis, it["R"][3], wp.float64(float(half_angle)), N, wout])

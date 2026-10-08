@@ -83,3 +83,20 @@ def test_particle_provider_follows_the_body_and_is_a_provider():
     ref1 = outputs(AnalyticBoundary(sc), ps, a1, ax)
     assert max(err(after, ref1).values()) < 0.15                                           # follows: the same convergence-level error at the new pose (no rebuild of the lattice)
     assert err(after, ref0)["lam"] > 0.15 and err(after, ref0)["lam"] > 4 * err(after, ref1)["lam"] and float((after["lam"] - before["lam"]).abs().max()) > 0.05      # negative control: against the old pose it is far off
+
+
+@pytest.mark.parametrize("name", ["floor", "disk", "tank"])
+def test_direction_extreme_particles_approach_the_analytic_value(name):
+    """`dir_extreme`: the maximum over wall particles of |cos| is a lower bound of the analytic supremum over the solid; the lattice misses the solid where it only just enters the support (a sliver thinner than
+    the lattice step, an all-or-nothing error of 1 at that query) and finds the end of an angular interval to a lattice step seen from a distance, so the criterion is statistical: the fraction of queries off by
+    more than 0.05 is below 4 % at s = H/32 and decreases with the lattice spacing (stated from the observed behaviour)."""
+    sc, ps, a1, ax = make(name)
+    vec = torch.as_tensor(np.random.default_rng(7).normal(size=(1, len(ps.positions), 2)), dtype=F64, device=DEV)
+    ref = AnalyticBoundary(sc).aggregate(ps, H, KernelFunctions.Wendland2).dir_extreme(vec)
+    frac = []
+    for n in (8, 32):
+        got = ParticleBoundary(sc, H / n).aggregate(ps, H, KernelFunctions.Wendland2).dir_extreme(vec)
+        assert float((got - ref).max()) <= 1e-12
+        frac.append(float(((ref - got) > 0.05).double().mean()))
+    assert frac[1] < 0.04 and frac[1] < frac[0], frac
+    assert float(ref.max()) == 1.0 and float(ref.min()) < 0.99                              # not vacuous: lines of w that meet the wall and some that only touch its ends

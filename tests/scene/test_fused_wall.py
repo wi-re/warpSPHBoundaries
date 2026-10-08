@@ -188,3 +188,65 @@ def test_fused_cone_area_equals_cone_area_scene(device, half_angle):
         assert d <= 1e-11 * H * H, (row, d)
     assert float(got[1].max()) > 0.1 * H * H                                       # the queries do see the walls (not a vacuous comparison)
     assert torch.equal(got, fw.cone_area(axes, half_angle))                         # deterministic
+
+
+def _solid_mask(body, rep, X, Y):
+    """even-odd membership of the world points (X, Y) in the solid of one polygon rep of `body` (the rep's local polygon posed by the body; `background` = the solid is the outside)."""
+    c, s = math.cos(float(body.angle)), math.sin(float(body.angle))
+    V = rep.vertices.cpu().numpy()
+    V = np.stack([c * V[:, 0] - s * V[:, 1], s * V[:, 0] + c * V[:, 1]], 1) + np.asarray([float(body.center[0]), float(body.center[1])])
+    inside = np.zeros(X.shape, bool)
+    for e0, e1 in rep.edges.cpu().numpy():
+        (x1, y1), (x2, y2) = V[int(e0)], V[int(e1)]
+        cond = (y1 > Y) != (y2 > Y)
+        xi = x1 + (Y - y1) * (x2 - x1) / (y2 - y1 + 1e-300)
+        inside ^= cond & (X < xi)
+    return ~inside if rep.background else inside
+
+
+def _brute_dir_extreme(sc, pos, vec, H, nr=300, nphi=1440):
+    """independent oracle: the largest |cos| over a polar grid of the solid points in the disk (midpoint grid, even-odd membership), per body."""
+    B, N = vec.shape[:2]
+    out = np.zeros((B, N))
+    rr = (np.arange(nr) + 0.5) / nr * H
+    ph = (np.arange(nphi) + 0.5) / nphi * 2 * math.pi
+    for b, body in enumerate(sc.bodies):
+        rep = body.reps[0].surface() if isinstance(body.reps[0], BoxRep) else body.reps[0]
+        for q in range(N):
+            w = vec[b, q]
+            nw = np.linalg.norm(w)
+            if nw == 0:
+                continue
+            X = pos[q, 0] + rr[:, None] * np.cos(ph)[None]
+            Y = pos[q, 1] + rr[:, None] * np.sin(ph)[None]
+            solid = _solid_mask(body, rep, X, Y)
+            if solid.any():
+                cosv = np.abs(np.cos(ph - math.atan2(w[1], w[0])))[None] * np.ones_like(X)
+                out[b, q] = cosv[solid].max()
+    return out
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("kind", ["lshape", "tank", "obstacle"])
+def test_dir_extreme_equals_bruteforce(device, kind):
+    """`FusedWall.dir_extreme` (the maximum of |w_hat . x_hat| over the directions to the solid points within one support) against a polar-grid oracle with even-odd membership, per body, rotated and translated
+    polygons (an L-shape with a reflex corner and a thin box; a tank = the outside of a box; an obstacle).  Tolerance: a direction in which the solid ends (a vertex, the edge's crossing of the support circle) is found
+    by the grid only to its angular step 2 pi / 1440 = 4.4e-3 rad (the cell containing the end is sampled at its centre, up to two cells off at a thin corner) and |cos| has slope <= 1, so the stated tolerance is
+    1.5e-2 (measured 6e-3); the kernel is never below the oracle (it is the supremum)."""
+    H = 0.5
+    if kind == "lshape":
+        sc, ps, pos, _ = make(device, n=60, constant_support=H)
+    else:
+        sc, ps, pos, _ = make_box(device, "outside" if kind == "tank" else "inside", n=60)
+    B, N = len(sc.bodies), len(pos)
+    vec = torch.as_tensor(np.random.default_rng(5).normal(size=(B, N, 2)), dtype=F64, device=device)
+    vec[0, 3] = 0.0                                                                      # a vanishing vector: 0
+    fw = FusedWall(sc, sc.adjacency(ps, props(WarpOperation.Density, "w2")), (FusedGroup("w2"),))
+    got = fw.dir_extreme(vec).cpu().numpy()
+    ref = _brute_dir_extreme(sc, pos.cpu().numpy(), vec.cpu().numpy(), H)
+    assert got.shape == (B, N)
+    assert (got >= ref - 1e-9).all(), float((ref - got).max())
+    assert float(np.abs(got - ref).max()) <= 1.5e-2, float(np.abs(got - ref).max())
+    assert (ref > 0.5).sum() > 5 and (got == 0).sum() > 5                                  # both near and far queries: not a vacuous comparison
+    assert got[0, 3] == 0.0
+    assert np.array_equal(got, fw.dir_extreme(vec).cpu().numpy())                          # deterministic
