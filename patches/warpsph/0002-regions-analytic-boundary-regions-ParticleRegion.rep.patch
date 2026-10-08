@@ -1,0 +1,211 @@
+From 0c6d6744ac81aeb38b78f213fcd87f7643feb10f Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Thu, 8 Oct 2026 17:22:49 +0100
+Subject: [PATCH 2/7] regions: analytic boundary regions
+ (ParticleRegion.representation, buildRegion(representation=): not sampled, no
+ ghost layer; initializer builds the analytic RigidBody); dambreak
+ wallRepresentation='analytic' for the plain tank
+
+---
+ src/warpSPH/caseUtils/weaklyCompressible.py   | 20 ++++++++-
+ src/warpSPH/cases/dambreak.py                 |  3 ++
+ src/warpSPH/configurations/region.py          |  4 ++
+ .../initializers/weaklyCompressible.py        |  8 ++++
+ src/warpSPH/regions/region.py                 | 13 ++++--
+ src/warpSPH/rigidBody/ghostParticles.py       |  3 ++
+ tests/test_analyticRegions.py                 | 43 +++++++++++++++++++
+ 7 files changed, 90 insertions(+), 4 deletions(-)
+ create mode 100644 tests/test_analyticRegions.py
+
+diff --git a/src/warpSPH/caseUtils/weaklyCompressible.py b/src/warpSPH/caseUtils/weaklyCompressible.py
+index 91bd975..4e5ca57 100644
+--- a/src/warpSPH/caseUtils/weaklyCompressible.py
++++ b/src/warpSPH/caseUtils/weaklyCompressible.py
+@@ -797,6 +797,16 @@ def alignInteriorDomainToLattice(domain, interiorDomain, dx, periodic=None):
+     return interiorDomain
+ 
+ 
++def analyticTankBody(interiorDomain):
++    """The walls of a rectangular tank as one analytic `warpSPHBoundaries` Body: the inner faces are the box
++    [min, max] of `interiorDomain`, the solid is everything outside it."""
++    from warpSPHBoundaries.scene import Body
++    from warpSPHBoundaries.scene.scene import BoxRep
++    lo = [float(v) for v in interiorDomain.min]
++    hi = [float(v) for v in interiorDomain.max]
++    return Body(bodyId = 0, reps = [BoxRep(tuple(lo), tuple(hi), solid = 'outside')])
++
++
+ def buildRegions(config, schemeConfig, simSetup, args, domain, interiorDomain, obstacle):
+     regions, _, domain_sdf, _ = build_sdfs(config, schemeConfig, args.band, args, domain, interiorDomain, obstacle)
+ 
+@@ -833,8 +843,16 @@ def buildRegions(config, schemeConfig, simSetup, args, domain, interiorDomain, o
+     wallBC = getattr(args, 'wallBC', None) or 'freeSlip'
+     if isinstance(wallBC, str):
+         wallBC = BCType[wallBC]
++    # `wallRepresentation='analytic'`: the tank walls are a boundary-provider body (warpSPHBoundaries) instead of boundary
++    # particles. The region keeps `domain_sdf` (the fluid is clipped against it as usual) but is not sampled; an obstacle
++    # is not supported in this mode (its sdf is merged into `domain_sdf` above).
++    representation = None
++    if getattr(args, 'wallRepresentation', 'particles') == 'analytic':
++        if getattr(args, 'obstacleActive', False):
++            raise NotImplementedError("wallRepresentation='analytic' is for the plain tank (no obstacle yet)")
++        representation = analyticTankBody(interiorDomain)
+     regions = [
+-        buildRegion(config, schemeConfig, domain_sdf, RegionType.Boundary, initialConditions={}, kind=wallBC),
++        buildRegion(config, schemeConfig, domain_sdf, RegionType.Boundary, initialConditions={}, kind=wallBC, representation=representation),
+         buildRegion(config, schemeConfig, box_sdf, RegionType.Fluid, initialConditions={}),
+     ]
+ 
+diff --git a/src/warpSPH/cases/dambreak.py b/src/warpSPH/cases/dambreak.py
+index 7a79369..7b3fa35 100644
+--- a/src/warpSPH/cases/dambreak.py
++++ b/src/warpSPH/cases/dambreak.py
+@@ -975,6 +975,9 @@ dambreakCase = registerCase(Case(
+         # Pass `'constant'` to reproduce a pre-flip number, or `'noSlip'` for
+         # Marrone Sec. 3.4.2's viscous half, which genuinely wants it.
+         wallBC='freeSlip',
++        # 'particles' (default): boundary particles + ghost nodes (mDBC). 'analytic': the tank walls are a
++        # warpSPHBoundaries body (exact boundary integrals, no wall particles); plain tank only.
++        wallRepresentation='particles',
+         targetDt=0.0005,
+         # Downstream-wall pressure sensors (`ACSPH_PLAN.md` §4.5): heights above
+         # the tank bed, in the case's length unit. Empty -> no probing. See
+diff --git a/src/warpSPH/configurations/region.py b/src/warpSPH/configurations/region.py
+index e96dd5e..35c21d3 100644
+--- a/src/warpSPH/configurations/region.py
++++ b/src/warpSPH/configurations/region.py
+@@ -92,6 +92,10 @@ class ParticleRegion:
+ 
+     initialConditions: dict = None
+     kind: BCType = BCType.constant
++    # Analytic boundary (a `warpSPHBoundaries` Body): the region keeps its `sdf` (so `filterRegion` clips the fluid
++    # against it as against any boundary) but is not sampled into boundary particles; `particles` is empty and
++    # `rigidBody.buildAnalyticRigidBody` makes its RigidBody. None: a particle boundary (unchanged).
++    representation: object = None
+ 
+     def toDict(self):
+         return {
+diff --git a/src/warpSPH/initializers/weaklyCompressible.py b/src/warpSPH/initializers/weaklyCompressible.py
+index 8589a26..caecb27 100644
+--- a/src/warpSPH/initializers/weaklyCompressible.py
++++ b/src/warpSPH/initializers/weaklyCompressible.py
+@@ -250,6 +250,14 @@ def initializeSimulation(regions, config, schemeConfig, SimulationSystem, Simula
+         if(rigidBody is not None):
+             rigidBodies.append(rigidBody)
+ 
++    # Analytic boundaries: no particles, so no material id appears above; their RigidBody comes from the
++    # representation. Appended in region order after the particle bodies (a mixed scene keeps both kinds).
++    restDensity = schemeConfig.fluid.restDensity if hasattr(schemeConfig, 'fluid') else config.rho0
++    boundaryRegions = [r for r in regions if r.type == RegionType.Boundary]
++    for bodyId, region in enumerate(boundaryRegions):
++        if getattr(region, 'representation', None) is not None:
++            rigidBodies.append(buildAnalyticRigidBody(region, bodyId, particleState, restDensity = restDensity))
++
+     # rigidBodies[0].angularVelocity = np.pi / 2
+     for rigidBody in rigidBodies:
+         particleState = updateBodyParticlesWCSPH(particleState, rigidBody)
+diff --git a/src/warpSPH/regions/region.py b/src/warpSPH/regions/region.py
+index 6c5142e..804d798 100644
+--- a/src/warpSPH/regions/region.py
++++ b/src/warpSPH/regions/region.py
+@@ -6,6 +6,7 @@
+ from ..configurations.region import RegionType, ParticleRegion, BCType
+ from .sample import sampleParticles
+ from .contour import find_contour
++import torch
+ from typing import Optional
+ 
+ __all__ = ['buildRegion']
+@@ -19,17 +20,23 @@ def buildRegion(
+     nGrid: int = 255,
+     nx: Optional[int] = None,
+     kind: Optional[BCType] = BCType.zeros,
+-    shortEdge: bool = True
++    shortEdge: bool = True,
++    representation = None
+ ):
+     nx_ = nx if nx is not None else config.nx
+ 
++    # An analytic boundary (`representation`) is not sampled: the lattice is evaluated against a constant
++    # positive distance, which keeps nothing and returns an empty set of the right dtype / device.
++    samplingSdf = sdf if representation is None else (lambda p: (torch.ones(p.shape[0], device = p.device, dtype = p.dtype), None))
++
+     return ParticleRegion(
+         sdf = sdf,
+         type = regionType,
+-        particles = sampleParticles(config, schemeConfig, sdf, nx_, shortEdge = shortEdge)[0],
++        particles = sampleParticles(config, schemeConfig, samplingSdf, nx_, shortEdge = shortEdge)[0],
+         contour = find_contour(config, schemeConfig, sdf, nGrid) if config.dim == 2 else None,
+         initialConditions = initialConditions,
+-        kind = kind 
++        kind = kind,
++        representation = representation
+     )
+     
+ 
+diff --git a/src/warpSPH/rigidBody/ghostParticles.py b/src/warpSPH/rigidBody/ghostParticles.py
+index 6bac9f4..c8e2813 100644
+--- a/src/warpSPH/rigidBody/ghostParticles.py
++++ b/src/warpSPH/rigidBody/ghostParticles.py
+@@ -559,6 +559,9 @@ def addBoundaryGhostParticles(regions, particleState : Any):
+ 
+     for region in regions:
+         # print(f"Processing region {region} of type {region.type}")
++        if region.type == RegionType.Boundary and getattr(region, 'representation', None) is not None:
++            boundaryMaterial += 1                      # an analytic boundary has no particles and no ghost layer; its material id is still taken
++            continue
+         if region.type == RegionType.Boundary:
+             particleIndices = torch.arange(particleState.positions.shape[0], device = device, dtype = torch.int64)
+             relevantParticles = torch.logical_and(particleState.kinds == 1, particleState.materials == boundaryMaterial)
+diff --git a/tests/test_analyticRegions.py b/tests/test_analyticRegions.py
+new file mode 100644
+index 0000000..a9ed718
+--- /dev/null
++++ b/tests/test_analyticRegions.py
+@@ -0,0 +1,43 @@
++"""Analytic boundary regions (`buildRegion(representation=...)`, the initializer, the dam break's `wallRepresentation`).
++
++An analytic region is clipped against like any boundary (`filterRegion` reads its `sdf`), is not sampled
++(no boundary particles, no ghost layer), and gets a RigidBody from its representation. The fluid sampled
++for the particle tank and for the analytic tank is the same set of particles.
++"""
++import pytest
++import torch
++
++pytest.importorskip('warpSPHBoundaries')
++
++from warpSPH.cases import importAll  # noqa: E402
++from warpSPH.runner import buildContext, getCase  # noqa: E402
++from warpSPH.runner.caseSpec import CaseSpec  # noqa: E402
++
++
++def build(representation, nx=24):
++    importAll()
++    case = getCase('dambreak')
++    spec = CaseSpec(caseName=case.name, scheme=case.scheme, params={**case.params, 'wallRepresentation': representation})
++    spec = spec.merged(**case.defaults).merged(nx=nx)
++    ctx = buildContext(case, spec)
++    case.configureScheme(ctx)
++    return ctx, case.buildSystem(ctx)
++
++
++def test_analytic_tank_has_no_boundary_particles_and_one_analytic_body():
++    ctx, system = build('analytic')
++    kinds = system.state.kinds
++    assert int((kinds == 1).sum()) == 0 and int((kinds == 2).sum()) == 0 and int((kinds == 0).sum()) > 100
++    bodies = ctx.config.rigidBodies
++    assert len(bodies) == 1 and bodies[0].representation is not None
++    assert torch.isinf(bodies[0].mass) and bodies[0].particlePositions.shape[0] == 0
++
++
++def test_fluid_is_the_same_set_of_particles_as_with_boundary_particles():
++    _, wall = build('particles')
++    _, ana = build('analytic')
++    fp, fa = wall.state.positions[wall.state.kinds == 0], ana.state.positions[ana.state.kinds == 0]
++    assert fp.shape == fa.shape
++    key = lambda p: p[torch.argsort(p[:, 0] * 1e6 + p[:, 1])]
++    assert torch.allclose(key(fp), key(fa))
++    assert int((wall.state.kinds == 1).sum()) > 0                                    # the particle tank does have wall particles
+-- 
+2.43.0
+

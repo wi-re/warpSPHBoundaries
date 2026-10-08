@@ -1,0 +1,27 @@
+From 05a365473c731e12a2260b85e517a709747b3f38 Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Thu, 8 Oct 2026 18:35:35 +0100
+Subject: [PATCH 7/7] deltaSPH: the right-hand-side CUDA graph refuses analytic
+ boundaries (host support, Python-side wall cache)
+
+---
+ src/warpSPH/schemes/deltaSPH.py | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/warpSPH/schemes/deltaSPH.py b/src/warpSPH/schemes/deltaSPH.py
+index 9bd349f..3e6b405 100644
+--- a/src/warpSPH/schemes/deltaSPH.py
++++ b/src/warpSPH/schemes/deltaSPH.py
+@@ -99,6 +99,9 @@ def _rhsIsGraphable(schemeConfig, stageIndex) -> bool:
+     symplectic Euler, recomputes the diffusion every call and never reads it.)"""
+     if getattr(schemeConfig, 'mdbcNoPenShiftMode', 'derivative') == 'derivative':
+         return False
++    # analytic walls: the wall aggregates are cached in Python and the support is a host float (modules/analyticBoundary); not capturable yet
++    if getattr(schemeConfig, 'boundaryProvider', None) is not None:
++        return False
+     if getattr(schemeConfig, 'freezeDiffusionAcrossStages', False) and stageIndex is not None:
+         return False
+     # both keep Python-side per-step state (the stage-0 mask, flip counters)
+-- 
+2.43.0
+

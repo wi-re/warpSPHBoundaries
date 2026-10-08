@@ -1,0 +1,470 @@
+From 5b48746db684c79827bc5bed56152e5c59157b82 Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Thu, 8 Oct 2026 17:32:11 +0100
+Subject: [PATCH 3/7] boundary provider + analytic wall terms: provider adapter
+ (boundary/), wall continuity / pressure / viscosity terms
+ (modules/analyticBoundary) hooked at stages 05b / 11 (inside the frozen
+ diffusion tuple) / 12 / 13; equals the warpSPHBoundaries reference to 1e-13
+ (free slip and no slip)
+
+---
+ src/warpSPH/boundary/__init__.py              |  11 ++
+ src/warpSPH/boundary/provider.py              |  59 ++++++++
+ .../configurations/weaklyCompressible.py      |   2 +
+ .../initializers/weaklyCompressible.py        |   6 +
+ .../modules/analyticBoundary/__init__.py      |  10 ++
+ .../modules/analyticBoundary/wallTerms.py     | 142 ++++++++++++++++++
+ src/warpSPH/schemes/deltaSPH.py               |  25 +++
+ tests/test_analyticWallTerms.py               |  96 ++++++++++++
+ 8 files changed, 351 insertions(+)
+ create mode 100644 src/warpSPH/boundary/__init__.py
+ create mode 100644 src/warpSPH/boundary/provider.py
+ create mode 100644 src/warpSPH/modules/analyticBoundary/__init__.py
+ create mode 100644 src/warpSPH/modules/analyticBoundary/wallTerms.py
+ create mode 100644 tests/test_analyticWallTerms.py
+
+diff --git a/src/warpSPH/boundary/__init__.py b/src/warpSPH/boundary/__init__.py
+new file mode 100644
+index 0000000..b3c03e5
+--- /dev/null
++++ b/src/warpSPH/boundary/__init__.py
+@@ -0,0 +1,11 @@
++"""Boundary providers: analytic boundary integrals (warpSPHBoundaries) as an alternative to boundary particles.
++
++A boundary region with a `representation` (`configurations/region.py`) is not sampled into particles; its
++geometry is served by a provider (`provider.py`) that returns, at the fluid particles, the kernel integrals
++over the solid (`lam`, `G`, `A`, `lap`, `cover`, `tens`, ...) and the signed distance. The scheme keeps the
++boundary-condition physics: `modules/analyticBoundary/` turns these aggregates into the wall terms of the
++delta+ stages (continuity, viscosity, pressure force, surface detection, shifting, no-penetration).
++"""
++from .provider import BoundaryProvider, bindBodies, buildBoundaryProvider
++
++__all__ = ['BoundaryProvider', 'bindBodies', 'buildBoundaryProvider']
+diff --git a/src/warpSPH/boundary/provider.py b/src/warpSPH/boundary/provider.py
+new file mode 100644
+index 0000000..632a9f5
+--- /dev/null
++++ b/src/warpSPH/boundary/provider.py
+@@ -0,0 +1,59 @@
++"""The boundary provider: a structural protocol and the adapter to the `warpSPHBoundaries` package.
++
++The protocol is what the scheme consumes (it is defined here, in the scheme's own package; the boundary
++package depends on warpSPHCore only and never imports warpSPH):
++
++    bodies                                        the rigid bodies (pose, velocity, acceleration), bound to the integrated state
++    aggregate(ps, support, kernel, laplacian, ...)  the wall integrals at the particles `ps`: `.out` (lam, G, Cov, cover, lap, tens),
++                                                  `.evaluate(...)` for the hydrostatic term A(a1), `.cone_area(axis, halfAngle)`
++    signed_distance(x, body, supportMax, want_body) (d, n, hit[, body index]) with d > 0 in the fluid
++
++`buildBoundaryProvider` makes one from the analytic regions of a scene; `bindBodies` writes the integrated
++`RigidBody` state (device tensors, updated in place by `integrateRigidBody`) into the provider's bodies at
++the start of every right-hand-side evaluation, so a captured graph reads the live pose.
++"""
++from typing import Any, Protocol, Sequence
++
++import torch
++
++from ..configurations.region import RegionType
++
++__all__ = ['BoundaryProvider', 'buildBoundaryProvider', 'bindBodies']
++
++
++class BoundaryProvider(Protocol):
++    bodies: Sequence[Any]
++
++    def aggregate(self, ps: Any, support: float, kernel: Any = ..., laplacian: bool = False, fixedAdjacency: bool = True, lean: bool = False) -> Any: ...
++
++    def signed_distance(self, x: torch.Tensor, body: Any = None, supportMax: float = None, want_body: bool = False) -> Any: ...
++
++
++def buildBoundaryProvider(regions, device):
++    """The provider of the analytic boundary regions (None when there are none): one scene holding the
++    representations in region order."""
++    reps = [r.representation for r in regions if r.type == RegionType.Boundary and getattr(r, 'representation', None) is not None]
++    if not reps:
++        return None
++    from warpSPHBoundaries.scene import AnalyticBoundary, Scene
++    for i, b in enumerate(reps):
++        b.bodyId = i
++    return AnalyticBoundary(Scene(reps, str(device)))
++
++
++def bindBodies(provider, rigidBodies):
++    """The integrated state of the analytic `RigidBody` objects into the provider's bodies (device tensors; the
++    pose enters the kernels as (cos, sin) tensors, never as host floats, so this is capturable). The body
++    objects of the provider are the `representation` of the RigidBody."""
++    F64 = torch.float64
++    for rb in rigidBodies:
++        b = getattr(rb, 'representation', None)
++        if b is None:
++            continue
++        b.center = rb.centerOfMass.to(F64)
++        angle = torch.as_tensor(rb.orientation).to(F64)
++        b.angle, b._cs = angle, (torch.cos(angle), torch.sin(angle))
++        b.linearVelocity = torch.as_tensor(rb.linearVelocity).to(F64)
++        b.angularVelocity = torch.as_tensor(rb.angularVelocity).to(F64)
++        b.linearAcceleration = torch.zeros_like(b.linearVelocity)
++        b.angularAcceleration = torch.zeros_like(angle)
+diff --git a/src/warpSPH/configurations/weaklyCompressible.py b/src/warpSPH/configurations/weaklyCompressible.py
+index ee664d3..fc577da 100644
+--- a/src/warpSPH/configurations/weaklyCompressible.py
++++ b/src/warpSPH/configurations/weaklyCompressible.py
+@@ -158,6 +158,8 @@ class WeaklyCompressibleSPHConfig:
+ 
+     regions: List[ParticleRegion] = field(default_factory=list, metadata={'description': 'List of particle regions in the simulation'})
+     rigidBodies: List[RigidBody] = field(default_factory=list, metadata={'description': 'List of rigid bodies in the simulation'})
++    # Boundary provider of the analytic boundary regions (`boundary/provider.py`), built by the initializer; None without any. Not serialized.
++    boundaryProvider: object = field(default=None, repr=False, compare=False, metadata={'description': 'Analytic boundary provider (warpSPHBoundaries), None for particle boundaries'})
+ 
+     surfaceDetectionConfig: SurfaceDetectionConfig = field(default_factory=buildDefaultSurfaceDetectionConfig, metadata={'description': 'Configuration for surface detection module'})
+ 
+diff --git a/src/warpSPH/initializers/weaklyCompressible.py b/src/warpSPH/initializers/weaklyCompressible.py
+index caecb27..5d3083d 100644
+--- a/src/warpSPH/initializers/weaklyCompressible.py
++++ b/src/warpSPH/initializers/weaklyCompressible.py
+@@ -262,6 +262,12 @@ def initializeSimulation(regions, config, schemeConfig, SimulationSystem, Simula
+     for rigidBody in rigidBodies:
+         particleState = updateBodyParticlesWCSPH(particleState, rigidBody)
+     config.rigidBodies = rigidBodies
++    from ..boundary import buildBoundaryProvider
++    provider = buildBoundaryProvider(regions, particleState.positions.device)
++    schemeConfig.boundaryProvider = provider
++    if provider is not None:
++        provider.rigidBodies = [rb for rb in rigidBodies if getattr(rb, 'representation', None) is not None]
++        schemeConfig.rigidBodies = rigidBodies          # the system's finalize integrates the analytic bodies like the particle ones
+     config.regions = regions
+     
+     compressibleSystem = SimulationSystem(
+diff --git a/src/warpSPH/modules/analyticBoundary/__init__.py b/src/warpSPH/modules/analyticBoundary/__init__.py
+new file mode 100644
+index 0000000..5d3876b
+--- /dev/null
++++ b/src/warpSPH/modules/analyticBoundary/__init__.py
+@@ -0,0 +1,10 @@
++"""Wall terms of the delta+ stages for ANALYTIC boundaries (a boundary provider instead of boundary particles).
++
++The provider (`boundary/provider.py`) returns geometry: the kernel integrals over the solid at the fluid
++particles. This package owns the boundary-condition physics that turns them into the terms a boundary particle
++contributes to each stage (wall continuity at stage 12, wall viscosity at 11, the pressure force of stage 13,
++and, in the later patches, the detector, the shifting and the no-penetration impulse).
++"""
++from .wallTerms import (WallState, evaluateWall, wallContinuity, wallPressureAcceleration, wallViscousAcceleration, viscousPrefactor)
++
++__all__ = ['WallState', 'evaluateWall', 'wallContinuity', 'wallPressureAcceleration', 'wallViscousAcceleration', 'viscousPrefactor']
+diff --git a/src/warpSPH/modules/analyticBoundary/wallTerms.py b/src/warpSPH/modules/analyticBoundary/wallTerms.py
+new file mode 100644
+index 0000000..138fd89
+--- /dev/null
++++ b/src/warpSPH/modules/analyticBoundary/wallTerms.py
+@@ -0,0 +1,142 @@
++"""The wall terms of the analytic-boundary flavour of the delta+ scheme (formulas of `DeltaSPH2D.rhs`, validated
++against the boundary-particle scheme; derivations in warpSPHBoundaries docs/derivation.md and
++docs/dfsph-validation.md s.7).
++
++With W the kernel, mu the wall mass density (`analyticWallMass`, 1 = the fluid's own packing), the provider's
++aggregates at a fluid particle i, per body b (all arrays [B, N, ...], raw: this module applies the factors):
++
++    lam    = int_solid W dA                    completeness of the wall
++    G      = mu grad_i lam                     wall normal times a magnitude (the pair sum of wall particles V_b grad W)
++    A(a1)  = mu int_solid (a1 . y) grad_i W    the hydrostatic extrapolation, a1 = rho0 (g - a_wall)
++    lap    = int_solid Laplace-weight         the exact wall Laplacian (free-slip / mirror viscosity)
++
++    continuity     d rho / dt   += sum_b 2 rho ((v - u_b) . n_b) |G_b|            (free-slip mirror: the wall continuum moves with u_b)
++    pressure       a            += - sum_b [ (p^+ + s p) G_b + A_eff ] / rho        (Antuono switch s; p_b >= 0 clamp on the hydrostatic part)
++    viscosity      a            += - 2 (fac / 8) mu / rho * dl * ...                 laplacian (free slip) or noslipMirror (antisymmetric mirror)
++
++with n_b = G_b / |G_b|, fac = alpha c0 H / xi, dl = lap_factor(H) * lap_b.  Gravity is taken uniform (the wall
++pressure condition needs a1 at the particle).
++"""
++from dataclasses import dataclass
++from typing import Any, List
++
++import torch
++
++from warpSPHCore import KernelFunctions
++
++from ...boundary.provider import bindBodies
++from ...configurations.region import BCType
++
++__all__ = ['WallState', 'evaluateWall', 'wallContinuity', 'wallPressureAcceleration', 'wallViscousAcceleration', 'viscousPrefactor']
++
++F64 = torch.float64
++FAMILY = {KernelFunctions.Wendland2: 'w2', KernelFunctions.Wendland4: 'w4'}
++XI = {KernelFunctions.Wendland2: 2.8213846683502197, KernelFunctions.Wendland4: 3.56734561920166}      # warpSPHCore sphKernel_xi(kernel, 2D)
++
++
++@dataclass
++class WallState:
++    agg: Any                    # the provider's aggregate (FusedWall): .out, .evaluate, .cone_area
++    kin: Any                    # BodyKinematics of all bodies at the particle positions
++    lam: torch.Tensor           # [B, N]
++    G: torch.Tensor             # [B, N, 2]
++    A: torch.Tensor             # [B, N, 2]
++    near: torch.Tensor          # [N] 1 where any wall is within the support
++    pinned: List[bool]          # per body: the wall velocity is pinned to zero (BCType.zeros)
++    mirror: List[bool]          # per body: antisymmetric mirror (no-slip) instead of free slip
++    dtype: Any
++
++
++def _policies(provider):
++    """(pinned zero velocity, no-slip mirror) per analytic body from the BCType of its RigidBody."""
++    pinned, mirror = [], []
++    for rb in provider.rigidBodies:
++        if rb.kind == BCType.extended:
++            raise NotImplementedError('BCType.extended has no analytic counterpart (open boundaries are out of scope)')
++        pinned.append(rb.kind == BCType.zeros)
++        mirror.append(rb.kind != BCType.freeSlip)            # noSlip, constant (the wall particles keep the body velocity: an effective no-slip), zeros
++    return pinned, mirror
++
++
++def evaluateWall(provider, state, config, schemeConfig, gravity):
++    """The wall aggregates at the fluid particles of `state` (one provider call per stage). `gravity`: [N, 2] or [2], uniform."""
++    from warpSPHBoundaries.scene import WallOutput
++    bindBodies(provider, provider.rigidBodies)
++    pinned, mirror = _policies(provider)
++    wm = float(getattr(schemeConfig, 'analyticWallMass', 1.0))
++    needLap = True                                         # the Laplacian channel serves the free-slip and the mirror form
++    support = float(getattr(schemeConfig, '_analyticSupport', None) or state.supports.max())
++    agg = provider.aggregate(state, support, config.kernel, laplacian=needLap, fixedAdjacency=True)
++    x = state.positions.to(F64)
++    kin = provider.scene.kinematics(x)
++    g = torch.as_tensor(gravity).to(F64)
++    g = g.reshape(-1, 2)[0] if g.dim() > 1 else g
++    a1 = schemeConfig.fluid.restDensity * (g[None, None, :] - kin.acceleration)
++    lam, G = wm * agg.out['lam'], wm * agg.out['G']
++    A = wm * agg.evaluate((WallOutput('A', 0, 'a1g1'),), a1=a1)['A']
++    near = (lam.sum(0) > 1e-9).to(F64)
++    return WallState(agg, kin, lam, G, A, near, pinned, mirror, state.positions.dtype)
++
++
++def _wallVelocity(wall, bi):
++    return torch.zeros_like(wall.kin.velocity[bi]) if wall.pinned[bi] else wall.kin.velocity[bi]
++
++
++def wallContinuity(wall, rho, v):
++    """d rho / dt of the wall (free-slip mirror), summed over the bodies in body order."""
++    rho64, v64 = rho.to(F64), v.to(F64)
++    out = torch.zeros_like(rho64)
++    for bi in range(wall.G.shape[0]):
++        gm = wall.G[bi].norm(dim=1)
++        nb = wall.G[bi] / gm.clamp(min=1e-300)[:, None]
++        out = out + 2.0 * rho64 * ((v64 - _wallVelocity(wall, bi)) * nb).sum(1) * gm
++    return out.to(wall.dtype)
++
++
++def wallPressureAcceleration(wall, P, switch, rho, wallMass=1.0, h=1.0, clamp=True):
++    """The pressure force of the wall: a = - sum_b [(p^+ + s p) G_b + A_eff,b] / rho. `switch`: the Antuono switch s (+1 / -1) per particle."""
++    P64, s64, rho64 = P.to(F64), switch.to(F64), rho.to(F64)
++    pp = P64.clamp(min=0)
++    A, G = wall.A, wall.G
++    if clamp:                                              # p_b >= 0: remove (1 - theta) q G of the hydrostatic offset q (docs/dfsph-validation.md s.7)
++        eps = 1e-5 * wallMass / h
++        q = (A * G).sum(2) / (G * G).sum(2).clamp(min=eps * eps)
++        theta = torch.where(q < 0, (pp[None] / (-q).clamp(min=1e-300)).clamp(0.0, 1.0), torch.ones_like(q))
++        A = A - ((1.0 - theta) * q)[:, :, None] * G
++    wallTerm = (pp + s64 * P64)[None, :, None] * G + A
++    return (-wallTerm / rho64[None, :, None]).sum(0).to(wall.dtype)
++
++
++def wallViscousAcceleration(wall, rho, v, fac, h, wallMass=1.0, kernel=KernelFunctions.Wendland2):
++    """The wall term of the velocity diffusion of stage 11 through the exact wall Laplacian: free slip ('laplacian':
++    the normal relative velocity along the wall normal) or the antisymmetric mirror ('noslipMirror'). `fac` is the
++    prefactor of the pair term, alpha c_s h / xi for the artificial viscosity and 2 (dim + 2) nu = 8 nu for the
++    physical one (the effective kinematic viscosity is fac / 8)."""
++    from warpSPHBoundaries.scene.viscosity import lap_factor
++    rho64, v64 = rho.to(F64), v.to(F64)
++    dl_all = lap_factor(h, FAMILY[kernel]) * wall.agg.out['lap']
++    out = torch.zeros_like(v64)
++    for bi in range(wall.G.shape[0]):
++        gm = wall.G[bi].norm(dim=1)
++        nb = wall.G[bi] / gm.clamp(min=1e-300)[:, None]
++        vrel = v64 - _wallVelocity(wall, bi)
++        dl = dl_all[bi]
++        if wall.mirror[bi]:
++            out = out + (-2.0 * (fac / 8.0) * wallMass / rho64 * dl * wall.near)[:, None] * vrel
++        else:
++            un = (vrel * nb).sum(1)
++            out = out + (-2.0 * (fac / 8.0) * wallMass * un / rho64 * dl * wall.near)[:, None] * nb
++    return out.to(wall.dtype)
++
++
++def viscousPrefactor(schemeConfig, config, h):
++    """The prefactor `fac` of the pair viscosity of stage 11 (`modules/deltaSPH/wp_viscosityDelta.py`): alpha c_s h / xi
++    (artificial viscosity, `inviscid`) or 2 (dim + 2) nu = 8 nu (physical, 2D). The shear-carrying Morris term has no
++    exact wall Laplacian here."""
++    from ...enumTypes import ViscosityTerm
++    dp = schemeConfig.diffusionParams
++    if getattr(dp, 'viscousTerm', ViscosityTerm.monaghanGingold) == ViscosityTerm.morris1997 and not dp.inviscid:
++        raise NotImplementedError('the Morris viscosity has no analytic-wall term')
++    if dp.inviscid:
++        return float(dp.inviscidAlpha) * float(schemeConfig.fluid.fixedSoundSpeed) * float(h) / XI[config.kernel]
++    return 8.0 * float(dp.viscidNu)
+diff --git a/src/warpSPH/schemes/deltaSPH.py b/src/warpSPH/schemes/deltaSPH.py
+index 1bcf080..9bd349f 100644
+--- a/src/warpSPH/schemes/deltaSPH.py
++++ b/src/warpSPH/schemes/deltaSPH.py
+@@ -51,6 +51,9 @@ from warpSPHCore.profiling import record_function
+ __all__ = ['deltaSPH_step']
+ 
+ 
++from ..modules.analyticBoundary import evaluateWall, viscousPrefactor, wallContinuity, wallPressureAcceleration, wallViscousAcceleration
++
++
+ def deltaSPH_step(
+     system: CompSPHSystem,
+     dt: float,
+@@ -226,6 +229,15 @@ def _deltaSPH_rhs(
+     # with TimedBlock('compute EOS', use_cuda=True, device=config.device) as tb_eos:
+     with record_function("[warpSPH] - [deltaSPH - 05] - compute EOS"):
+         currentState.pressures = weaklyCompressibleEOS(currentState, schemeConfig)
++
++    # Analytic boundaries (a boundary provider, no wall particles): the kernel integrals over the solid at the fluid
++    # particles, once per right-hand-side evaluation; `modules/analyticBoundary` turns them into the wall terms of
++    # the stages below. None without analytic bodies: the particle path above is then untouched.
++    provider = getattr(schemeConfig, 'boundaryProvider', None)
++    wall = None
++    if provider is not None:
++        with record_function("[warpSPH] - [deltaSPH - 05b] - analytic wall aggregates"):
++            wall = evaluateWall(provider, currentState, config, schemeConfig, computeGravity(currentState, config, schemeConfig, adjacency))
+     # 6. Skipped boundary velocity computation since no boundaries are present
+     # with TimedBlock('compute boundary velocities', use_cuda=True, device=config.device) as tb_boundary_velocities:
+ 
+@@ -285,6 +297,11 @@ def _deltaSPH_rhs(
+         with record_function("[warpSPH] - [deltaSPH - 11] - compute dvdt_diss"):
+             dvdt_diss = computeVelocityDiffusion(currentState, config, schemeConfig, adjacency,
+                                                  approachOnly=False)
++            if wall is not None:                  # the wall's share of the velocity diffusion, inside the (possibly frozen) tuple
++                hWall = float(schemeConfig._analyticSupport) if getattr(schemeConfig, '_analyticSupport', None) else float(currentState.supports.max())
++                dvdt_diss = dvdt_diss + wallViscousAcceleration(wall, currentState.densities, currentState.velocities,
++                                                                viscousPrefactor(schemeConfig, config, hWall), hWall,
++                                                                wallMass=float(getattr(schemeConfig, 'analyticWallMass', 1.0)), kernel=config.kernel)
+ 
+         if freezeDiffusion:
+             schemeConfig._frozenDiffusionCache = (drhodt_diss, dvdt_diss)
+@@ -293,6 +310,8 @@ def _deltaSPH_rhs(
+     # with TimedBlock('compute drhodt', use_cuda=True, device=config.device) as tb_drhodt:
+     with record_function("[warpSPH] - [deltaSPH - 12] - compute drhodt"):
+         drhodt = computeMomentum(currentState, config, schemeConfig, adjacency)
++        if wall is not None:                      # free-slip mirror of the wall in the continuity equation
++            drhodt = drhodt + wallContinuity(wall, currentState.densities, currentState.velocities)
+ 
+     # 13. Compute dvdt from pressure
+     # with TimedBlock('compute dvdt', use_cuda=True, device=config.device) as tb_dvdt:
+@@ -343,6 +362,12 @@ def _deltaSPH_rhs(
+         dvdt_pressure = computePressureForceSurfaceAware(
+             currentState, config, schemeConfig, adjacency,
+             renormalizationState=pressureRenormalizationState)
++        if wall is not None:                      # the wall's pressure force: Antuono switch as in the fluid pair kernel (P >= 0 or surface)
++            switch = torch.where((currentState.pressures >= 0) | (currentState.surfaceIndicators == 1),
++                                 torch.ones_like(currentState.pressures), -torch.ones_like(currentState.pressures))
++            hWall = float(schemeConfig._analyticSupport) if getattr(schemeConfig, '_analyticSupport', None) else float(currentState.supports.max())
++            dvdt_pressure = dvdt_pressure + wallPressureAcceleration(wall, currentState.pressures, switch, currentState.densities,
++                                                                     wallMass=float(getattr(schemeConfig, 'analyticWallMass', 1.0)), h=hWall)
+ 
+     # 14. Apply forcing
+     # with TimedBlock('compute forcing', use_cuda=True, device=config.device) as tb_forcing:
+diff --git a/tests/test_analyticWallTerms.py b/tests/test_analyticWallTerms.py
+new file mode 100644
+index 0000000..5838a6c
+--- /dev/null
++++ b/tests/test_analyticWallTerms.py
+@@ -0,0 +1,96 @@
++"""The wall terms of the analytic-boundary flavour (modules/analyticBoundary/wallTerms.py) against the reference
++implementation in warpSPHBoundaries (`DeltaSPH2D.rhs`): the wall contribution to d rho / dt and to the acceleration.
++
++Reference: `DeltaSPH2D.rhs(x, v, rho)` with the tank minus the same call without any wall (the fluid-fluid terms
++cancel). The state has P >= 0 everywhere (rho >= rho0), so the Antuono switch is +1 for every particle whatever the
++surface detection says. Compared: continuity (free-slip mirror), the pressure force (with the p_b >= 0 clamp) and the
++viscous wall term, for a free-slip tank and a no-slip tank; the sum of the three equals the difference of the
++reference right-hand sides.
++"""
++import math
++from types import SimpleNamespace
++
++import numpy as np
++import pytest
++import torch
++
++pytest.importorskip('warpSPHBoundaries')
++
++from warpSPHCore import KernelFunctions  # noqa: E402
++
++from warpSPH.boundary import buildBoundaryProvider  # noqa: E402
++from warpSPH.configurations.region import BCType, RegionType  # noqa: E402
++from warpSPH.modules.analyticBoundary import (evaluateWall, wallContinuity, wallPressureAcceleration, wallViscousAcceleration)  # noqa: E402
++from warpSPH.rigidBody import buildAnalyticRigidBody  # noqa: E402
++from warpSPH.systems.weaklyCompressible import WeaklyCompressibleState  # noqa: E402
++from warpSPHBoundaries.scene import Body  # noqa: E402
++from warpSPHBoundaries.scene.scene import BoxRep  # noqa: E402
++from warpSPHBoundaries.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig  # noqa: E402
++from warpSPHBoundaries.scene.scene import Scene  # noqa: E402
++
++pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
++DEV = 'cuda'
++F64 = torch.float64
++LO, HI = (0.0, 0.0), (0.6, 0.5)
++G = (0.0, -9.81)
++ALPHA, C0 = 0.1, 20.0
++
++
++def block(dx=0.025):
++    nx, ny = int(0.6 / dx), int(0.3 / dx)
++    X, Y = np.meshgrid(dx * (np.arange(nx) + 0.5), dx * (np.arange(ny) + 0.5), indexing='ij')
++    return np.stack([X.ravel(), Y.ravel()], 1), dx
++
++
++def state_of(pos, v, rho, H):
++    n = len(pos)
++    z = torch.zeros(n, device=DEV, dtype=F64)
++    t = lambda a: torch.as_tensor(a, device=DEV, dtype=F64)
++    return WeaklyCompressibleState(
++        positions=t(pos), velocities=t(v), supports=z + H, masses=z + 0.025 ** 2, densities=t(rho),
++        kinds=torch.zeros(n, dtype=torch.int32, device=DEV), materials=torch.zeros(n, dtype=torch.int32, device=DEV),
++        UIDs=torch.arange(n, device=DEV), UIDcounter=n, pressures=C0 ** 2 * (t(rho) - 1.0), soundspeeds=z + C0,
++        ghostIndices=-torch.ones(n, dtype=torch.int32, device=DEV), ghostOffsets=torch.zeros((n, 2), device=DEV, dtype=F64))
++
++
++def setup(kind):
++    pos, dx = block()
++    H = 4 * dx
++    rng = np.random.default_rng(3)
++    v = rng.normal(scale=0.3, size=pos.shape)
++    rho = 1.0 + 0.002 * (1.0 + 0.5 * np.sin(8 * pos[:, 0]) * np.cos(5 * pos[:, 1])) + 9.81 * np.clip(0.3 - pos[:, 1], 0, None) / C0 ** 2
++    st = state_of(pos, v, rho, H)
++    body = Body(bodyId=0, reps=[BoxRep(LO, HI, solid='outside')])
++    region = SimpleNamespace(type=RegionType.Boundary, representation=body, sdf=None, kind=kind)
++    rb = buildAnalyticRigidBody(region, 0, st)
++    provider = buildBoundaryProvider([region], DEV)
++    provider.rigidBodies = [rb]
++    config = SimpleNamespace(kernel=KernelFunctions.Wendland2)
++    schemeConfig = SimpleNamespace(analyticWallMass=1.0, fluid=SimpleNamespace(restDensity=1.0))
++    wall = evaluateWall(provider, st, config, schemeConfig, torch.tensor(G, device=DEV, dtype=F64))
++    return pos, v, rho, H, dx, st, wall
++
++
++def reference(pos, v, rho, H, dx, form):
++    kw = dict(gravity=G, c0=C0, alpha=ALPHA, wallViscosityForm=form, noPen='impulse', shifting=False, graphStep=False, fluidWarp=False, fusedWall=True)
++    tank = Scene([Body(bodyId=0, reps=[BoxRep(LO, HI, solid='outside')])], DEV)
++    withWall = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, tank, DeltaSPHConfig(**kw), DEV, support=H)
++    noWall = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, None, DeltaSPHConfig(**kw), DEV, support=H)
++    xt, vt, rt = (torch.as_tensor(a, device=DEV, dtype=F64) for a in (pos, v, rho))
++    a1, d1, _ = withWall.rhs(xt, vt, rt)
++    a0, d0, _ = noWall.rhs(xt, vt, rt)
++    return (a1 - a0), (d1 - d0)
++
++
++@pytest.mark.parametrize('kind,form', [(BCType.freeSlip, 'laplacian'), (BCType.noSlip, 'noslipMirror')])
++def test_wall_terms_equal_the_reference_wall_contribution(kind, form):
++    pos, v, rho, H, dx, st, wall = setup(kind)
++    dacc, ddrho = reference(pos, v, rho, H, dx, form)
++    ours_drho = wallContinuity(wall, st.densities, st.velocities)
++    s = torch.ones_like(st.densities)
++    ours_acc = (wallPressureAcceleration(wall, st.pressures, s, st.densities, wallMass=1.0, h=H)
++                + wallViscousAcceleration(wall, st.densities, st.velocities, ALPHA * C0 * H / 2.8213846683502197, H, wallMass=1.0))
++    scale = float(dacc.abs().max())
++    assert scale > 1.0                                                                     # the walls act: hydrostatic support and viscous drag
++    assert float((ours_drho - ddrho).abs().max()) <= 1e-9 * max(1.0, float(ddrho.abs().max()))
++    assert float((ours_acc - dacc).abs().max()) <= 1e-9 * scale
+-- 
+2.43.0
+

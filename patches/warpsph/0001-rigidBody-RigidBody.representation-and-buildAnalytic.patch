@@ -1,0 +1,218 @@
+From 4517596eff14cc12ebbc05b543a0e033ccadfed2 Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Thu, 8 Oct 2026 17:19:52 +0100
+Subject: [PATCH 1/7] rigidBody: RigidBody.representation and
+ buildAnalyticRigidBody (a body without boundary particles; mass / inertia
+ from the representation)
+
+---
+ src/warpSPH/configurations/rigidBody.py |  5 ++
+ src/warpSPH/rigidBody/__init__.py       |  3 +-
+ src/warpSPH/rigidBody/build.py          | 65 ++++++++++++++++++++-
+ tests/test_analyticRigidBody.py         | 77 +++++++++++++++++++++++++
+ 4 files changed, 148 insertions(+), 2 deletions(-)
+ create mode 100644 tests/test_analyticRigidBody.py
+
+diff --git a/src/warpSPH/configurations/rigidBody.py b/src/warpSPH/configurations/rigidBody.py
+index ffb0adb..2393e62 100644
+--- a/src/warpSPH/configurations/rigidBody.py
++++ b/src/warpSPH/configurations/rigidBody.py
+@@ -65,6 +65,11 @@ class RigidBody:
+     sdf: callable
+     bodyID: int = 0  
+     kind: BCType = BCType.constant
++    # Analytic representation of the body (a `warpSPHBoundaries` Body, or anything with the same
++    # `center` / `angle` / `massProperties(rho)` surface): None for a body made of boundary particles (the
++    # mDBC path, unchanged); set for a body whose boundary integrals come from a boundary provider
++    # (`rigidBody.build.buildAnalyticRigidBody`: the particle / ghost arrays are then empty).
++    representation: object = None
+ 
+     def toDict(self) -> dict:
+         # These fields are tensors as constructed, but a caller driving a body
+diff --git a/src/warpSPH/rigidBody/__init__.py b/src/warpSPH/rigidBody/__init__.py
+index c16496b..94c41bb 100644
+--- a/src/warpSPH/rigidBody/__init__.py
++++ b/src/warpSPH/rigidBody/__init__.py
+@@ -10,7 +10,7 @@ integrate/update pair every step to move rigid obstacles such as
+ `cases/movingObstacle.py`'s spinning hexagon.
+ """
+ 
+-from .build import buildRigidBody
++from .build import buildRigidBody, buildAnalyticRigidBody
+ from .ghostParticles import addBoundaryGhostParticles
+ from .integrate import integrateRigidBody
+ from .transformation import getTransformationMatrix
+@@ -18,6 +18,7 @@ from .update import updateBodyParticlesWCSPH
+ 
+ __all__ = [
+     'buildRigidBody',
++    'buildAnalyticRigidBody',
+     'addBoundaryGhostParticles',
+     'integrateRigidBody',
+     'getTransformationMatrix',
+diff --git a/src/warpSPH/rigidBody/build.py b/src/warpSPH/rigidBody/build.py
+index 178be11..ae56045 100644
+--- a/src/warpSPH/rigidBody/build.py
++++ b/src/warpSPH/rigidBody/build.py
+@@ -11,7 +11,7 @@ sets the prescribed rate afterward (e.g. `cases/movingObstacle.py`).
+ import torch
+ from ..configurations.weaklyCompressible import RegionType, ParticleRegion, RigidBody
+ 
+-__all__ = ['buildRigidBody']
++__all__ = ['buildRigidBody', 'buildAnalyticRigidBody']
+ 
+ 
+ def buildRigidBody(particleState, regions, bodyId):
+@@ -68,3 +68,66 @@ def buildRigidBody(particleState, regions, bodyId):
+         sdf = currentRegion.sdf,
+         kind= currentRegion.kind
+     )
++
++
++def buildAnalyticRigidBody(region, bodyId, particleState, restDensity = 1.0, bodyDensity = None):
++    """The `RigidBody` of a boundary region whose boundary is analytic (`region.representation`, a
++    `warpSPHBoundaries` Body): no boundary particles, so every per-particle array is empty and the
++    index masks select nothing -- `integrateRigidBody` and `updateBodyParticlesWCSPH` run on it unchanged
++    (an empty gather / scatter), and `modules/mdbc/velocity.py`'s `_ghostBodyVelocity` finds no owned rows.
++
++    Mass, centre of mass and inertia come from the representation (`massProperties`, uniform density
++    `bodyDensity`, default the fluid's rest density) where the solid is bounded; an unbounded solid (a
++    tank wall, a hole in an infinite solid) has infinite mass and inertia. The pose is the body's own
++    (`center`, `angle`, rates). The body-frame origin must be the centre of mass for a finite-mass body
++    (`RigidBody.centerOfMass` is the pose reference): `massProperties` reports the offset, and a body
++    whose origin is elsewhere is refused rather than silently rotated about the wrong point.
++    """
++    rep = region.representation
++    device = particleState.positions.device
++    dtype = particleState.positions.dtype
++    n = particleState.positions.shape[0]
++    t = lambda v: torch.as_tensor(v, device = device, dtype = dtype)
++    empty = torch.zeros((0, 2), device = device, dtype = dtype)
++    noRows = torch.zeros(n, dtype = torch.bool, device = device)
++
++    center = t(rep.center).clone()
++    try:
++        mp = rep.massProperties(restDensity if bodyDensity is None else bodyDensity)
++    except ValueError:
++        mass, inertia = float('inf'), float('inf')                     # an unbounded solid: a wall that does not move under load
++    else:
++        offset = (mp['com'][0] ** 2 + mp['com'][1] ** 2) ** 0.5
++        if offset > 1e-9 * max(1.0, float(mp['area']) ** 0.5):
++            raise ValueError(f"analytic body {bodyId}: its origin is {offset:.3g} away from its centre of mass; "
++                             "place the body-frame origin at the centre of mass (massProperties(rho)['com'])")
++        mass, inertia = mp['mass'], mp['inertia']
++
++    return RigidBody(
++        centerOfMass = center,
++        orientation = t(float(rep.angle)),
++        angularVelocity = t(float(rep.angularVelocity)),
++        linearVelocity = t(rep.linearVelocity).clone(),
++        mass = t(mass),
++        inertia = t(inertia),
++
++        particlePositions = empty.clone(),
++        ghostParticlePositions = empty.clone(),
++        particleVelocities = empty.clone(),
++
++        particleMasses = torch.zeros(0, device = device, dtype = dtype),
++        particleUIDs = torch.zeros(0, device = device, dtype = torch.int64),
++        ghostParticleUIDs = torch.zeros(0, device = device, dtype = torch.int64),
++        particleIndices = noRows,
++        ghostParticleIndices = noRows.clone(),
++
++        particleBoundaryDistances = torch.zeros(0, device = device, dtype = dtype),
++        ghostParticleBoundaryDistances = torch.zeros(0, device = device, dtype = dtype),
++        particleBoundaryNormals = empty.clone(),
++        ghostParticleBoundaryNormals = empty.clone(),
++
++        bodyID = bodyId,
++        sdf = region.sdf,
++        kind = region.kind,
++        representation = rep,
++    )
+diff --git a/tests/test_analyticRigidBody.py b/tests/test_analyticRigidBody.py
+new file mode 100644
+index 0000000..e95dd22
+--- /dev/null
++++ b/tests/test_analyticRigidBody.py
+@@ -0,0 +1,77 @@
++"""`buildAnalyticRigidBody`: a RigidBody whose boundary is analytic (no boundary particles).
++
++The existing rigid-body machinery must run on it unchanged: `integrateRigidBody` advances the pose, and
++`updateBodyParticlesWCSPH` is an identity on a state that has no rows of that body (empty gather / scatter).
++Mass, centre of mass and inertia come from the representation (`warpSPHBoundaries`' `Body.massProperties`).
++"""
++import math
++
++import pytest
++import torch
++
++pytest.importorskip('warpSPHBoundaries')
++
++from types import SimpleNamespace  # noqa: E402
++
++from warpSPH.configurations.region import BCType  # noqa: E402
++from warpSPH.rigidBody import buildAnalyticRigidBody, integrateRigidBody, updateBodyParticlesWCSPH  # noqa: E402
++from warpSPH.systems.weaklyCompressible import WeaklyCompressibleState  # noqa: E402
++from warpSPHBoundaries.scene import Body  # noqa: E402
++from warpSPHBoundaries.scene.implicitBodies import DiskBody  # noqa: E402
++from warpSPHBoundaries.scene.scene import BoxRep, ImplicitRep, Scene  # noqa: E402
++
++DEV = 'cuda' if torch.cuda.is_available() else 'cpu'
++
++
++def fluidState(n=50):
++    x = torch.rand((n, 2), device=DEV, dtype=torch.float64)
++    z = torch.zeros(n, device=DEV, dtype=torch.float64)
++    return WeaklyCompressibleState(
++        positions=x, velocities=torch.zeros_like(x), supports=z + 0.1, masses=z + 1.0, densities=z + 1.0,
++        kinds=torch.zeros(n, dtype=torch.int32, device=DEV), materials=torch.zeros(n, dtype=torch.int32, device=DEV),
++        UIDs=torch.arange(n, device=DEV), UIDcounter=n, pressures=z.clone(), soundspeeds=z + 10.0,
++        ghostIndices=-torch.ones(n, dtype=torch.int32, device=DEV), ghostOffsets=x.clone())
++
++
++def region(body, kind=BCType.noSlip):
++    Scene([body], DEV)
++    return SimpleNamespace(sdf=lambda p: (torch.zeros(len(p), device=p.device), None), kind=kind, representation=body)
++
++
++def test_finite_body_mass_properties_and_pose():
++    R = 0.25
++    body = Body(bodyId=0, center=(0.4, 0.6), angle=0.3, linearVelocity=(0.1, 0.0), angularVelocity=2.0,
++                reps=[ImplicitRep(DiskBody(center=(0.0, 0.0), radius=R))])
++    rb = buildAnalyticRigidBody(region(body), 0, fluidState(), restDensity=2.0)
++    assert math.isclose(float(rb.mass), 2.0 * math.pi * R * R, rel_tol=1e-12)
++    assert math.isclose(float(rb.inertia), 0.5 * float(rb.mass) * R * R, rel_tol=1e-12)
++    assert torch.allclose(rb.centerOfMass, torch.tensor([0.4, 0.6], dtype=torch.float64, device=DEV))
++    assert math.isclose(float(rb.orientation), 0.3) and math.isclose(float(rb.angularVelocity), 2.0)
++    assert rb.particlePositions.shape == (0, 2) and not bool(rb.particleIndices.any()) and rb.representation is body
++
++
++def test_unbounded_wall_has_infinite_mass():
++    body = Body(bodyId=1, reps=[BoxRep((0.0, 0.0), (1.0, 1.0), solid='outside')])
++    rb = buildAnalyticRigidBody(region(body), 1, fluidState())
++    assert math.isinf(float(rb.mass)) and math.isinf(float(rb.inertia))
++
++
++def test_body_origin_away_from_the_centre_of_mass_is_refused():
++    body = Body(bodyId=2, center=(0.0, 0.0), reps=[ImplicitRep(DiskBody(center=(0.3, 0.0), radius=0.1))])
++    with pytest.raises(ValueError):
++        buildAnalyticRigidBody(region(body), 2, fluidState())
++
++
++def test_existing_machinery_runs_on_an_analytic_body():
++    body = Body(bodyId=0, center=(0.4, 0.6), linearVelocity=(0.5, -0.25), angularVelocity=1.5,
++                reps=[ImplicitRep(DiskBody(center=(0.0, 0.0), radius=0.2))])
++    rb = buildAnalyticRigidBody(region(body), 0, fluidState())
++    state = fluidState()
++    before = state.positions.clone(), state.velocities.clone()
++    dt = 0.01
++    for _ in range(10):
++        rb = integrateRigidBody(rb, 0, 0, dt)
++        state = updateBodyParticlesWCSPH(state, rb)
++    assert torch.equal(state.positions, before[0]) and torch.equal(state.velocities, before[1])        # no rows of this body: the fluid is untouched
++    assert torch.allclose(rb.centerOfMass, torch.tensor([0.4 + 0.05, 0.6 - 0.025], dtype=torch.float64, device=DEV))
++    assert math.isclose(float(rb.orientation), 1.5 * 0.1, rel_tol=1e-12)
+-- 
+2.43.0
+
