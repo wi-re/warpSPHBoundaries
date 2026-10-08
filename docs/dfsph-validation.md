@@ -201,3 +201,26 @@ Videos of these runs (`python scripts/dfsph_video.py`) are in `.tmp/omni/vids`, 
 * omniSPH's barycentric (`sim.barycentricPressure`) MLS pressure at the triangle vertices is not reproduced: it would need nodal data on a refined wall layer (`volumeMode='nodal'`);
 * gradient renormalisation with the exact wall moments (removes the first-row residual of §2), larger resolutions, 3D;
 * tier 3/4 around a moving disk (needs first moments of curved tier-3/4 bodies), torque via second moments, a first-order consistent *and* conservative fluid–fluid/wall operator (the renormalisation above breaks pairwise antisymmetry and the free-surface diagonal), the interior lattice noise.
+
+## 9. D4: regression and expansion (2026-10-08, after the compact projection / shared closure work)
+
+**Regression** (`dfsph_validation.py omni|reps|obstacle`, unchanged code paths): tank and dam break against the compiled omniSPH reproduce the tables of §3 digit for digit for `hydrostatic` (dam break front / mean y / v_max at t = 0.6: 1.5983 / 0.1698 / 6.27 against omniSPH 1.5975 / 0.1696 / 6.97); the representations of §4 agree (surface 0, volume 3e-4, sdf 3e-4, half planes 7e-2 relative position difference at t = 0.6); the submerged hexagon at rest gives F_y = 0.09190 (buoyancy 0.09175), sum of forces / weight 1.00008, momentum residual 2e-18.  Spinning hexagon (3 rad/s) F_y 0.0878 (surface) / 0.0892 (volume) against 0.0904 / 0.0895 in §5: the scatter of §6 (std F_y about 0.06-0.12 of the buoyancy per sample), not a change.
+
+**`wallPressure='linear'` is intermittently unstable** (found by the regression; not new): in the dam break one front particle at the right-wall impact (t ~ 0.50, x just beyond the wall, p up to 1e9) is thrown at 1e3-1e7 m/s in about a third of the runs (D2 commit 6 of 12, D3a 3 of 12, HEAD 2 of 6; the runs differ through GPU atomic ordering), so the single `linear` row of §3 (6.47) was a lucky run.  The default `hydrostatic` path is stable (6 of 6, peak v_max 7.57 m/s at t = 0.525, final 6.13).  `linear` stays a diagnostic.
+
+**Hydrostatic column** (0.4 x 0.3 m in a box closed at the sides, dx = 0.01, N = 1200, t = 2, `dfsph_freesurface.py column --variant omni`): pressure against rho g (H - y) RMSE 6.7 % of rho g H in the bulk and 6.6 % (max 17 %) next to the walls and corners, kinetic energy tail 6e-5 (peak 4e-4), mean height drift -0.07 dx, v_max 0.11 m/s (the wall-pressure noise of the density solve; the compact mirror variant is 0.1-0.4 % but unstable at the surface, plan "Mirror projection wall").
+
+**Dam break, DFSPH against delta+** (same geometry: column 0.2 x 0.8 at the left wall of a 1.6 x 1.0 box, dx = 0.01, N = 1600, each scheme on its own lattice and support: DFSPH calibrated lattice / PACKING support, wall friction 5e-3; delta+ EOS c0 = 10 sqrt(g H_f), support 4 dx, default shifting / DDT; `scripts/studies/dambreak_dfsph_vs_delta.py`):
+
+| t | front DFSPH / delta+ | mean y | v_max | KE per mass | rho range |
+|---|---|---|---|---|---|
+| 0.1 | 0.2884 / 0.2924 | 0.3600 / 0.3603 | 1.80 / 1.83 | 0.387 / 0.382 | 0.63-1.00 / 1.00-1.00 |
+| 0.2 | 0.5014 / 0.5113 | 0.2581 / 0.2594 | 2.71 / 2.65 | 1.357 / 1.349 | |
+| 0.3 | 0.7689 / 0.7951 | 0.1474 / 0.1490 | 3.36 / 3.24 | 2.388 / 2.389 | |
+| 0.4 | 1.0973 / 1.1310 | 0.0860 / 0.0875 | 3.73 / 3.57 | 2.919 / 2.961 | |
+| 0.5 | 1.4680 / 1.5057 | 0.0599 / 0.0613 | 4.04 / 3.95 | 3.098 / 3.201 | |
+| 0.6 | 1.5982 / 1.5972 | 0.0592 / 0.0644 | 6.36 / 6.46 | 2.905 / 3.074 | |
+| 0.8 | 1.5986 / 1.5978 | 0.1819 / 0.1977 | 3.33 / 7.64 | 1.275 / 1.453 | |
+| 1.0 | 1.5995 / 1.5989 | 0.2434 / 0.2629 | 4.38 / 8.39 | 0.574 / 0.808 | |
+
+The two independent schemes agree before the impact (mean y 0.5 %, KE 1-3 %, front 1-3 %: the delta+ front is ahead by up to 0.04 m, the weakly compressible fluid is slightly freer at the base).  After the impact DFSPH dissipates more (KE per mass 0.57 against 0.81 at t = 1, mean y lower, v_max of the splash 4.4 against 8.4); the DFSPH density minimum 0.36-0.78 is the free spray (summation density at truncated supports), delta+ stays in 0.93-1.13.  The cost at this N: 47 s (1000 steps, dt 1e-3) against 122 s (4430 steps, acoustic dt) for t = 1.
