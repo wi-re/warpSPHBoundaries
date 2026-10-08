@@ -399,7 +399,32 @@ one provider interface.
 | D2 | fluid sums on the Warp adjacency (warpSPH modules / generated modules), float32-capable; CUDA graph with chunked pressure iterations (residual checked between chunks) | same trajectories (tolerance), ms/step |
 | D2 status | **first stage DONE 2026-10-07**: lean provider layout for DFSPH (only the scheme kernel's group: wall aggregate 4 -> 2-3 ms); fluid pairs from warpSPHCore's Verlet list (`fluidPairs`, reused while valid; = the cell list to 1e-12); the pressure iterates as CUDA graphs (`graphIterations`, default on): persistent buffers, pair arrays padded to a fixed capacity (25 % headroom; padding adds exactly zero) so a Verlet rebuild does not recapture (2 captures per run), dt^2 a device scalar, the host keeps omniSPH's convergence test; the hydrostatic / mirror iterate is two fused Warp kernels over the CSR adjacency (`sim/dfsph_kernels.py`), the MLS one the torch iterate (graphed with the fused wall backend only); the MLS moment matrix only for wallPressure = 'linear'.  Graphed = eager (positions 1e-13 / 4e-11 after 30 steps at 6k / 24k particles, identical iteration counts, exact momentum balance).  ms/step (tank with a 3 rad/s hexagon, f64): N = 2.1k 11.0 -> 8.7, 5.9k 18.1 -> 13.1, 23.7k 69.3 -> 18.6.  Remaining per-step host work (eager wall aggregate for the friction, Verlet check, alpha / source in torch): the next stage would capture those as well | tests 12 + 10 |
 | D3 | viscosity: Morris + the complement no-slip closure (shared with delta+), torque bookkeeping, periodic domains | channel, Taylor-Couette, periodic arrays (disk, square), corner rig |
+| D3 status | **in progress 2026-10-08**: D3a (shared closure) committed; D3b/c: `cfg.viscosity` (Morris, `morris_calibration` of the DFSPH lattice 0.943 at H/dx 2.5) + `NoSlipClosure` with complement moments from the DFSPH pairs, viscous force / torque booking, `cfg.periodic`, `cfg.bodyForce`, viscous dt <= 0.1 dx^2 / nu.  Shear wave nu_eff / nu 1.004; plane channel amplitude 0.9974 (n=48) / 0.9978 (n=96), plate force 1.000.  Periodic arrays: see below | |
 | D4 | validation expansion: tank / dam break / hexagon vs omniSPH (existing), hydrostatic column with corners, dam break vs the delta+ path, buoyancy, Stokes arrays (no c0: no pressure-level issue) | tables in docs/dfsph-validation.md |
+
+### DFSPH in closed periodic domains (2026-10-08, `scripts/studies/dfsph_periodic.py`, `dfsph_viscous.py array [--shape square]`)
+
+Ladder (user): TGV (periodic, no walls) -> a static obstacle without forcing -> the forced array.
+- TGV: stable with and without the p >= 0 clamp, KE decay 1.05x analytic (0.64-0.69x with a 0.1 dx jitter).
+- The forced disk array exploded at t ~ 7: an **initial-condition** defect, not the closure.  `carve(lamRow0)` keeps only lattice particles beyond the flat-wall first-row distance; around a staircased disk this leaves
+  near-wall gaps (rho 0.76-0.88) and a 2 % volume deficit (N dx^2 / (1 - c) = 0.979) that an incompressible p >= 0 solve can never close.  `lattice_calibration()['lamCell']` (keep a particle iff its lattice cell
+  starts beyond d_wall - dx/2) is volume-consistent; with it the unforced disk heals (rho_min 0.83 -> 0.98) and the forced array is stable (rho [0.97, 1]).  The signed pressure (`densityClamp=False`) closes
+  the gaps but blows up (tension / particles drawn into the walls).
+- Drag excess: disk U_x / U_ref 0.76 (n=48), worse at n=96; a lattice-aligned square (faces at the rest distance, no cut cells, Fourier reference K = 25.65 for c = 0.10968) 0.71.  delta+ at the same support
+  (H/dx 2.5) is itself K 1.17x (disk and square): the small-support closure; DFSPH adds 5-25 %.
+- Not the cause: hydrostatic vs mirror wall pressure, 60 pressure iterations, the wall in the divergence solve, a smaller viscous dt, the viscous operator (static test on the exact Fourier field: bulk to 0.3 %,
+  total viscous force 4 % low).
+- Mechanism found: in a closed domain the density source's mean is in the null space, the density pressure floats up (0.3-0.4 against a Stokes pressure ~5e-3), and the DFSPH wall coupling is not force-free for
+  a uniform pressure (p = 0.1 uniform -> near-wall |a| 0.32 at the square, 1.3 at the staircased disk, against f = 0.03; `gradientCorrection='wall'` partial).  Started from the exact Stokes field the run holds
+  the field until the pressure lifts off zero, then the slot between periodic squares stagnates.
+- Added (options): `closedDomain` (zero-mean density source; auto iff fully periodic), `pressureGauge` ('min': p -= min p after the density solve; auto with closedDomain), `divergenceGauge`,
+  `divergenceWarmStart`, `densityShift` (VD+PS: the density correction moves positions, the velocity and the loads carry only the divergence solve), `wallPressureFactor` (0.5 = SPlisHSPlasH's p_i / rho_i^2
+  form), `densityClamp`; the divergence solve's wall force booked separately (`forcePressureDiv`).
+- Results (square, n=48, t=15): baseline 0.71; gauge + zero-mean 0.77-0.80 (disk 0.78); VD+PS (divergence pressure physical, converged, warm-started, min gauge) 0.79; factor 0.5 no gain.  From the exact field
+  the gauged run converges to the same 0.78: one (wrong) steady state.
+- SPlisHSPlasH (`~/dev/SPlisHSPlasH`, density maps / volume maps): the same structure (wall term (p_i / rho_i^2) grad rho_b), both solves clamped, compression-only sources, capped warm starts, no closed-domain
+  treatment; nothing that addresses this.
+- Next: the force budget at the steady state against the exact Stokes pressure; the openMaelstrom MLS wall-pressure extrapolation for comparison; a uniform-pressure-consistent wall coupling.
 
 ## Remaining items (short notes)
 

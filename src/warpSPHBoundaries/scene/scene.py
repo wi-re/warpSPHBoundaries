@@ -1210,6 +1210,8 @@ class Scene:
             if bool(low.any()):
                 li = torch.nonzero(low).flatten()
                 ent["surface"].append(fb.pairs(lpos[li], lsup[li], cand[li], name, dev).toWorld(pose))
+        else:                                                                                    # e.g. DiskArrayRep (the disk element exists on the fused path only): never silently zero
+            raise NotImplementedError("the scene-operation (oracle) path does not evaluate %s; use the boundary provider (AnalyticBoundary / FusedWall)" % type(rep).__name__)
 
 
 def _planar_moments(rep, lpos, lsup, name, dev):

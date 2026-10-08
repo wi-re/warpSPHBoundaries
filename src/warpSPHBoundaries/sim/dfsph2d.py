@@ -28,7 +28,7 @@ from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, Ope
 from ..scene.implicitBodies import HalfPlaneBody
 from ..scene.scene import Body, BodyField, BoxRep, ImplicitRep, Scene, SdfRep, SurfaceRep, VolumeRep, sceneOperation
 from ..scene.fused import WallOutput
-from .pairs import F64, dwendland2, neighbor_pairs, wendland2
+from .pairs import F64, dwendland2, neighbor_pairs, pair_delta, wendland2
 
 PACKING = 0.399200743165053487            # omniSPH packing_2D (spacing / h)
 TARGET_NEIGHBORS = 20
@@ -41,6 +41,9 @@ def lattice_calibration(dx, dy, h, kernel="w2"):
         V'   = dx dy / S      -> sum_j V' W = 1 in the bulk
         mu   = 1 / S          mass per area of the wall continuum (a wall filled with the same lattice)
         d_x, d_y             distance of the first lattice row from the wall face for which the first row also has density exactly 1.
+        lamRow0 = lambda(d_y)          the carve threshold that puts a flat wall's first row at its rest distance (a curved or staircased surface keeps only particles at >= d_y: gaps, a volume deficit)
+        lamCell = lambda(d_y - dy / 2) the volume-consistent threshold: a particle is kept iff its lattice cell starts beyond the rest state's fluid edge d_y - dy / 2, so N dx dy = the fluid area on average
+                                       (the particles inside d_y are over-dense and pushed out by the positive pressure, which the p >= 0 density solve can do; gaps it can never close)
     omniSPH uses V = pi r^2 and a face one spacing outside the block; with these numbers the initial density is 1 +- few %, which DFSPH removes in ONE step
     (an impulse); calibrated, the lattice starts at rest (density error ~1e-3)."""
     from ..scene.implicitBodies import Tier3
@@ -70,7 +73,7 @@ def lattice_calibration(dx, dy, h, kernel="w2"):
                 a, fa = c, fc
         return 0.5 * (a + b)
     dwx, dwy = solve(dx, dy), solve(dy, dx)
-    return dict(S=S, V=Vp, mu=mu, dwallX=dwx, dwallY=dwy, lamRow0=lam(dwy))
+    return dict(S=S, V=Vp, mu=mu, dwallX=dwx, dwallY=dwy, lamRow0=lam(dwy), lamCell=lam(max(dwy - 0.5 * dy, 0.0)))
 
 
 def carve(positions, bodies, h, lamMax, device, kernel=KernelFunctions.Wendland2):
@@ -81,8 +84,13 @@ def carve(positions, bodies, h, lamMax, device, kernel=KernelFunctions.Wendland2
     ps = ParticleState(positions=pos, supports=torch.full((n,), float(h), dtype=F64, device=device), masses=torch.ones(n, dtype=F64, device=device),
                        kinds=torch.zeros(n, dtype=torch.int32, device=device), densities=torch.ones(n, dtype=F64, device=device))
     sc = Scene(bodies, device)
-    props = OperationProperties(kernel=kernel, operation=WarpOperation.Density, operationMode=OperationDirection.BoundaryToFluid)
-    lam = sceneOperation(ps, props, sc, bodyFields=[BodyField(rho=1.0)] * len(bodies))
+    from ..scene.provider import AnalyticBoundary
+    prov = AnalyticBoundary(sc)
+    if prov.supported(fixedAdjacency=True):                                                     # the provider (the disk element exists only there: the oracle `sceneOperation` returns lambda = 0 for DiskArrayRep)
+        lam = prov.aggregate(ps, float(h), kernel=kernel, lean=True).out["lam"].sum(0)
+    else:
+        props = OperationProperties(kernel=kernel, operation=WarpOperation.Density, operationMode=OperationDirection.BoundaryToFluid)
+        lam = sceneOperation(ps, props, sc, bodyFields=[BodyField(rho=1.0)] * len(bodies))
     return positions[(lam <= lamMax).cpu().numpy()]
 
 
@@ -138,6 +146,19 @@ class DFSPHConfig:
     maxIterations: int = 256
     divergenceMaxIterations: int = 3         # omniSPH: the divergence loop always runs exactly 4 iterations
     minIterations: int = 4
+    densityClamp: bool = True                # p >= 0 in the density solve (omniSPH; a free surface cannot carry tension).  False: the signed pressure, for closed / periodic domains without a free surface, where
+                                             # the pressure is only defined up to a constant and a flow past an obstacle needs pressures below the mean (the clamp leaves the lee side unsupported: voids)
+    closedDomain: Optional[bool] = None      # no free surface (a fully periodic box, or one closed by walls): the density source's mean (1 - rho averaged) is in the null space of the pressure operator (a uniform pressure moves
+                                             # nothing), the Jacobi can only pump the pressure up / down uniformly (measured: 0.3-0.4 against a Stokes pressure ~5e-3 in a periodic array), and a large uniform pressure is not
+                                             # force-free next to a wall.  True: the source's mean is removed (the compatibility projection; warpSPH's closed-box finding for velocity-impulse solvers).  None: True iff fully periodic.
+    divergenceWarmStart: float = 0.0         # the divergence solve starts from this fraction of the previous step's divergence pressure (omniSPH: 0, from zero; the Jacobi then cannot build a long-range pressure in 4 iterations)
+    pressureGauge: str = "auto"              # closed domains: the density pressure is defined up to a constant, and the Jacobi lets that constant float up (a 1e-4 density excess -> p ~ 0.3 with dt^2 scaling); a large uniform
+                                             # pressure is not force-free next to walls (measured: the slot between periodic squares stagnates as p_min lifts off 0).  'min': after the density solve p -= min(p) (the smallest
+                                             # admissible background, p >= 0 kept); 'none'; 'auto': 'min' iff closedDomain.
+    divergenceGauge: str = "none"            # the same for the divergence solve's pressure (the physical one under densityShift): 'none' | 'min' (p -= min p) | 'mean' (p -= mean p)
+    wallPressureFactor: float = 1.0          # scales the wall's p_i term (p_i / rho_i^2 + p_i) mu grad lambda: 1 = omniSPH (pressure mirrored, 2 p at rho = 1); 0.5 = SPlisHSPlasH's (p_i / rho_i^2) grad rho_b (Akinci / density / volume maps)
+    densityShift: bool = False               # VD+PS (Cornelis et al.): the density solve's correction moves the particles (x += dt^2 a_density) instead of changing their velocity; the velocity carries only the divergence-free
+                                             # projection.  Its wall loads are then not momentum exchange and are left out of forcePressure (kept in forcePressureShift)
     divergenceClamp: bool = False            # clamp the divergence pressure of ALL particles at >= 0 as the density pressure is (omniSPH does not: its negative divergence pressure is the cohesion that keeps
                                              # the fluid together after a splash; clamping it expands the fluid by ~30 %).  Needed only for many divergence iterations with a moving wall
     wallDivergenceClamp: Optional[bool] = None   # clamp the divergence pressure only where it enters the WALL acceleration (fluid-fluid terms keep the signed pressure).  None: iff the wall is in the divergence solve.
@@ -156,6 +177,12 @@ class DFSPHConfig:
     kernel: KernelFunctions = KernelFunctions.Wendland2
     wallPressure: str = "hydrostatic"       # 'hydrostatic' (p_b = p_i + rho g.(x'-x_i): dp/dn = rho (g - a_wall).n), 'linear' (MLS gradient of the neighbours' pressure), 'mirror' (p_b = p_i)
     wallMass: float = 1.0                   # mass per area of the wall continuum (1 = omniSPH; 1/S for a calibrated lattice)
+    periodic: Optional[object] = None       # `Periodic` box (sim/pairs.py): the fluid pairs take the minimum image of the raw positions (never wrapped), bodies via `Scene.setPeriodic`
+    bodyForce: tuple = (0.0, 0.0)           # a uniform acceleration of the momentum equation (a periodic pressure-gradient driver); the hydrostatic wall pressure carries it like gravity
+    viscosity: float = 0.0                  # kinematic viscosity nu (0: inviscid, omniSPH): the Morris operator on the fluid pairs (nu / morrisCalibration) and the shared no-slip wall closure (sim/wallclosure.py,
+                                            # complement moments); the wall viscous force and torque per body are booked (incl. the Morris traction correction -2 mu Omega A); set boundaryFriction = 0 with it
+    morrisCalibration: Optional[float] = None  # nu_eff / nu of the discrete Morris operator on this lattice (None: the long-wave lattice sum of the rest lattice, `morris_calibration`)
+    viscousDt: float = 0.1                  # dt <= viscousDt dx^2 / nu, dx = PACKING h the spacing (explicit viscosity; the no-slip wall term is as stiff as nu / d^2 with d ~ dx / 2: the support h would be unstable)
     graphIterations: bool = True            # replay each pressure iterate as a CUDA graph (persistent per-step buffers, recaptured when a buffer changes shape, i.e. the Verlet list is rebuilt); the host keeps
                                             # omniSPH's convergence test (one scalar read per iterate); needs fluidPairs = 'verlet' and CUDA
     fluidPairs: str = "verlet"              # 'verlet': warpSPHCore's Verlet list (reused while no particle has moved beyond the margin; pairs beyond the support carry W = grad W = 0); 'cells': a fresh torch cell list every step
@@ -163,6 +190,20 @@ class DFSPHConfig:
     wallBackend: str = "auto"               # 'fused': the wall terms from the boundary provider (AnalyticBoundary / FusedWall: lam, grad lam, the first-moment tensor int y (x) grad W, m1 = int y W, per body; one
                                             # evaluation per position set, the iterates contract the stored tensor); 'scene': the oracle `sceneOperation`; 'auto': fused when every body is supported (surface, box,
                                             # disks, implicit / SDF lowered), else scene (VolumeRep: the omniSPH slabs)
+
+
+def morris_calibration(h, dx, V, kernel="w2", eta2=0.0025):
+    """nu_eff / nu of the Morris operator a_i = sum_j V_j nu (rho_i + rho_j) / rho_i K_ij (v_i - v_j), K = (x_ij . grad W) / (r^2 + eta2 h^2), on a square lattice of spacing dx with particle volume V at rest density 1:
+    for a shear field the long-wave rate is -nu (sum_j 2 V K_ij y_j^2) / 2 per unit u'', so the factor is -sum_j V K_ij y_j^2 (the continuum value with eta -> 0 is 1)."""
+    m = int(math.ceil(h / dx)) + 1
+    i, j = np.meshgrid(np.arange(-m, m + 1), np.arange(-m, m + 1), indexing="ij")
+    r = np.hypot(i * dx, j * dx).ravel()
+    y = (j * dx).ravel()
+    keep = (r > 1e-14) & (r < h)
+    r, y = r[keep], y[keep]
+    dw = dwendland2(torch.as_tensor(r), h).numpy()
+    K = dw * r / (r * r + eta2 * h * h)
+    return float(-np.sum(V * K * y * y))
 
 
 class DFSPH2D:
@@ -176,6 +217,7 @@ class DFSPH2D:
         self.h = t(h) if np.ndim(h) else torch.full((n,), float(h), dtype=F64, device=device)
         self.scene = scene
         self.p = torch.zeros(n, dtype=F64, device=device)               # fluidPriorPressure
+        self.pDiv = torch.zeros(n, dtype=F64, device=device)            # the divergence solve's pressure of the last step
         self.rho = torch.ones(n, dtype=F64, device=device)
         self.dt = self.cfg.maxDt
         self.time = 0.0
@@ -183,6 +225,8 @@ class DFSPH2D:
         self.wallForce = torch.zeros(2, dtype=F64, device=device)
         nb = len(scene.bodies) if scene is not None else 0
         self.nb = nb
+        if scene is not None and self.cfg.periodic is not None:
+            scene.setPeriodic(self.cfg.periodic, float(self.h.max()))
         self.forcePressure = torch.zeros((nb, 2), dtype=F64, device=device)    # force of the fluid on each body, pressure part (this step)
         self.forceFriction = torch.zeros((nb, 2), dtype=F64, device=device)    # friction (boundary viscosity) part
         self.history = []                                                       # per step: dict(t, dt, pressure [B,2], friction [B,2], balance)
@@ -193,12 +237,18 @@ class DFSPH2D:
         self.kinds = torch.zeros(n, dtype=torch.int32, device=device)
 
     # ---- geometry-dependent data, valid for the current positions
+    def _delta(self, x, i, j):
+        """x_i - x_j of the pairs, the minimum image on the periodic axes (the positions are raw, never wrapped)."""
+        return pair_delta(x, i, j, self.cfg.periodic)
+
     def _pairs(self):
         """(i, j, r) of the fluid pairs at the current positions: the Verlet list (fixed arrays while it stays valid) or a fresh cell list."""
         x, h = self.x, self.h
         if self.cfg.fluidPairs == "cells":
-            return neighbor_pairs(x, h)
+            return neighbor_pairs(x, h, self.cfg.periodic)
+        import warp as wp
         from warpSPHCore import DomainDescription, SupportScheme, buildVerletList
+        wp.init()                                                                               # idempotent; without walls nothing else initialises Warp before the Verlet search
         if getattr(self, "_domain", None) is None:
             pts = [x]
             for b in (self.scene.bodies if self.scene is not None else []):
@@ -206,14 +256,22 @@ class DFSPH2D:
                 pts.append(b.pose.toWorld(torch.stack([lo, hi])))
             P = torch.cat(pts)
             H = float(h.max())
-            self._domain = DomainDescription(P.amin(0) - 20.0 * H, P.amax(0) + 20.0 * H, torch.zeros(2, dtype=torch.bool, device=self.dev), 2)
+            lo, hi = P.amin(0) - 20.0 * H, P.amax(0) + 20.0 * H
+            flags = torch.zeros(2, dtype=torch.bool, device=self.dev)
+            per = self.cfg.periodic
+            if per is not None:
+                per.checkSupport(H)
+                for a, f in enumerate(per.flags):
+                    if f:
+                        lo[a], hi[a], flags[a] = per.lo[a], per.hi[a], True
+            self._domain = DomainDescription(lo, hi, flags, 2)
             self._prior = None
         ps = ParticleState(positions=x, supports=h, masses=self.V, kinds=self.kinds, densities=torch.ones_like(self.V))
         adj = buildVerletList(ps, self._domain, verletScale=self.cfg.verletScale, supportMode=SupportScheme.SuperSymmetric, priorNeighborhood=self._prior, verbose=False)
         self._prior = adj
         self._csr = (adj.edgeOffsets, adj.numNeighbors)                                         # CSR rows of the pairs (i sorted): the fused iterate kernels loop over them
         i, j = adj.i.long(), adj.j.long()
-        r = (x[i] - x[j]).norm(dim=1)
+        r = self._delta(x, i, j).norm(dim=1)
         return i, j, r
 
     def _prepare(self):
@@ -222,7 +280,7 @@ class DFSPH2D:
         hij = 0.5 * (h[i] + h[j])
         self.pi, self.pj = i, j
         self.W = wendland2(r, hij)
-        d = x[i] - x[j]
+        d = self._delta(x, i, j)
         self.gW = torch.where((r > 1e-14 * hij)[:, None], dwendland2(r, hij)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
         self.ps = self._particleState(torch.ones_like(self.V))
         if self.scene is not None and self._fused():
@@ -260,7 +318,7 @@ class DFSPH2D:
             self.Minv = self.wy = None
             return
         w = self.V[j] * self.W
-        y = x[j] - x[i]
+        y = -self._delta(x, i, j)
         M = torch.zeros((len(x), 2, 2), dtype=F64, device=self.dev).index_add_(0, i, (w[:, None, None] * y[:, :, None] * y[:, None, :]))
         ev, U = torch.linalg.eigh(M)
         inv = torch.where(ev > 1e-3 * ev.amax(1, keepdim=True).clamp(min=1e-300), 1.0 / ev.clamp(min=1e-300), torch.zeros_like(ev))
@@ -354,7 +412,7 @@ class DFSPH2D:
         if self.scene is None:
             return torch.zeros((self.nb, len(self.x), 2) if perBody else self.x.shape, dtype=F64, device=self.dev)
         pp = p.clamp(min=0) if clamp else p
-        pfac = (pp / self.rho ** 2 + pp) * self.sClose
+        pfac = (pp / self.rho ** 2 + pp) * self.sClose * self.cfg.wallPressureFactor
         a1 = self._a1_part(pp)
         if self.cfg.clampWallPressure and self.cfg.wallPressure == "hydrostatic":
             a1 = a1 - self._wall_excess(pp)[:, :, None] * self.gkb
@@ -381,7 +439,7 @@ class DFSPH2D:
         if mode == "hydrostatic" and self._out1 is not None:
             return self._out1
         if getattr(self, "_gT", None) is None:
-            self._gT = torch.tensor(self.cfg.gravity, dtype=F64, device=self.dev)               # made once (a host-to-device copy cannot be captured)
+            self._gT = torch.tensor([self.cfg.gravity[0] + self.cfg.bodyForce[0], self.cfg.gravity[1] + self.cfg.bodyForce[1]], dtype=F64, device=self.dev)   # g + f (dp/dn = rho (g + f - a_wall) . n); made once (graph capture)
         g = self._gT[None]
         flds = []
         for b in self.scene.bodies:
@@ -417,7 +475,86 @@ class DFSPH2D:
             s = s - dt * (vp * self.gk).sum(1)
             if self.wallDiv is not None:
                 s = s + dt * self.wallDiv
+        if density and self._closed():
+            s = s - (self.V * s).sum() / self.V.sum()
         return s
+
+    def _gauge(self, p, density=True):
+        g = self.cfg.pressureGauge if density else self.cfg.divergenceGauge
+        if g == "auto":
+            g = "min" if self._closed() else "none"
+        if g == "min":
+            return p - p.min()
+        if g == "mean":
+            return p - (self.V * p).sum() / self.V.sum()
+        return p
+
+    def _closed(self):
+        c = self.cfg.closedDomain
+        if c is None:
+            c = self.cfg.periodic is not None and all(self.cfg.periodic.flags)
+        return bool(c)
+
+    # ---- viscosity: Morris on the fluid pairs, the shared no-slip wall closure
+    def _morris_cal(self):
+        if self.cfg.morrisCalibration is not None:
+            return float(self.cfg.morrisCalibration)
+        if getattr(self, "_calCache", None) is None:
+            h = float(self.h.median())
+            self._calCache = morris_calibration(h, PACKING * h, float(self.V.median()))
+        return self._calCache
+
+    def _viscous_accel(self):
+        """the viscous acceleration (fluid Morris pairs + the no-slip wall closure per body), with the wall's viscous force and torque on each body booked (-sum V a_wall; torque with the lever at the particle,
+        plus the Morris traction correction -2 nu Omega A of a rotating body, rest density 1)."""
+        from .wallclosure import NoSlipClosure
+        from .wallmoments import MORRIS_ETA2
+        cfg = self.cfg
+        cal = self._morris_cal()
+        nu_used = cfg.viscosity / cal
+        i, j = self.pi, self.pj
+        x, v, rho = self.x, self.v, self.rho
+        d = self._delta(x, i, j)
+        r = d.norm(dim=1)
+        K = (d * self.gW).sum(1) / (r * r + MORRIS_ETA2 * self.h[i] ** 2)
+        Vt = self.V / rho
+        viscf = self._sum((Vt[j] * nu_used * (rho[i] + rho[j]) / rho[i] * K)[:, None] * (v[i] - v[j]))
+        if self.scene is None or self.nb == 0:
+            return viscf
+        if getattr(self, "_wcObj", None) is None:
+            self._wcObj = NoSlipClosure(self.scene, dwendland2, float(self.h.max()), PACKING * float(self.h.median()), self.dev, morris=True, cal=cal, wallMass=1.0, complement=True, sums=self._complement_sums)
+        wc = self._wcObj
+        acc = viscf.clone()
+        H = float(self.h.max())
+        for bi, b in enumerate(self.scene.bodies):
+            dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=H)
+            dd = dsd.clamp(min=0.25 * PACKING * float(self.h.median()))
+            on = (hit & (dsd < H))[:, None]
+            term = torch.where(on, wc.term(bi, x, v - b.velocityAt(x), nsd, dd, viscf, rho, 8.0 * cfg.viscosity), torch.zeros_like(v))
+            acc = acc + term
+            F = -(self.V[:, None] * term)
+            self.forceViscous[bi] = F.sum(0)
+            lev = b.relative(x) if hasattr(b, "relative") else x - b.center
+            tq = (lev[:, 0] * F[:, 1] - lev[:, 1] * F[:, 0]).sum()
+            self.torque[2, bi] = tq - 2.0 * cfg.viscosity * NoSlipClosure.solid_area(b) * float(b.angularVelocity)
+        return acc
+
+    def _complement_sums(self, x, n, d, rho):
+        """the discrete fluid moments of the Morris weight in the frame (n_i, d_i) of each particle's wall, over this step's fluid pairs (padding pairs add zero)."""
+        from .wallmoments import MORRIS_ETA2
+        i, j = self.pi, self.pj
+        y = -self._delta(x, i, j)
+        r = y.norm(dim=1)
+        K = -(y * self.gW).sum(1) / (r * r + MORRIS_ETA2 * self.h[i] ** 2)                      # (x_ij . grad W_ij) / (r^2 + eta^2 h^2), x_ij = -y
+        K = torch.where(i != j, K, torch.zeros_like(K))
+        Vt = self.V / rho
+        w = Vt[j] * (rho[i] + rho[j]) / (2.0 * rho[i]) * K
+        st = (y * n[i]).sum(1) + d[i]
+        S0 = self._sum(w)
+        S1 = self._sum(w * st)
+        S2 = self._sum(w * st * st)
+        SM = self._sum(w[:, None] * y)
+        return S0, S1, S2, SM
 
     # ---- CUDA-graph replay of the pressure iterates
     def _graphs_on(self):
@@ -520,7 +657,7 @@ class DFSPH2D:
             q = torch.zeros((1, 1), dtype=F64, device=self.dev)
             excess, nb = False, 0
         gk = self.gk if hasWall else torch.zeros((N, 2), dtype=F64, device=self.dev)
-        sC = self.sClose if hasWall else torch.ones(N, dtype=F64, device=self.dev)
+        sC = self.sClose * self.cfg.wallPressureFactor if hasWall else torch.ones(N, dtype=F64, device=self.dev)
         import contextlib
         ctx = contextlib.nullcontext() if torch.cuda.is_current_stream_capturing() else wp.ScopedStream(wp.stream_from_torch(torch.cuda.current_stream()))   # inside a capture the Warp stream is set by the caller
         with ctx:
@@ -541,10 +678,10 @@ class DFSPH2D:
         Vt = self.V / self.rho
         vp = self.v + dt * acc
         wall = bool(density or self._bdiv)
-        clampP = bool(density or cfg.divergenceClamp)
-        clampWall = bool(density or clampP or self._clampWallDiv)
+        clampP = bool((density and cfg.densityClamp) or (not density and cfg.divergenceClamp))
+        clampWall = bool(clampP or self._clampWallDiv)
         B = {"Vt": self._pin("Vt", Vt), "alpha": self._pin("alpha", self._alpha(dt, Vt, wall)), "src": self._pin("src", self._source(dt, Vt, vp, density, wall)),
-             "p2": self._pin("p2", 0.5 * self.p if density else torch.zeros_like(self.V)), "dt2": self._pin("dt2", torch.tensor(dt * dt, dtype=F64, device=self.dev)),
+             "p2": self._pin("p2", 0.5 * self.p if density else self.cfg.divergenceWarmStart * self.pDiv), "dt2": self._pin("dt2", torch.tensor(dt * dt, dtype=F64, device=self.dev)),
              "err": self._pin("err", torch.zeros((), dtype=F64, device=self.dev))}
         graphs = self.__dict__.setdefault("_graphs", {})
         key = (bool(density), wall, clampP, clampWall)
@@ -575,14 +712,19 @@ class DFSPH2D:
             if counter >= cfg.minIterations and not (float(B["err"]) > eta and counter < maxit):
                 break
         p2 = B["p2"].clone()
+        p2 = self._gauge(p2, density)
         pred = self._fluid_accel(p2)
         if wall and self.scene is not None:
             ab = self._boundary_accel(p2, clampWall, perBody=True)
             pred = pred + ab.sum(0)
             self.forcePressure = self.forcePressure - (self.V[None, :, None] * ab).sum(1)
+            if not density:
+                self.forcePressureDiv = -(self.V[None, :, None] * ab).sum(1)                   # the divergence solve's share (the physical pressure; the density solve's is a position correction)
         if density:
             self.wallForce = self.forcePressure.sum(0) if self.scene is not None else self.wallForce
             self.p = p2
+        else:
+            self.pDiv = p2
         self.err = float(B["err"])
         return acc + pred, counter
 
@@ -594,14 +736,14 @@ class DFSPH2D:
         wall = density or self._bdiv
         alpha = self._alpha(dt, Vt, wall)
         src = self._source(dt, Vt, vp, density, wall)
-        p2 = 0.5 * self.p if density else torch.zeros_like(self.V)
+        p2 = 0.5 * self.p if density else self.cfg.divergenceWarmStart * self.pDiv
         p1 = p2.clone()
         eta = cfg.densityEta if density else cfg.divergenceEta
         maxit = cfg.maxIterations if density else cfg.divergenceMaxIterations
         counter = 0
         while True:
-            clampP = density or cfg.divergenceClamp
-            pred = (self._boundary_accel(p2, density or clampP or self._clampWallDiv) if wall else torch.zeros_like(self.x)) + self._fluid_accel(p2)
+            clampP = (density and cfg.densityClamp) or (not density and cfg.divergenceClamp)
+            pred = (self._boundary_accel(p2, clampP or self._clampWallDiv) if wall else torch.zeros_like(self.x)) + self._fluid_accel(p2)
             p1 = p2
             ks = dt * dt * self._sum(Vt[j] * ((pred[i] - pred[j]) * self.gW).sum(1))
             if wall:
@@ -616,14 +758,19 @@ class DFSPH2D:
             counter += 1
             if counter >= cfg.minIterations and not (float(err) > eta and counter < maxit):
                 break
+        p2 = self._gauge(p2, density)
         pred = self._fluid_accel(p2)
         if wall and self.scene is not None:
-            ab = self._boundary_accel(p2, density or cfg.divergenceClamp or self._clampWallDiv, perBody=True)                         # [B,N,2]: acceleration of the fluid by each body
+            ab = self._boundary_accel(p2, clampP or self._clampWallDiv, perBody=True)                         # [B,N,2]: acceleration of the fluid by each body
             pred = pred + ab.sum(0)
             self.forcePressure = self.forcePressure - (self.V[None, :, None] * ab).sum(1)    # force of the fluid on each body (m_i = V_i, rest density 1)
+            if not density:
+                self.forcePressureDiv = -(self.V[None, :, None] * ab).sum(1)                   # the divergence solve's share (the physical pressure; the density solve's is a position correction)
         if density:
             self.wallForce = self.forcePressure.sum(0) if self.scene is not None else self.wallForce
             self.p = p2
+        else:
+            self.pDiv = p2
         self.err = float(err)
         return acc + pred, counter
 
@@ -632,6 +779,7 @@ class DFSPH2D:
         self._bdiv = cfg.boundaryInDivergence if cfg.boundaryInDivergence is not None else self._moving()
         self._clampWallDiv = cfg.wallDivergenceClamp if cfg.wallDivergenceClamp is not None else self._bdiv
         self.forcePressure = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
+        self.forcePressureDiv = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
         self.forceFriction = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
         self._prepare()
         i, j = self.pi, self.pj
@@ -640,19 +788,32 @@ class DFSPH2D:
         if self._graphs_on():
             self._pin_step()
             i, j = self.pi, self.pj
-        g = torch.tensor(cfg.gravity, dtype=F64, device=self.dev)
+        g = torch.tensor([cfg.gravity[0] + cfg.bodyForce[0], cfg.gravity[1] + cfg.bodyForce[1]], dtype=F64, device=self.dev)      # gravity + the body force (both per unit mass)
         acc = g.expand(len(self.x), 2).clone()
+        self.forceViscous = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
+        self.torque = torch.zeros((3, self.nb), dtype=F64, device=self.dev)                     # (pressure, friction, viscous) torque of the fluid on each body about its centre (lever at the particle)
+        if cfg.viscosity > 0.0:
+            acc = acc + self._viscous_accel()
         nd = 0
         if cfg.divergenceSolve:
             acc, nd = self._solve(acc, False)
+        accDiv, fpDiv = acc, self.forcePressure.clone()
         acc, nq = self._solve(acc, True)
         self.iters = (nd, nq)
+        shift = None
+        if cfg.densityShift:
+            shift = dt * dt * (acc - accDiv)
+            acc = accDiv
+            self.forcePressureShift = self.forcePressure - fpDiv
+            self.forcePressure = fpDiv
         # XSPH (pairwise antisymmetric: conserves momentum)
         w = 2.0 * self.V[j] / (self.rho[i] + self.rho[j]) * self.W
         self.v = self.v + cfg.xsph * self._sum(w[:, None] * (self.v[j] - self.v[i]))
         # integrate; prescribed bodies move with the fluid
         self.v = self.v + dt * acc
         self.x = self.x + dt * self.v
+        if shift is not None:
+            self.x = self.x + shift
         self.time += dt
         if self.scene is not None:
             for b in self.scene.bodies:
@@ -700,12 +861,15 @@ class DFSPH2D:
                 self._pmNext = pm
         # momentum bookkeeping: d(sum m v) = dt (m g - sum F_pressure - sum F_friction), exact up to round-off
         mtot = self.V.sum()
-        expected = dt * (mtot * g - self.forcePressure.sum(0) - self.forceFriction.sum(0))
+        expected = dt * (mtot * g - self.forcePressure.sum(0) - self.forceFriction.sum(0) - self.forceViscous.sum(0))
         self.balance = float(((self.V[:, None] * (self.v - v0)).sum(0) - expected).norm())
         if cfg.recordForces:
-            self.history.append(dict(t=self.time, dt=dt, pressure=self.forcePressure.clone().cpu().numpy(), friction=self.forceFriction.clone().cpu().numpy(), balance=self.balance))
+            self.history.append(dict(t=self.time, dt=dt, pressure=self.forcePressure.clone().cpu().numpy(), pressureDiv=self.forcePressureDiv.clone().cpu().numpy(), friction=self.forceFriction.clone().cpu().numpy(),
+                                     viscous=self.forceViscous.clone().cpu().numpy(), torqueViscous=self.torque[2].clone().cpu().numpy(), balance=self.balance))
         vmax = float(self.v.norm(dim=1).max())
         self.dt = float(np.clip(cfg.cfl * float(self.h.min()) / max(vmax, 1e-12), cfg.minDt, cfg.maxDt))
+        if cfg.viscosity > 0.0:
+            self.dt = min(self.dt, cfg.viscousDt * (PACKING * float(self.h.min())) ** 2 / cfg.viscosity)   # the spacing, not the support: the no-slip wall term acts over the wall distance (~dx / 2)
         return self.time
 
 
