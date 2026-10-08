@@ -17,7 +17,7 @@ gradient and works for every representation, including SDF and primitives).  For
 All fluid-fluid sums are plain torch pair sums (cell list neighbours, `warpSPHBoundaries.scene.buildCellList`) and are checked against `warpSPHCore.warpOperation`.
 """
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 import numpy as np
@@ -151,6 +151,10 @@ class DFSPHConfig:
     closedDomain: Optional[bool] = None      # no free surface (a fully periodic box, or one closed by walls): the density source's mean (1 - rho averaged) is in the null space of the pressure operator (a uniform pressure moves
                                              # nothing), the Jacobi can only pump the pressure up / down uniformly (measured: 0.3-0.4 against a Stokes pressure ~5e-3 in a periodic array), and a large uniform pressure is not
                                              # force-free next to a wall.  True: the source's mean is removed (the compatibility projection; warpSPH's closed-box finding for velocity-impulse solvers).  None: True iff fully periodic.
+    closedPreset: Optional[bool] = None      # the converged-projection setup for closed / periodic flows without a free surface (docs/plan-next-steps.md "DFSPH in closed periodic domains": Stokes arrays, TGV, channel, Couette ~ 1.00
+                                             # against 1.2-1.45 for the density-solve path): every field below still at its library default is replaced by CLOSED_PRESET (projection='compact', densitySolve=False,
+                                             # shifting='fixed' shiftA 0.5, divergenceGauge='min'); explicitly set fields win.  None: on iff fully periodic (like closedDomain); True: force (walled closed domains, e.g.
+                                             # Taylor-Couette); False: the omniSPH-style path.  Free surfaces keep the omniSPH-style path.
     divergenceWarmStart: float = 0.0         # the divergence solve starts from this fraction of the previous step's divergence pressure (omniSPH: 0, from zero; the Jacobi then cannot build a long-range pressure in 4 iterations)
     pressureGauge: str = "auto"              # closed domains: the density pressure is defined up to a constant, and the Jacobi lets that constant float up (a 1e-4 density excess -> p ~ 0.3 with dt^2 scaling); a large uniform
                                              # pressure is not force-free next to walls (measured: the slot between periodic squares stagnates as p_min lifts off 0).  'min': after the density solve p -= min(p) (the smallest
@@ -235,9 +239,24 @@ def morris_calibration(h, dx, V, kernel="w2", eta2=0.0025):
     return float(-np.sum(V * K * y * y))
 
 
+CLOSED_PRESET = dict(projection="compact", densitySolve=False, shifting="fixed", shiftA=0.5, divergenceGauge="min")
+
+
+def resolve_closed_preset(cfg):
+    """`DFSPHConfig.closedPreset`: the fields of CLOSED_PRESET that are still at their library default take the preset's value (an explicit value, even the default one set deliberately to
+    differ from the preset, is indistinguishable from the default: use closedPreset=False then)."""
+    on = cfg.closedPreset
+    if on is None:
+        on = cfg.periodic is not None and all(cfg.periodic.flags)
+    if not on:
+        return cfg
+    dflt = DFSPHConfig()
+    return replace(cfg, **{k: v for k, v in CLOSED_PRESET.items() if getattr(cfg, k) == getattr(dflt, k)})
+
+
 class DFSPH2D:
     def __init__(self, positions, velocities, V, h, scene: Optional[Scene], cfg: Optional[DFSPHConfig] = None, device="cuda:0"):
-        self.cfg = cfg or DFSPHConfig()
+        self.cfg = resolve_closed_preset(cfg or DFSPHConfig())
         self.dev = device
         t = lambda a: torch.as_tensor(a, dtype=F64, device=device)
         self.x, self.v = t(positions).clone(), t(velocities).clone()

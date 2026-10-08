@@ -73,3 +73,16 @@ def test_converged_compact_projection_keeps_the_taylor_green_decay():
     rate = -np.polyfit(ts[5:], np.log(es[5:]), 1)[0]
     assert abs(rate / (4 * NU * (2 * math.pi) ** 2) - 1.0) < 0.02
     assert all(b <= a * (1 + 1e-12) for a, b in zip(es, es[1:]))                            # monotone
+
+
+def test_closed_preset_selects_the_converged_projection_for_fully_periodic_flows():
+    from warpSPHBoundaries.sim.dfsph2d import CLOSED_PRESET, resolve_closed_preset
+    per = Periodic((0, 0), (1, 1))
+    on = resolve_closed_preset(DFSPHConfig(periodic=per))
+    assert all(getattr(on, k) == v for k, v in CLOSED_PRESET.items())
+    assert resolve_closed_preset(DFSPHConfig()).projection == "dfsph"                              # a free-surface (non-periodic) setup keeps the omniSPH-style path
+    assert resolve_closed_preset(DFSPHConfig(periodic=Periodic((0, -9), (1, 9), (True, False)))).projection == "dfsph"
+    assert resolve_closed_preset(DFSPHConfig(periodic=per, closedPreset=False)).projection == "dfsph"
+    assert resolve_closed_preset(DFSPHConfig(closedPreset=True)).densitySolve is False            # walled closed domain (Taylor-Couette): forced on
+    kept = resolve_closed_preset(DFSPHConfig(periodic=per, shiftA=1.0, divergenceGauge="mean"))
+    assert kept.shiftA == 1.0 and kept.divergenceGauge == "mean" and kept.projection == "compact"   # explicit values win
