@@ -20,6 +20,31 @@ F64 = torch.float64
 wf = wp.float64
 
 
+
+_INDEX_CACHE = {}
+
+
+def _cached(key, make):
+    """a read-only index array that is a pure function of its key, shared by every body and step.  Never created INSIDE a CUDA graph capture (a tensor made while capturing holds no data until the replay):
+    there it is built afresh without being cached, and the eager warm-up step has normally cached it already."""
+    t = _INDEX_CACHE.get(key)
+    if t is None:
+        t = make()
+        if not torch.cuda.is_current_stream_capturing():
+            _INDEX_CACHE[key] = t
+    return t
+
+
+def _csr_arrays(rows, K, device):
+    """(pair order, row offsets) of a fixed-shape slot list."""
+    return _cached(("csr", rows, K, str(device)), lambda: (torch.arange(rows * K, dtype=torch.int32, device=device), torch.arange(rows + 1, dtype=torch.int32, device=device) * K))
+
+
+def _slot_rows(N, K, device):
+    """the row of every slot, arange(N K) // K."""
+    return _cached(("rows", N, K, str(device)), lambda: torch.arange(N * K, device=device, dtype=torch.int32) // K)
+
+
 @dataclass
 class FixedTopology:
     """duck-types `SurfaceTopology` for `FusedWall`: slots instead of a pair list.  `e` [N * K] int32 (-1 = empty), `qi` [N * K] the row of a slot, `ind` [N] float64."""
@@ -34,7 +59,7 @@ class FixedTopology:
 
     def csr(self, rows):
         if self._csr is None:
-            self._csr = (torch.arange(rows * self.K, dtype=torch.int32, device=self.e.device), torch.arange(rows + 1, dtype=torch.int32, device=self.e.device) * self.K)
+            self._csr = _csr_arrays(rows, self.K, self.e.device)
         return self._csr
 
 
@@ -128,7 +153,7 @@ def fixed_topology(rep, lpos, lsup, valid, supportMax):
         wp.from_torch(lp, dtype=wf), wp.from_torch(ls, dtype=wf), wp.from_torch(vi, dtype=wp.int32), wa["verts"], wa["edges"], wf(sc["clo0"]), wf(sc["clo1"]), wf(sc["cell"]), sc["nx"], sc["ny"],
         wa["cstart"], wa["citems"], K, wa["cind"], wa["cempty"], wf(float(rep.background)), wf(sc["y0"]), wf(sc["dy"]), sc["nb"], wa["bstart"], wa["bitems"],
         wp.from_torch(e, dtype=wp.int32), wp.from_torch(ind, dtype=wf)])
-    return FixedTopology(e, torch.arange(N * K, device=lpos.device, dtype=torch.int32) // K, K, ind)
+    return FixedTopology(e, _slot_rows(N, K, lpos.device), K, ind)
 
 
 @dataclass
@@ -141,7 +166,7 @@ class FixedDiskTopology:
 
     def csr(self, rows):
         if self._csr is None:
-            self._csr = (torch.arange(rows * self.K, dtype=torch.int32, device=self.e.device), torch.arange(rows + 1, dtype=torch.int32, device=self.e.device) * self.K)
+            self._csr = _csr_arrays(rows, self.K, self.e.device)
         return self._csr
 
 
@@ -192,7 +217,7 @@ def fixed_disk_topology(rep, lpos, lsup, valid, supportMax):
     vi = valid.to(torch.int32).contiguous()
     wp.launch(_disk_slots_kernel, dim=N, device=dev, inputs=[wp.from_torch(lp, dtype=wf), wp.from_torch(ls, dtype=wf), wp.from_torch(vi, dtype=wp.int32), wc, wr, wf(lo0), wf(lo1), wf(cell), nx, ny,
                                                               wst, wit, K, wp.from_torch(e, dtype=wp.int32)])
-    return FixedDiskTopology(e, torch.arange(N * K, device=lpos.device, dtype=torch.int32) // K, K)
+    return FixedDiskTopology(e, _slot_rows(N, K, lpos.device), K)
 
 
 def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
@@ -205,9 +230,10 @@ def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
     N = len(pos)
     cand = torch.arange(N, device=dev)
     bodies = []
-    for body in scene.bodies:
+    kin = scene.kinematics(pos)                                                      # the local frames of all bodies in one batched evaluation (bit-for-bit `Body.toLocal`)
+    for bi, body in enumerate(scene.bodies):
         lo, hi = body.obb()
-        lpos = body.toLocal(pos)
+        lpos = body.toLocal(pos) if kin is None else kin.local[bi]
         d = (lo - lpos).clamp(min=0) + (lpos - hi).clamp(min=0)
         valid = (d.norm(dim=1) < sup) & allowed
         replist = body.fusedReps(supportMax, dev) or body.reps                  # implicit / SDF bodies as their exact polygon

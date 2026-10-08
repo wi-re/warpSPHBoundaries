@@ -772,11 +772,14 @@ class Body:
     angularAcceleration: float = 0.0
     periodic: Optional[Periodic] = None          # set by `Scene.setPeriodic`: this body sees the particles at their nearest periodic image (below)
     periodicSupport: float = 0.0                 # the largest kernel support of the particles (the reach of the images)
+    bc: str = "noSlip"                           # boundary-condition policy of the wall for the solver (sim/bcclosures.py): 'noSlip' | 'freeSlip' | 'zeros' (wall velocity pinned to 0) | 'constant' (pinned to `bcValue`)
+    bcValue: tuple = (0.0, 0.0)                  # the pinned wall velocity of the 'constant' policy
 
     def __post_init__(self):
         self.center = torch.as_tensor(self.center, dtype=F64)
         self.linearVelocity = torch.as_tensor(self.linearVelocity, dtype=F64)
         self.linearAcceleration = torch.as_tensor(self.linearAcceleration, dtype=F64)
+        self.bcValue = torch.as_tensor(self.bcValue, dtype=F64)
 
     def accelerationAt(self, world):
         """acceleration of the material points of the body at world positions: a + alpha J s - omega^2 s (s = x - centre)."""
@@ -981,6 +984,68 @@ class ParticleCells:
         return self.order[torch.repeat_interleave(s, cnt) + off]
 
 
+class BodyKinematics:
+    """The rigid-body fields of ALL bodies at the positions `x`, evaluated for the whole set at once ([B, N, 2], a handful of launches instead of one family per body).
+
+    `rel[b]` = `Body.relative(x)` (nearest image of the body centre), `velocity[b]` = `Body.velocityAt(x)`, `acceleration[b]` = `Body.accelerationAt(x)`.  The arithmetic is the per-body arithmetic
+    element by element in the same order (the products `w w s` and `a + alpha J s - w w s` included), so the values are bit-for-bit the per-body ones (tests/scene/test_body_kinematics.py)."""
+
+    def __init__(self, bodies, x):
+        dev = x.device
+        self.x = x
+        self.C = torch.stack([b.center for b in bodies])                                                       # [B, 2]
+        self.periodic = bodies[0].periodic
+        self.rel = min_image(x[None] - self.C[:, None, :], self.periodic)                                      # [B, N, 2]
+        self._bodies = bodies
+        self._vel = self._acc = self._loc = None
+
+    @staticmethod
+    def _scalars(vals, dev):
+        """[B] float64 from python floats, 0-d device tensors (a graph capture) or a mix (no host-to-device copy when a tensor is present)."""
+        if all(isinstance(v, torch.Tensor) for v in vals):
+            return torch.stack([v.to(dev, F64) for v in vals])
+        if not any(isinstance(v, torch.Tensor) for v in vals):
+            return torch.tensor([float(v) for v in vals], dtype=F64).to(dev)
+        return torch.stack([v.to(dev, F64) if isinstance(v, torch.Tensor) else torch.full((), float(v), dtype=F64, device=dev) for v in vals])
+
+    @staticmethod
+    def _perp(r):
+        return torch.stack([-r[..., 1], r[..., 0]], -1)
+
+    @property
+    def velocity(self):
+        if self._vel is None:
+            bs, dev = self._bodies, self.x.device
+            w = self._scalars([b.angularVelocity for b in bs], dev)[:, None, None]
+            v = torch.stack([b.linearVelocity for b in bs])[:, None, :]
+            self._vel = v + w * self._perp(self.rel)
+        return self._vel
+
+    @property
+    def local(self):
+        """`Body.toLocal(x)` of every body: [B, N, 2] body-frame coordinates (nearest image of the centre in a periodic box; the rotation as `Pose.toLocal`)."""
+        if self._loc is None:
+            bs, dev = self._bodies, self.x.device
+            cs = [b.pose._cs() for b in bs]
+            c = self._scalars([t[0] for t in cs], dev)[:, None]
+            s = self._scalars([t[1] for t in cs], dev)[:, None]
+            Cc = self.C[:, None, :]
+            p = self.x[None].expand(len(bs), -1, -1) if self.periodic is None else Cc + self.rel                # Body.image
+            d = p - Cc
+            self._loc = torch.stack([d[..., 0] * c + d[..., 1] * s, d[..., 1] * c - d[..., 0] * s], -1)
+        return self._loc
+
+    @property
+    def acceleration(self):
+        if self._acc is None:
+            bs, dev = self._bodies, self.x.device
+            w = self._scalars([b.angularVelocity for b in bs], dev)[:, None, None]
+            al = self._scalars([b.angularAcceleration for b in bs], dev)[:, None, None]
+            a = torch.stack([b.linearAcceleration.to(dev) for b in bs])[:, None, :]
+            self._acc = a + al * self._perp(self.rel) - w * w * self.rel
+        return self._acc
+
+
 class Scene:
     def __init__(self, bodies: List[Body], device="cpu", volumeMode: str = "moments"):
         """`volumeMode`: 'moments' (volume representations as pair sets of exact moments, fields linear in position) or 'nodal' (P1 nodal data through
@@ -993,6 +1058,7 @@ class Scene:
             b.center = b.center.to(device)
             b.linearVelocity = b.linearVelocity.to(device)
             b.linearAcceleration = b.linearAcceleration.to(device)         # a host tensor would be copied (a synchronisation) on every `accelerationAt`
+            b.bcValue = b.bcValue.to(device)
             for r in b.reps:
                 r.to(device) if hasattr(r, "to") else None
 
@@ -1005,6 +1071,27 @@ class Scene:
             b.__dict__.pop("_fusedCache", None)
             b.__dict__.pop("_obbCache", None)
         return self
+
+    def kinematics(self, x):
+        """`BodyKinematics` of all bodies at the positions `x` (one batched evaluation; the last one is kept while `x` (storage and version) and every body state (the identity and in-place version of its pose /
+        velocity / acceleration tensors, the value of its python-float rates and angle, the captured (cos, sin)) are unchanged).  None when the bodies do not share one periodic box (use the per-body methods)."""
+        bs = self.bodies
+        if not bs or any(b.periodic is not bs[0].periodic for b in bs):
+            return None
+
+        def tok(v):
+            if isinstance(v, torch.Tensor):
+                return (id(v), v._version)
+            return tuple(tok(u) for u in v) if isinstance(v, tuple) else v
+
+        sig = (x.data_ptr(), x._version, tuple(x.shape),
+               tuple((tok(b.center), tok(b.linearVelocity), tok(b.linearAcceleration), tok(b.angularVelocity), tok(b.angularAcceleration), tok(b.angle), tok(getattr(b, "_cs", None))) for b in bs))
+        hit = self.__dict__.get("_kinCache")
+        if hit is not None and hit[0] == sig:
+            return hit[1]
+        kin = BodyKinematics(bs, x)
+        self._kinCache = (sig, kin)
+        return kin
 
     def inside(self, points, body=None):
         """True where a world point lies inside the solid of any body (surface loops: winding number; SDF / implicit primitives: negative signed distance, positive = fluid; volume: inside a triangle).

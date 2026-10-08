@@ -32,7 +32,7 @@ def make(n, M, bundle, dev, **cfgkw):
         bodies = [Body(bodyId=0, reps=[DiskArrayRep(cs, [R] * len(cs))])]
     else:
         bodies = [Body(bodyId=i, center=c, reps=[ImplicitRep(DiskBody(center=(0.0, 0.0), radius=R))]) for i, c in enumerate(cs)]
-    cfg = DeltaSPHConfig(gravity=(0.0, 0.0), c0=10.0, alpha=0.1, periodic=Periodic((0, 0), (1, 1)), bodyForce=(0.03, 0.0), shifting=True, graphStep=True, **cfgkw)
+    cfg = DeltaSPHConfig(gravity=(0.0, 0.0), c0=10.0, alpha=0.1, periodic=Periodic((0, 0), (1, 1)), bodyForce=(0.03, 0.0), shifting=True, **{"graphStep": True, **cfgkw})
     return DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, Scene(bodies, dev), cfg, dev)
 
 

@@ -41,6 +41,7 @@ from ..scene.viscosity import lap_factor, lap_lambda_scene
 from ..scene.periodic import Periodic, min_image
 from .pinned import Pinned
 from .wallclosure import NoSlipClosure
+from .bcclosures import POLICIES as BC_POLICIES, pinned as bc_pinned
 from .pairs import F64, dwendland2, dwendland4, neighbor_pairs, pair_delta, wendland2, wendland4
 
 XI = 2.8213846683502197                 # warpSPHCore sphKernel_xi(Wendland2, 2D) = packing * kernelScale
@@ -73,6 +74,8 @@ class DeltaSPHConfig:
     shiftCFL: float = 0.3
     shiftThreshold: float = 0.5         # per-component clamp (x dx)
     shiftCapFraction: float = 0.5       # |shift| <= fraction * Umax * dt  (Sun 2019 Eq. 14)
+    shiftMachFrame: str = "absolute"    # the speed of the shifting's Mach number and cap: 'absolute' (max |v|, Sun 2017) or 'wall' (max |v - u_wall| with u_wall the wall velocity averaged over the wall contacts,
+                                        # sum lam_b(i) u_b(x_i) / sum lam_b(i); 0 without walls in reach): the same for walls at rest, and invariant under a uniform boost of fluid AND walls (Galilean test)
     shiftLambda: float = 0.4            # lambda gate in the surface set F
     shiftCurvatureAngle: float = 15.0   # degrees
     noPen: str = "off"                  # 'impulse': once per step, closing particles within dp/4 of a wall get v_n <- v_n (1 - f(d)), f = 3 - 4 clip(1/2 + d/dp, 1/4, 1) (warpSPH mDBC no-penetration, 'impulse' placement)
@@ -149,6 +152,9 @@ class DeltaSPH2D:
         self.Hvec = torch.full((n,), self.H, dtype=F64, device=device)
         self.scene = scene
         self.nb = len(scene.bodies) if scene is not None else 0
+        for b in (scene.bodies if scene is not None else []):
+            if b.bc not in BC_POLICIES:
+                raise ValueError("Body.bc must be one of %s, got %r" % (BC_POLICIES, b.bc))
         self.kinds = torch.zeros(n, dtype=torch.int32, device=device)
         self.g = torch.tensor(self.cfg.gravity, dtype=F64, device=device)
         self.time = 0.0
@@ -194,6 +200,32 @@ class DeltaSPH2D:
         flds = flds if isinstance(flds, list) else [flds] * self.nb
         return self.cfg.wallMass * sceneOperation(ps, self._props(op, mode), self.scene, pm, None, flds, perBody=True)
 
+    def _bvel(self, b, x):
+        """the velocity of the wall of body `b` at the particles `x`: the rigid-body field (`b.velocityAt(x)`, from the batched evaluation of all bodies at x, scene.kinematics, bit-for-bit the same values)
+        for the noSlip / freeSlip policies, the pinned value for 'zeros' / 'constant' (sim/bcclosures.py)."""
+        if bc_pinned(b.bc):
+            return self._pinned(b, x)
+        kin = self.scene.kinematics(x)
+        return b.velocityAt(x) if kin is None else kin.velocity[self._bidx(b)]
+
+    def _bvelAt(self, b, pts):
+        """the wall velocity of body `b` at arbitrary points (the contact points of the friction and of the no-penetration law)."""
+        return self._pinned(b, pts) if bc_pinned(b.bc) else b.velocityAt(pts)
+
+    @staticmethod
+    def _pinned(b, pts):
+        return torch.zeros_like(pts) if b.bc == "zeros" else b.bcValue.to(pts.device)[None].expand_as(pts)
+
+    def _bacc(self, b, x):
+        kin = self.scene.kinematics(x)
+        return b.accelerationAt(x) if kin is None else kin.acceleration[self._bidx(b)]
+
+    def _bidx(self, b):
+        ids = self.__dict__.get("_bodyIds")
+        if ids is None or len(ids) != len(self.scene.bodies):
+            ids = self._bodyIds = {id(bb): i for i, bb in enumerate(self.scene.bodies)}
+        return ids[id(b)]
+
     def _wall_data(self, x, rho):
         """per-body wall integrals at positions x: lam [B,N], G = mu grad lambda [B,N,2], A = mu int (a1.y) grad W [B,N,2] with a1 = rho0 (g - a_wall)."""
         return self._wall_state(x, rho)[:3]
@@ -221,11 +253,12 @@ class DeltaSPH2D:
             G = self._wall_op(ps, pm, WarpOperation.Gradient, BodyField(torch.tensor(1.0, dtype=F64, device=self.dev)))
             self._wallCache = None if self._graphMode else (x.clone(), poses, adj, pm, lam, G, self.Hvec.clone(), self.kinds.clone())
         if isinstance(adj, WallAggregate):
-            a1 = torch.stack([self.cfg.rho0 * (self._gWall()[None] - b.accelerationAt(x)) for b in self.scene.bodies])
+            kin = self.scene.kinematics(x)
+            a1 = self.cfg.rho0 * (self._gWall()[None, None] - kin.acceleration) if kin is not None else torch.stack([self.cfg.rho0 * (self._gWall()[None] - b.accelerationAt(x)) for b in self.scene.bodies])
             return lam, G, self.cfg.wallMass * adj.evaluate((WallOutput("A", 0, "a1g1"),), a1=a1)["A"], adj
         flds = []
         for b in self.scene.bodies:
-            a1 = self.cfg.rho0 * (self._gWall()[None] - b.accelerationAt(x))
+            a1 = self.cfg.rho0 * (self._gWall()[None] - self._bacc(b, x))
             flds.append(BodyField(torch.zeros(len(x), dtype=F64, device=self.dev), a1, rho=1.0, perQuery=True))
         A = self._wall_op(ps, pm, WarpOperation.Gradient, flds)
         return lam, G, A, adj
@@ -250,13 +283,18 @@ class DeltaSPH2D:
             self._hc = (self.Hvec, bool((self.Hvec == self.H).all()))
         return self._hc[1]
 
+    def _needLap(self):
+        """the wall Laplacian channel (`lap`) is needed by the laplacian / noslipMirror forms and by every freeSlip body (the exact symmetric-mirror closure)."""
+        cfg = self.cfg
+        return bool(cfg.viscosity and cfg.wallViscosity and (cfg.wallViscosityForm in ("laplacian", "noslipMirror") or any(b.bc == "freeSlip" for b in self.scene.bodies)))
+
     def _fused_key(self):
-        return (self.cfg.kernel, bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm in ("laplacian", "noslipMirror")), bool(self.cfg.fixedAdjacency), float(self.cfg.wallParticleSpacing))
+        return (self.cfg.kernel, self._needLap(), bool(self.cfg.fixedAdjacency), float(self.cfg.wallParticleSpacing))
 
     def _fused_state(self, ps):
         """the fused wall evaluation at the positions of `ps` from the boundary provider (scene/provider.py): adjacency, one stage-1 launch family for the kernels the step needs, and every static output of this
         position set in `.out` (lam, G, Cov of the kernel, `cover` = g0 of the degree-1 cone kernel per body, `lap` = sum(2 lam - tr g1) of lw, `tens` = g0 of wp5, per body, raw: factors applied by the consumers)."""
-        fw = self._provider().aggregate(ps, self.H, self.cfg.kernel, laplacian=bool(self.cfg.viscosity and self.cfg.wallViscosity and self.cfg.wallViscosityForm in ("laplacian", "noslipMirror")), fixedAdjacency=self.cfg.fixedAdjacency)
+        fw = self._provider().aggregate(ps, self.H, self.cfg.kernel, laplacian=self._needLap(), fixedAdjacency=self.cfg.fixedAdjacency)
         fw.key = self._fused_key()
         return fw
 
@@ -373,13 +411,23 @@ class DeltaSPH2D:
         s = torch.where(sw, torch.ones_like(P), -torch.ones_like(P))
 
         # continuity: fluid pairs, wall (free-slip mirror); the kinematic rate is a function of the velocity (time-centred continuity re-evaluates it with the mean velocity)
+        kinB = self.scene.kinematics(x) if (self.nb and cfg.wallContinuity) else None
+        if kinB is not None:                                                                        # the wall directions of all bodies once (they do not depend on the velocity)
+            gmB = G.norm(dim=2)
+            nbB = G / gmB.clamp(min=1e-300)[..., None]
+
         def kinematic(vel):
             out = fw.continuity(fps, fadj, vel) if fw is not None else -rho * self._sum(V[j] * ((vel[j] - vel[i]) * gW).sum(1), i)
             if self.nb and cfg.wallContinuity:
+                if kinB is not None:                                                                # all bodies in one evaluation, accumulated in body order (the sum of the per-body loop, bit for bit)
+                    terms = 2.0 * rho[None] * ((vel[None] - kinB.velocity) * nbB).sum(-1) * gmB
+                    for bi in range(len(terms)):
+                        out = out + terms[bi]
+                    return out
                 for bi, b in enumerate(self.scene.bodies):
                     gm = G[bi].norm(dim=1)
                     nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
-                    out = out + 2.0 * rho * ((vel - b.velocityAt(x)) * nb_).sum(1) * gm
+                    out = out + 2.0 * rho * ((vel - self._bvel(b, x)) * nb_).sum(1) * gm
             return out
         self._kinematic = kinematic
         kin = self._kin = kinematic(v)
@@ -442,35 +490,38 @@ class DeltaSPH2D:
         if cfg.viscosity and cfg.wallViscosity and isinstance(adj, WallAggregate) and cfg.wallViscosityForm in ("laplacian", "noslip", "noslipMirror", "noslipCurv", "noslipMoment"):
             fac = cfg.alpha * cfg.c0 * H / self.xi                                                  # full-length form: the near-wall rows are a mask, not an index list (no host sync)
             nearm = (lam.sum(0) > 1e-9).to(F64)
+            if cfg.fluidViscosity == "morris" and any(bb.bc == "freeSlip" for bb in self.scene.bodies):
+                raise NotImplementedError("fluidViscosity='morris': the freeSlip policy (the alpha-weight wall Laplacian) is not available with the Morris operator")
             if cfg.fluidViscosity == "morris" and cfg.wallViscosityForm not in ("noslip", "noslipMoment"):
                 raise NotImplementedError("fluidViscosity='morris': the wall closures 'noslip' and 'noslipMoment' only (the others are built for the alpha pair weight), got %r" % (cfg.wallViscosityForm,))
             for bi, b in enumerate(self.scene.bodies):
                 gm = G[bi].norm(dim=1)
                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
-                if cfg.wallViscosityForm == "laplacian":
-                    un = ((v - b.velocityAt(x)) * nb_).sum(1)
+                form = "laplacian" if b.bc == "freeSlip" else cfg.wallViscosityForm                  # freeSlip: the exact wall Laplacian with the symmetric mirror (no tangential traction)
+                if form == "laplacian":
+                    un = ((v - self._bvel(b, x)) * nb_).sum(1)
                     dl = lap_factor(H, self._family()) * adj.out["lap"][bi]
                     term = (-2.0 * (fac / 8.0) * cfg.wallMass * un / rho * dl * nearm)[:, None] * nb_
-                elif cfg.wallViscosityForm == "noslipMirror":                                       # the same exact wall Laplacian with the antisymmetric mirror: the wall continuum moves with 2 v_w - v, the whole relative velocity flips (free slip flips its normal part only)
+                elif form == "noslipMirror":                                                        # the same exact wall Laplacian with the antisymmetric mirror: the wall continuum moves with 2 v_w - v, the whole relative velocity flips (free slip flips its normal part only)
                     dl = lap_factor(H, self._family()) * adj.out["lap"][bi]
-                    term = (-2.0 * (fac / 8.0) * cfg.wallMass / rho * dl * nearm)[:, None] * (v - b.velocityAt(x))
-                elif cfg.wallViscosityForm == "noslipMoment":
+                    term = (-2.0 * (fac / 8.0) * cfg.wallMass / rho * dl * nearm)[:, None] * (v - self._bvel(b, x))
+                elif form == "noslipMoment":
                     dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
                     dd = dsd.clamp(min=0.25 * self.dx)
                     cp = x - dsd[:, None] * nsd
                     on = (hit & (nearm > 0))[:, None]
-                    term = torch.where(on, self._moment_wall_term(bi, x, v - b.velocityAt(x), nsd, dd, viscf, rho, fac), torch.zeros_like(v))      # relative to the RIGID motion of the wall at the particle (the rigid part is annihilated by the pair weight; w = 0 on the wall)
+                    term = torch.where(on, self._moment_wall_term(bi, x, v - self._bvel(b, x), nsd, dd, viscf, rho, fac), torch.zeros_like(v))      # relative to the RIGID motion of the wall at the particle (the rigid part is annihilated by the pair weight; w = 0 on the wall)
                     if lever is not None and cfg.wallFrictionLever == "contact":
                         lever[bi] = cp
                 else:
                     dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=self.H)
                     dd = dsd.clamp(min=0.25 * self.dx)
                     cp = x - dsd[:, None] * nsd                                                     # the wall point: the wall velocity of the friction is the one THERE (rotating walls)
-                    vrel = v - b.velocityAt(cp)
+                    vrel = v - self._bvelAt(b, cp)
                     on = (hit & (nearm > 0))[:, None]
                     nu_w = fac / 8.0
                     term = torch.where(on, -2.0 * nu_w * vrel * (gm / (rho * dd))[:, None], torch.zeros_like(v))
-                    if cfg.wallViscosityForm == "noslipCurv":                                       # EXPERIMENTAL, EMPIRICAL (not a derived method): a correction in the spirit of the second-order wall gradient v_rel / d - (d / 2) lap v.  The consistent algebra gives
+                    if form == "noslipCurv":                                                        # EXPERIMENTAL, EMPIRICAL (not a derived method): a correction in the spirit of the second-order wall gradient v_rel / d - (d / 2) lap v.  The consistent algebra gives
                         kappa = (gm * dd / rho)[:, None]                                            # term = (term0 + kappa viscf) / (1 - kappa) (kappa = |G| d / rho); that form makes the plane Poiseuille amplitude WORSE (0.920 / 0.958 at n = 32 / 64, the flux form is 0.950 / 0.966).
                         term = torch.where(on, (term + kappa * viscf) / (1.0 + kappa), torch.zeros_like(v))   # The (1 + kappa) used here fits the channel (1.011 / 1.001) but has no derivation and is wrong on curved walls: do not use it beyond the plane channel (docs/plan-next-steps.md).
                     if lever is not None and cfg.wallFrictionLever == "contact":
@@ -493,12 +544,12 @@ class DeltaSPH2D:
             for bi, b in enumerate(self.scene.bodies):
                 gm = G[bi].norm(dim=1)
                 nb_ = G[bi] / gm.clamp(min=1e-300)[:, None]
-                un = ((v - b.velocityAt(x)) * nb_).sum(1)
+                un = ((v - self._bvel(b, x)) * nb_).sum(1)
                 if cfg.wallViscosityForm == "noslip":
                     d, nsd, hit = self.scene.signed_distance(x[near], body=bi)                         # d_signed > 0 in the fluid; hit False only for volume representations
                     dd = d.clamp(min=0.25 * self.dx)                                                   # the 1/d floor (the no-penetration law keeps particles at d >= ~0.25 dx)
                     cp = x[near] - d[:, None] * nsd                                                    # the wall velocity of the friction is the one at the wall point
-                    accv = torch.where(hit[:, None], -2.0 * (fac / 8.0) * (v[near] - b.velocityAt(cp)) * (gm[near] / (rho[near] * dd))[:, None], torch.zeros_like(v[near]))   # fac/8 = nu_eff; gm = |G_b|; all-components relative velocity (no-slip)
+                    accv = torch.where(hit[:, None], -2.0 * (fac / 8.0) * (v[near] - self._bvelAt(b, cp)) * (gm[near] / (rho[near] * dd))[:, None], torch.zeros_like(v[near]))   # fac/8 = nu_eff; gm = |G_b|; all-components relative velocity (no-slip)
                     if lever is not None and cfg.wallFrictionLever == "contact":
                         lever[bi, near] = cp
                 elif cfg.wallViscosityForm == "laplacian":
@@ -537,7 +588,7 @@ class DeltaSPH2D:
                 # (any shape): no net force, torque -mu Omega oint (r x t) ds = -2 mu Omega A, A = the signed area enclosed by the solid's boundary (positive for an obstacle, negative for a cavity)
                 mu = cfg.rho0 * cfg.alpha * cfg.c0 * H / (8.0 * self.xi)
                 for bi, b in enumerate(self.scene.bodies):
-                    forces[1, bi, 2] = forces[1, bi, 2] - 2.0 * mu * self._solid_area(b) * b.angularVelocity
+                    forces[1, bi, 2] = forces[1, bi, 2] - 2.0 * mu * self._solid_area(b) * (0.0 if bc_pinned(b.bc) else b.angularVelocity)
         return acc, drho, forces
 
     def _project(self, x, v, rho, V, pairs, G, kinematic, acc, fw=None, fps=None, fadj=None):
@@ -737,7 +788,14 @@ class DeltaSPH2D:
                 T = tensile_vector_scene(self.scene, x[near], H, self._family(), st["adj"].restrict(near))
                 wall = wall.index_add(0, near, cfg.wallMass * cfg.shiftR / w0 ** 4 * T)
             raw = raw + (cfg.rho0 / (4.0 * rho))[:, None] * wall
-        vmax = v.norm(dim=1).max()                                                                  # device scalars: no host sync
+        vrel = v
+        if cfg.shiftMachFrame == "wall" and self.nb:                                                # speeds relative to the walls: a uniform boost of fluid and walls leaves the shift unchanged
+            lamB = st["lam"]
+            Wb = torch.stack([self._bvel(b, x) for b in self.scene.bodies])
+            vrel = v - (lamB[..., None] * Wb).sum((0, 1)) / lamB.sum().clamp(min=1e-300)
+        elif cfg.shiftMachFrame not in ("absolute", "wall"):
+            raise ValueError("shiftMachFrame must be 'absolute' or 'wall', got %r" % (cfg.shiftMachFrame,))
+        vmax = vrel.norm(dim=1).max()                                                               # device scalars: no host sync
         Ma = vmax / cfg.c0
         Ma = torch.where(Ma >= 1e-6, Ma, torch.full_like(Ma, 0.1))
         hs = H / self.ks
@@ -775,7 +833,7 @@ class DeltaSPH2D:
     def _wall_velocity(self, x, d, n, bidx):
         """velocity of the wall at the contact point x - d n, of the nearest body (`bidx`, -1: none -> 0): v_b + omega x (cp - centre), the same rigid-body field as `Body.velocityAt`."""
         cp = x - d[:, None] * n
-        W = torch.stack([b.velocityAt(cp) for b in self.scene.bodies])                              # [B, N, 2]
+        W = torch.stack([self._bvelAt(b, cp) for b in self.scene.bodies])                              # [B, N, 2]
         uw = W[bidx.clamp(min=0), torch.arange(len(x), device=x.device)]
         return torch.where((bidx >= 0)[:, None], uw, torch.zeros_like(uw))
 
