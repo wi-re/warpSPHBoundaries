@@ -101,6 +101,8 @@ class DeltaSPHConfig:
     bodyForceAtWall: bool = True        # the body force enters the wall pressure condition dp/dn = rho (g + f - a_wall) . n (a uniform force acts on the fluid at a wall like gravity; it is not hydrostatic in the density diffusion)
     pinned: Optional[Pinned] = None     # a prescribed-velocity band of fluid particles (pinned.py): the free stream of a periodic flow past a body
     fluidWarp: bool = True              # phase 3 of the plan: continuity, density diffusion, Antuono pressure force and the alpha viscosity of the fluid pairs from the warpSPH modules on a warpSPHCore Verlet adjacency (sim/fluidwarp.py); False = the torch pair sums, the oracle
+    integrator: str = "Symplectic Euler"  # warpSPHIntegrators scheme by display name (explicit: 'Symplectic Euler' (DualSPHysics, default), 'Velocity Verlet', 'Leap Frog', 'Midpoint', 'RK4', 'TVD RK2' ...): bodies
+                                        # and particles advance with the same scheme (exact poses for prescribed motion); the wall loads of a step are the stage loads weighted with the scheme's weights
     timeCentred: bool = False           # warpSPH `timeCentredContinuity`: the kinematic part of drho/dt is advanced with the mean velocity (v^n + v^{n+1})/2 at the half-step positions
     wallContinuity: bool = True         # free-slip mirror term in the continuity equation (ablation switch)
     barecascoThreshold: float = math.pi / 3
@@ -989,22 +991,33 @@ class DeltaSPH2D:
             self._body_writeback(vals[1:])
         return self.time
 
+    def _scheme(self):
+        """the integration function of `cfg.integrator` (warpSPHIntegrators, by display name; resolved once per name)."""
+        name = self.cfg.integrator
+        if self.__dict__.get("_schemeName") != name:
+            from warpSPHIntegrators.integration import getIntegrator
+            self._schemeFn, self._schemeName = getIntegrator(name).function, name
+        return self._schemeFn
+
+    def _wantForces(self, stage):
+        """the stages whose wall loads are booked: the symplectic Euler of the default books the second only (its weights are [0, 1]); any other scheme books every stage (weighted in `DeltaSPHSystem.finalize`)."""
+        return stage >= 1 if self.cfg.integrator == "Symplectic Euler" else True
+
     def _step_core(self):
         """the library's symplectic Euler (system.py: `symplecticEuler(DeltaSPHSystem, dt, deltaSPHRhs)`; shifting and the no-penetration impulse in the system's `finalize`) on the device state (x, v, rho, g, dt_t, the bodies
         `_bodyIn`); returns (loads, no-penetration count) and leaves the bodies in `_bodyOut`."""
-        from warpSPHIntegrators import symplecticEuler
+        from warpSPHIntegrators.integration import getIntegrator
         from warpSPHIntegrators.util import deferHostTime
         from .system import DeltaSPHSystem, deltaSPHRhs
         self._carryNext = self._graphMode and self._carry is not None
         dt = self.dt_t if self._graphMode else self.dt              # a captured step has no host dt: the device scalar, with the integrator's host time deferred
         with deferHostTime() if self._graphMode else contextlib.nullcontext():
-            res = symplecticEuler(DeltaSPHSystem.of(self, self._bodyIn), dt, deltaSPHRhs)
+            res = self._scheme()(DeltaSPHSystem.of(self, self._bodyIn), dt, deltaSPHRhs)
         st, aux = res.state.state, self._finalAux
         self.x, self.v, self.rho = st.positions, st.velocities, st.densities
         self._bodyOut = torch.stack([st.bodyPositions, st.bodyVelocities]) if self.nb else None
         forces = aux["forces"]
         loads = None if forces is None else torch.cat([forces, aux["nopenLoad"][None]])        # [3, B, 3]: pressure, wall viscous, no-penetration impulse (Fx, Fy, torque z about the body centre); the dt of the impulse is this step's
-        self.dt_t.copy_(self._next_dt(aux["acc"]))                 # in place: the device scalar is a persistent buffer
         return loads, aux["nopen"]
 
     # ---------------------------------------------------------------------------------------------------------------- diagnostics

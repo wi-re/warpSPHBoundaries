@@ -85,8 +85,17 @@ class DeltaSPHSystem(BaseIntegrationSystem):
         nopen = sim.no_penetration()
         sim.apply_pinned()
         st.positions, st.velocities = sim.x, sim.v
-        aux = returnValues[1][0]
-        sim._finalAux = dict(acc=aux["acc"], forces=aux["forces"], nopen=nopen, nopenLoad=sim._nopenLoad)
+        auxs = [r[0] for r in returnValues]                                                  # one aux per stage (acc, forces, kinematic); the last stage's acceleration sets the next time step
+        aux = auxs[-1]
+        forces = None
+        if len(weights) == len(auxs):                                                        # the stage loads weighted as the scheme weights its stages ([0, 1] for the symplectic Euler: the second only, bit for bit)
+            for w, a in zip(weights, auxs):
+                if a["forces"] is not None and float(w) != 0.0:
+                    forces = float(w) * a["forces"] if forces is None else forces + float(w) * a["forces"]
+        if forces is None:
+            forces = aux["forces"]
+        sim._finalAux = dict(acc=aux["acc"], forces=forces, nopen=nopen, nopenLoad=sim._nopenLoad)
+        sim.dt_t.copy_(sim._next_dt(aux["acc"]))                                              # the adaptive time step of the next step (a hook of the system; in place: the device scalar is a persistent buffer)
         return self
 
     # ------------------------------------------------------------------------------------------------ typed update interface
@@ -109,7 +118,10 @@ class DeltaSPHSystem(BaseIntegrationSystem):
 
     # ------------------------------------------------------------------------------------------------ drift field
     def drift_fields_enabled(self, **kwargs):
-        return bool(self.sim.cfg.timeCentred)
+        """the time-centred continuity (`cfg.timeCentred`); ALWAYS for the Verlet pair: their end-of-step evaluation sits at the drifted positions with the half-step velocity, and without the density drifted
+        with them the equation of state sees the old density there (measured, hydrostatic tank, 0.3 s: rho in [0.79, 1.32] and v_max 12 m/s for Velocity Verlet, [0.98, 1.28] for Leap Frog, against
+        [0.9998, 1.0027] and 0.40 with the drift field)."""
+        return bool(self.sim.cfg.timeCentred or self.sim.cfg.integrator in ("Velocity Verlet", "Leap Frog"))
 
     def drift_rates(self, velocities, aux=None, **kwargs):
         """the continuity rate at this state's configuration with the fluid moving at `velocities`: the closure of the stage's right-hand side (the same positions, densities, wall and bodies)."""
@@ -124,6 +136,6 @@ def deltaSPHRhs(system, dt, *args, **kwargs):
     sim, st = system.sim, system.state
     stage = sim._stage
     sim._stage += 1
-    acc, drho, forces = sim.rhs(st.positions, st.velocities, st.densities, want_forces=stage >= 1)
+    acc, drho, forces = sim.rhs(st.positions, st.velocities, st.densities, want_forces=sim._wantForces(stage))
     update = DeltaSPHUpdate(dxdt=st.velocities, dvdt=acc, drhodt=drho, dbxdt=st.bodyVelocities, dbvdt=st.bodyAccelerations, drhodt_kin=sim._kin)
     return update, dict(kinematic=sim._kinematic, acc=acc, forces=forces)

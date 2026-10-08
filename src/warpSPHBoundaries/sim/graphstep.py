@@ -33,8 +33,14 @@ def _no_gc():
             gc.enable()
 
 
+GRAPH_SCHEMES = ("Symplectic Euler",)       # warpSPHIntegrators schemes that capture: the library's other schemes read host time (`float(state.t + dt)`) in the step, which a captured step cannot do (a scheme
+                                            # moves here once it uses `hostTime`); the others run eagerly
+
+
 def graphable(sim):
     cfg = sim.cfg
+    if cfg.integrator not in GRAPH_SCHEMES:
+        return False
     if not (cfg.fluidWarp and cfg.fusedWall and cfg.fixedAdjacency) or sim.scene is None:
         return False
     if getattr(cfg, "pressureSolver", "eos") != "eos":                                                 # the projection's CG reads its convergence on the host (it graphs itself)
