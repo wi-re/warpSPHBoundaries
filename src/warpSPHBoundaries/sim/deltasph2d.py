@@ -104,10 +104,13 @@ class DeltaSPHConfig:
     surfaceSamples: tuple = (24, 96)    # radial x angular samples of the solid around a particle: used ONLY by wallViscosityForm = "pairwise"
     kernel: KernelFunctions = KernelFunctions.Wendland2
     fixedDt: float = 0.0                # > 0: constant time step (the sloshing case pins dt = 1e-4)
-    pressureSolver: str = "eos"         # 'eos': P = c0^2 (rho - rho0) + P_b (weakly compressible); 'projection': the pressure of a divergence-free projection (Jacobi, `projectionIterations`, relaxation 0.5) with this scheme's own
-                                        # operators: the symmetric pressure force (fluid pairs, wall 2 P G + the hydrostatic part A) and the continuity rate (fluid pairs + the wall term); the integrated density is a diagnostic,
-                                        # the distribution is kept by `shifting`.  torch pair path only (fluidWarp = False, graphStep = False); c0 still defines nu = alpha c0 H / (8 xi) and the acoustic dt limit
-    projectionIterations: int = 4
+    pressureSolver: str = "eos"         # 'eos': P = c0^2 (rho - rho0) + P_b (weakly compressible); 'projection': the pressure of the converged compact projection (sim/projection.py, shared with DFSPH): the compact
+                                        # Laplacian of P = -(this scheme's continuity rate of v*) / dt, CG to projectionTol, then this scheme's own pressure gradient (the symmetric force without the Antuono switch,
+                                        # wall 2 P G; the hydrostatic part A stays in the momentum); the density is held at rho0 (integrated it drifts without the EOS feedback), the distribution is kept by `shifting`.  The step runs eagerly (the CG reads its
+                                        # convergence on the host; the CG itself is a CUDA graph); c0 still defines nu = alpha c0 H / (8 xi) and the acoustic dt limit
+    projectionTol: float = 1e-8
+    projectionMaxIterations: int = 2000
+    projectionBlock: int = 8
 
 
 def _sym2_lam_pinv(M, pinv=True):
@@ -346,8 +349,6 @@ class DeltaSPH2D:
         P = cfg.c0 ** 2 * (rho - cfg.rho0) + cfg.backgroundPressure
         proj = cfg.pressureSolver == "projection"
         if proj:
-            if fk is not None:
-                raise NotImplementedError("pressureSolver='projection' needs fluidWarp=False (the torch pair sums)")
             P = torch.zeros_like(rho)                                                           # the momentum without the pressure; the projection pressure is added at the end
         adj = None
         if self.scene is not None:
@@ -382,7 +383,7 @@ class DeltaSPH2D:
             return out
         self._kinematic = kinematic
         kin = self._kin = kinematic(v)
-        drho = kin
+        drho = kin if not proj else torch.zeros_like(kin)                                          # projection: incompressible, the density stays rho0 (V = m / rho0); the distribution is kept by the shift
         # density diffusion (fourtakas2019, fluid only)
         if cfg.ddt and fw is not None:
             drho = drho + fw.density_diffusion(fps, fadj)
@@ -525,7 +526,7 @@ class DeltaSPH2D:
         if cfg.pinned is not None:
             acc = acc * (1.0 - cfg.pinned.weight(x, cfg.periodic))[:, None]                    # the band is prescribed, not integrated
         if proj:
-            acc, Pp, accw_p = self._project(x, v, rho, V, i, j, gW, G, kinematic, acc)
+            acc, Pp, accw_p = self._project(x, v, rho, V, None if fk else (i, j, gW), G, kinematic, acc, fw, fps if fk else None, fadj if fk else None)
             self.projectionPressure = Pp
             if forces is not None and accw_p is not None:
                 forces = forces + self._load(accw_p, x[None].expand(self.nb, -1, -1))
@@ -539,31 +540,47 @@ class DeltaSPH2D:
                     forces[1, bi, 2] = forces[1, bi, 2] - 2.0 * mu * self._solid_area(b) * b.angularVelocity
         return acc, drho, forces
 
-    def _project(self, x, v, rho, V, i, j, gW, G, kinematic, acc):
-        """the divergence-free projection (pressureSolver='projection'): P with  kinematic(v* + dt a_p(P)) = 0,  v* = v + dt acc,  a_p(P)_i = -sum_j V_j (P_i + P_j) grad W_ij / rho_i - sum_b 2 P_i G_b,i / rho_i
-        (the symmetric form of this scheme without the Antuono switch; the hydrostatic wall part A is already in acc).  Relaxed Jacobi on the diagonal of the composed operator.  Returns (acc + a_p, P, the wall part per body)."""
+    def _project(self, x, v, rho, V, pairs, G, kinematic, acc, fw=None, fps=None, fadj=None):
+        """pressureSolver='projection': the converged compact projection (sim/projection.py).  sum_j w_ij (P_i - P_j) = V_i (-kinematic(v*)_i / dt), v* = v + dt acc (kinematic = d rho / dt = -rho div v with the wall
+        term: ~ rho div v* / dt = lap P), then a_p = -sum_j V_j (P_i + P_j) grad W_ij / rho_i - 2 P_i sum_b G_b / rho_i (this scheme's symmetric pressure force, the Antuono switch off) after the min gauge.
+        Returns (acc + a_p, P, the wall part per body)."""
+        from .projection import CompactProjection, compact_weights
+        from .wallmoments import MORRIS_ETA2
         cfg = self.cfg
         dt = float(self.dt)
-        Gs = G.sum(0) if self.nb else torch.zeros_like(x)
-        def a_p(P):
-            a = -self._sum((V[j] * (P[i] + P[j]))[:, None] * gW, i) / rho[:, None]
-            return a - 2.0 * P[:, None] * Gs / rho[:, None]
+        N = len(x)
+        if pairs is None:                                                                           # the Warp adjacency (Verlet margin: the pairs beyond the support get grad W = 0)
+            i, j = fadj.i.long(), fadj.j.long()
+            d = pair_delta(x, i, j, cfg.periodic)
+            r = d.norm(dim=1)
+            gW = torch.where((r > 1e-14 * self.H)[:, None], self.dW(r, self.H)[:, None] * d / r.clamp(min=1e-300)[:, None], torch.zeros_like(d))
+        else:
+            i, j, gW = pairs
+            d = pair_delta(x, i, j, cfg.periodic)
+        order = torch.argsort(i, stable=True)
+        i, j, gW, d = i[order], j[order], gW[order], d[order]
+        cnt = torch.bincount(i, minlength=N)
+        off = torch.cumsum(cnt, 0) - cnt
         vs = v + dt * acc
-        b = -kinematic(vs)                                                                          # d rho / dt of v*: remove it
-        kin0 = lambda a: kinematic(a) - kinematic(torch.zeros_like(a))                              # linear part (the wall velocity offset removed)
-        c = self._sum(V[j][:, None] * gW, i) + 2.0 * Gs
-        diag = dt * (-(c * c).sum(1) - rho * V * self._sum(V[j] ** 2 / V[j] * (gW * gW).sum(1) / rho[j], i))
-        P = getattr(self, "_projP", None)
-        P = torch.zeros_like(rho) if P is None or P.shape != rho.shape else 0.0 * P
-        for _ in range(cfg.projectionIterations):
-            r = b - dt * kin0(a_p(P))
-            P = P + 0.5 * r / torch.where(diag.abs() > 1e-300, diag, torch.full_like(diag, -1e300))
-        P = P - P.min()                                                                             # closed domains: the smallest admissible level (the gauge of the DFSPH study)
-        self._projP = P
-        ap = a_p(P)
+        rhs = V * (-kinematic(vs) / dt)
+        Gs = G.sum(0) if self.nb else torch.zeros_like(x)
+        D = -4.0 * V * (Gs * Gs).sum(1)                                                             # the wall row: kinematic's wall term 2 rho a . G of the wall force a = -2 P G / rho
+        if cfg.periodic is not None and all(cfg.periodic.flags) and not self.nb:                   # closed without walls: the constant null space (a wall row makes the operator definite)
+            rhs = rhs - rhs.mean()
+        w = compact_weights(d, gW, V[i], V[j], torch.full_like(V[i], float(self.H)), cfg.morrisCalibration if cfg.fluidViscosity == "morris" else 1.0, MORRIS_ETA2)
+        if getattr(self, "_projector", None) is None:
+            self._projector = CompactProjection(self.dev, block=cfg.projectionBlock)
+        P, it, rel = self._projector.solve(off, cnt, j, w, rhs, cfg.projectionTol, cfg.projectionMaxIterations, diag=D)
+        self.projectionIterations, self.projectionResidual = it, rel
+        P = P - P.min()
+        if fw is not None:
+            ap = fw.pressure(fps, fadj, P, torch.ones(N, dtype=torch.bool, device=self.dev))         # the symmetric form (the surface mask sets the switch to +1)
+        else:
+            ap = -torch.zeros_like(x).index_add_(0, i, (V[j] * (P[i] + P[j]))[:, None] * gW) / rho[:, None]
         accw = None
         if self.nb:
             accw = -2.0 * P[None, :, None] * G / rho[None, :, None]
+            ap = ap + accw.sum(0)
         return acc + ap, P, accw
 
     def _wc(self):

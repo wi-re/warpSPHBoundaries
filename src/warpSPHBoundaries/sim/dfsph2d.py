@@ -163,12 +163,27 @@ class DFSPHConfig:
                                              # Jacobi-preconditioned CG to `projectionTol`; the velocity is corrected with this scheme's pressure gradient)
     projectionTol: float = 1e-8              # 'compact': relative residual of the CG
     projectionMaxIterations: int = 2000
+    projectionWarmStart: bool = True         # 'compact': start the CG from the previous step's pressure (the true relative residual decides convergence, so a stale start cannot stop it early)
+    projectionBlock: int = 8                 # 'compact' on the graph path: CG iterations per captured graph; the residual is read back only at the check schedule's marks (0.50 / 0.75 / 0.85 of the previous solve's
+                                             # first-converged count, then every block; every block on the first solve), iterations past convergence are no-ops on the device
     densitySolve: bool = True                # False: the divergence-free projection is the only pressure solve (isolates it from the density correction, whose pressure is a position-correction noise far above a Stokes
                                              # pressure); the wall then has to be in the divergence solve (boundaryInDivergence defaults to True) and the distribution is kept by `shifting`
     densityMode: str = "summation"           # 'summation' (rho = sum V W + mu lambda each step) | 'continuity' (integrated: d rho / dt = sum V_j (v_i - v_j) . grad W_ij + (v_i - v_b) . mu grad lambda; drift-free
                                              # for a solenoidal field, decoupled from the particle arrangement)
     shifting: str = "none"                   # 'fickian': delta x = -D grad C after the advection, grad C = sum V_j grad W_ij + mu grad lambda (the wall completes the concentration, so particles relax to the equilibrium
                                              # distance from it), D = shiftA h_s |v_i| dt (Lind et al. 2012, h_s = support / 2) or 'fixed' D = shiftA h_s^2 per step; a position move only (no momentum)
+    freeSurface: Optional[bool] = None       # 'compact' projection / shifting: free-surface treatment (surface particles: rho = sum V W + mu lambda < surfaceRho): P = 0 there (Dirichlet), and the shift keeps only its tangential
+                                             # part in the surface layer (the surface particles and their neighbours, Lind et al. 2012).  None: on unless the domain is fully periodic
+    surfaceRho: float = 0.85
+    projectionGradient: str = "symmetric"     # 'compact': the velocity correction.  'symmetric': this scheme's pressure force (fluid pairs p_i / rho_i^2 + p_j / rho_j^2, the wall (p_i / rho_i^2 + p_i) mu grad lambda) with the
+                                             # wall row (Robin) in the operator; 'difference': -(1 / rho_i) sum_j V_j (p_j - p_i) grad W_ij (exact for a uniform pressure; the wall acts through the Neumann
+                                             # condition: the flux source and its hydrostatic extrapolation, no p_i-dependent wall force, no wall row); the body loads are the symmetric wall integral either way
+    projectionWall: str = "robin"            # 'compact': the wall of the projection, 'robin' | 'mirror' (the consistent Neumann wall; free surfaces), see `_solve_compact`
+    renormalisationMinDet: float = 0.1       # the renormalised gradient: det of the moment matrix below this keeps the plain sum
+    projectionWallFlux: float = 1.0          # 'compact': the factor on the wall flux of the source (-dt v* . mu grad lambda): summed over the near-wall rows it captures lambda(0) ~ 1/2 of the flux into the wall; 2 = the mirror
+                                             # (delta+'s continuity carries the same factor)
+    projectionDensity: float = 0.0           # 'compact': + beta max(rho - 1, 0) (an over-compression, per step) in the projection source: a weak density-invariant term against the projection's volume drift (free surfaces only;
+                                             # the surface fixes the pressure level, so no closed-domain drift)
     shiftA: float = 2.0
     shiftCap: float = 0.25                   # |delta x| <= shiftCap dx per step
     densityShift: bool = False               # VD+PS (Cornelis et al.): the density solve's correction moves the particles (x += dt^2 a_density) instead of changing their velocity; the velocity carries only the divergence-free
@@ -494,56 +509,89 @@ class DFSPH2D:
         return s
 
     def _solve_compact(self, acc):
-        """the approximate projection: dt^2 L p = s (s the DFSPH divergence source: -dt div v* with the wall flux), L_i p = 2 sum_j Vt_j (p_i - p_j) (x_ij . grad W_ij) / (r^2 + eta^2 h^2) / cal (the Morris form, ~ lap p,
-        Neumann at the walls), Jacobi-preconditioned CG to projectionTol (closed domains: the source's mean removed, the constant null space), then v -= dt grad p / rho with this scheme's pressure gradient
-        (fluid pairs + the wall term, no clamp) after the divergence gauge."""
+        """the approximate projection (sim/projection.py): sum_j w_ij (p_i - p_j) [+ D_i p_i] = Vt_i s_i, w the compact Laplacian weights times dt^2 (the left side ~ Vt dt^2 lap p, as the DFSPH operator), s the DFSPH
+        divergence source of v* = v + dt acc; the shared CG to projectionTol; then v -= dt grad p / rho.  The wall (`projectionWall`):
+
+          'robin'   v* carries the pressure-independent wall part (the hydrostatic extrapolation), the source the wall flux (x projectionWallFlux), the operator the wall row D (the wall force of the particle's own
+                    pressure moves its own flux), the correction is this scheme's pressure force (`projectionGradient`).  Closed domains (the periodic Stokes arrays).
+          'mirror'  the consistent Neumann wall of a mirror (ghost) continuation: the velocity mirrored (odd normal part) -> the wall flux of the source twice the integral term, the pressure mirrored (even) -> the
+                    walls add nothing to the compact Laplacian (Neumann), the correction is the renormalised fluid gradient (exact for a linear p with a one-sided support; the mirrored p adds nothing to it),
+                    no pressure push in v* (the hydrostatic pressure is produced by the Neumann condition from v* = v + dt g).  Free surfaces: P = 0 on the surface particles (Dirichlet).
+        The body loads are the wall integral of the solved pressure."""
+        from .projection import CompactProjection, compact_weights
         from .wallmoments import MORRIS_ETA2
         cfg, dt = self.cfg, self.dt
-        i, j = self.pi, self.pj
+        mirror = cfg.projectionWall == "mirror"
+        walls = self.scene is not None and self.nb > 0
         Vt = self.V / self.rho
+        ab0 = None
+        if walls and not mirror:                                                                    # the pressure-independent wall part (the hydrostatic extrapolation rho (g - a_w) . y): known before the solve, so it goes into v*
+            ab0 = self._boundary_accel(torch.zeros_like(self.V), False, perBody=True)
+            acc = acc + ab0.sum(0)
         vp = self.v + dt * acc
-        src = Vt * self._source(dt, Vt, vp, False, True)                                           # rows weighted by Vt_i: the operator below is then exactly symmetric (its null vector the constant)
-        if self._closed():
-            src = src - src.mean()                                                                  # = the Vt-weighted compatibility condition of the unweighted rows
-        d = self._delta(self.x, i, j)
-        w = 2.0 * Vt[i] * Vt[j] * (d * self.gW).sum(1) / ((d * d).sum(1) + MORRIS_ETA2 * self.h[i] ** 2) / self._morris_cal() * dt * dt     # <= 0, symmetric in (i, j)
-        A = lambda p: self._sum(w * (p[i] - p[j]))                                                  # ~ Vt dt^2 lap p (symmetric negative semi-definite)
-        dg = self._sum(w)
-        Minv = torch.where(dg.abs() > 0, 1.0 / dg, torch.zeros_like(dg))
-        # CG on (-A) p = -src (symmetric positive semi-definite up to the volume weights)
-        scale = float(src.norm())
-        p = torch.zeros_like(src)
-        it, relres = 0, 0.0
-        if scale > 1e-30:                                                                           # normalised right-hand side: the inner products of a near-solenoidal field underflow otherwise
-            b = -src / scale
-            r = b.clone()
-            z = -Minv * r
-            q = z.clone()
-            rz = (r * z).sum()
-            for it in range(1, cfg.projectionMaxIterations + 1):
-                Aq = -A(q)
-                alpha = rz / (q * Aq).sum()
-                p = p + alpha * q
-                r = r - alpha * Aq
-                if it % 10 == 0:
-                    relres = float(r.norm())
-                    if not math.isfinite(relres) or relres < cfg.projectionTol:
-                        break
-                z = -Minv * r
-                rz2 = (r * z).sum()
-                q = z + (rz2 / rz) * q
-                rz = rz2
-            p = p * scale
-        p = self._gauge(p, False)
+        src = self._source(dt, Vt, vp, False, True)
+        flux = 2.0 if mirror else cfg.projectionWallFlux
+        if flux != 1.0 and walls:                                                                   # (flux - 1) more of the wall term -dt (v* . mu grad lambda - int v_b . grad W)
+            extra = -dt * (vp * self.gk).sum(1)
+            if self.wallDiv is not None:
+                extra = extra + dt * self.wallDiv
+            src = src + (flux - 1.0) * extra
+        if cfg.projectionDensity > 0.0:
+            src = src - cfg.projectionDensity * (self.rho - 1.0).clamp(min=0.0)
+        rhs = Vt * src
+        D = None
+        if walls and not mirror and cfg.projectionGradient == "symmetric":                         # the wall row: the source's wall term dt^2 a . gk of the wall force a = -(p / rho^2 + p) gk
+            D = -Vt * dt * dt * (1.0 / self.rho ** 2 + 1.0) * (self.gk * self.gk).sum(1)
+        surf = self._surface()
+        if self._closed() and D is None and surf is None:
+            rhs = rhs - rhs.mean()
+        off, cnt = self._csr[0], self._csr[1]
+        P = int(cnt.sum())
+        i, j = self.pi[:P], self.pj[:P]
+        w = compact_weights(self._delta(self.x, i, j), self.gW[:P], Vt[i], Vt[j], self.h[i], self._morris_cal(), MORRIS_ETA2) * dt * dt
+        if getattr(self, "_proj", None) is None:
+            self._proj = CompactProjection(self.dev, block=cfg.projectionBlock, warmStart=cfg.projectionWarmStart, graphs=self._graphs_on())
+        p, it, relres = self._proj.solve(off, cnt, j, w, rhs, cfg.projectionTol, cfg.projectionMaxIterations, diag=D, dirichlet=surf)
+        p = self._gauge(p, False) if surf is None else p
         self.pDiv = p
-        pred = self._fluid_accel(p)
-        if self.scene is not None and self.nb > 0:
-            ab = self._boundary_accel(p, False, perBody=True)
-            pred = pred + ab.sum(0)
+        grad = cfg.projectionGradient if (cfg.projectionGradient != "symmetric" or not mirror) else "renormalised"
+        if grad in ("difference", "renormalised"):
+            i, j = self.pi, self.pj
+            gp = self._sum((self.V[j] * (p[j] - p[i]))[:, None] * self.gW)
+            if grad == "renormalised":                                                              # L_i = [sum_j V_j grad W_ij (x) (x_j - x_i)]^-1: exact for a linear p with a one-sided support (surface, corners, walls)
+                Mx = torch.zeros((len(p), 2, 2), dtype=F64, device=self.dev).index_add_(0, i, self.V[j][:, None, None] * self.gW[:, :, None] * (-self._delta(self.x, i, j))[:, None, :])
+                det = Mx[:, 0, 0] * Mx[:, 1, 1] - Mx[:, 0, 1] * Mx[:, 1, 0]
+                ok = det.abs() > cfg.renormalisationMinDet                                         # ~1 in the bulk; a degenerate (one-sided, isolated) neighbourhood keeps the plain sum
+                Linv = torch.stack([torch.stack([Mx[:, 1, 1], -Mx[:, 0, 1]], 1), torch.stack([-Mx[:, 1, 0], Mx[:, 0, 0]], 1)], 1) / torch.where(ok, det, torch.ones_like(det))[:, None, None]
+                gp = torch.where(ok[:, None], torch.einsum("nab,nb->na", Linv.transpose(1, 2), gp), gp)
+            pred = -gp / self.rho[:, None]
+        else:
+            pred = self._fluid_accel(p)
+        if walls:
+            if mirror:                                                                              # the load of the mirrored pressure p_b = p_i: the wall integral (p_i / rho_i^2 + p_i) mu grad lambda per body
+                ab = -((p / self.rho ** 2 + p) * self.sClose)[None, :, None] * self.gkb
+            else:
+                ab = self._boundary_accel(p, False, perBody=True)
+                if grad == "symmetric":
+                    pred = pred + (ab - ab0).sum(0)                                                 # ab0 is already in acc
             self.forcePressure = self.forcePressure - (self.V[None, :, None] * ab).sum(1)
             self.forcePressureDiv = -(self.V[None, :, None] * ab).sum(1)
         self.err = relres
         return acc + pred, it
+
+    def _free_surface_on(self):
+        fs = self.cfg.freeSurface
+        if fs is None:
+            fs = not (self.cfg.periodic is not None and all(self.cfg.periodic.flags))
+        return bool(fs)
+
+    def _surface(self):
+        """the free-surface particles (rho = sum V W + mu lambda < surfaceRho, the summation density of this step), or None without a free-surface treatment."""
+        if not self._free_surface_on():
+            return None
+        rs = getattr(self, "rhoSum", None)
+        rs = rs if rs is not None else self.rho
+        return rs < self.cfg.surfaceRho
 
     def _gauge(self, p, density=True):
         g = self.cfg.pressureGauge if density else self.cfg.divergenceGauge
@@ -596,7 +644,7 @@ class DFSPH2D:
             dsd, nsd, hit = self.scene.signed_distance(x, body=bi, supportMax=H)
             dd = dsd.clamp(min=0.25 * PACKING * float(self.h.median()))
             on = (hit & (dsd < H))[:, None]
-            term = torch.where(on, wc.term(bi, x, v - b.velocityAt(x), nsd, dd, viscf, rho, 8.0 * cfg.viscosity), torch.zeros_like(v))
+            term = torch.where(on, wc.term(bi, x, v - b.velocityAt(x), nsd, dd, viscf, rho, 8.0 * cfg.viscosity, coverage=getattr(self, "rhoSum", None) if getattr(self, "rhoSum", None) is not None else rho), torch.zeros_like(v))
             acc = acc + term
             F = -(self.V[:, None] * term)
             self.forceViscous[bi] = F.sum(0)
@@ -895,6 +943,11 @@ class DFSPH2D:
             hs = 0.5 * self.h
             D = cfg.shiftA * hs * self.v.norm(dim=1) * dt if cfg.shifting == "fickian" else cfg.shiftA * hs * hs * torch.ones_like(self.V)
             dxs = -D[:, None] * gC
+            surf = self._surface()
+            if surf is not None:                                                                    # Lind et al. 2012: in the surface layer (surface particles and their neighbours) only the tangential part
+                layer = self._sum(surf[j].to(F64)) > 0.5
+                nrm_ = gC / gC.norm(dim=1, keepdim=True).clamp(min=1e-300)
+                dxs = torch.where(layer[:, None], dxs - (dxs * nrm_).sum(1, keepdim=True) * nrm_, dxs)
             cap = cfg.shiftCap * PACKING * self.h
             nrm = dxs.norm(dim=1)
             dxs = dxs * torch.where(nrm > cap, cap / nrm.clamp(min=1e-300), torch.ones_like(nrm))[:, None]

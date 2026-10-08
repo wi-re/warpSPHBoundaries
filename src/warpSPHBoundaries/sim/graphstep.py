@@ -37,6 +37,8 @@ def graphable(sim):
     cfg = sim.cfg
     if not (cfg.fluidWarp and cfg.fusedWall and cfg.fixedAdjacency) or sim.scene is None:
         return False
+    if getattr(cfg, "pressureSolver", "eos") != "eos":                                                 # the projection's CG reads its convergence on the host (it graphs itself)
+        return False
     if cfg.wallViscosity and cfg.viscosity and cfg.wallViscosityForm == "pairwise":
         return False
     if cfg.wallParticleSpacing > 0 or not FusedWall.supported(sim.scene, cfg.fixedAdjacency):

@@ -71,3 +71,54 @@ def dfsph_update_kernel(offsets: wp.array(dtype=wp.int32), counts: wp.array(dtyp
     else:
         p[i] = pn
         res[i] = ks - src[i]
+
+
+# ---- the compact projection's preconditioned CG (DFSPH2D._solve_compact, projection='compact'): one iteration = four kernels and three reductions (no atomics on the scalars), capturable as a CUDA graph; the scalars live on the device
+#      S = [rz, qAq, rz2, rr, active, count, tol2, the last rr]: `active` (1 until the relative residual meets tol2, or a non-finite value appears) multiplies the step, so iterations replayed past convergence are no-ops
+#      and `count` is the number of active iterations (the first-converged count for the next solve's check schedule).
+
+@wp.kernel
+def cg_matvec_kernel(offsets: wp.array(dtype=wp.int32), counts: wp.array(dtype=wp.int32), nbr: wp.array(dtype=wp.int64), w: wp.array(dtype=wp.float64), D: wp.array(dtype=wp.float64),
+                     q: wp.array(dtype=wp.float64), Aq: wp.array(dtype=wp.float64)):
+    """Aq = -A q,  A q_i = sum_j w_ij (q_i - q_j) + D_i q_i  (w <= 0, D <= 0 the wall row: -A is positive semi-definite)"""
+    i = wp.tid()
+    qi = q[i]
+    s = D[i] * qi
+    k0 = offsets[i]
+    for k in range(k0, k0 + counts[i]):
+        s = s + w[k] * (qi - q[wp.int32(nbr[k])])
+    Aq[i] = -s
+
+
+@wp.kernel
+def cg_update_kernel(S: wp.array(dtype=wp.float64), q: wp.array(dtype=wp.float64), Aq: wp.array(dtype=wp.float64), Minv: wp.array(dtype=wp.float64),
+                     p: wp.array(dtype=wp.float64), r: wp.array(dtype=wp.float64), z: wp.array(dtype=wp.float64)):
+    """alpha = active rz / qAq;  p += alpha q;  r -= alpha Aq;  z = M^-1 r  (the dot products r.z, r.r are reduced by the caller)"""
+    i = wp.tid()
+    alpha = wp.float64(0.0)
+    if S[4] > wp.float64(0.5) and S[1] != wp.float64(0.0):
+        alpha = S[0] / S[1]
+    p[i] = p[i] + alpha * q[i]
+    ri = r[i] - alpha * Aq[i]
+    r[i] = ri
+    z[i] = Minv[i] * ri
+
+
+@wp.kernel
+def cg_direction_kernel(S: wp.array(dtype=wp.float64), z: wp.array(dtype=wp.float64), q: wp.array(dtype=wp.float64)):
+    """q = z + (rz2 / rz) q  (active only)"""
+    i = wp.tid()
+    if S[4] > wp.float64(0.5) and S[0] != wp.float64(0.0):
+        q[i] = z[i] + (S[2] / S[0]) * q[i]
+
+
+@wp.kernel
+def cg_scalars_kernel(S: wp.array(dtype=wp.float64)):
+    """one thread: count the iteration if it was active, deactivate on convergence / a non-finite value, rz <- rz2 (the dot products S[1..3] are written by reductions each iteration)"""
+    S[7] = S[3]
+    if S[4] > wp.float64(0.5):
+        S[5] = S[5] + wp.float64(1.0)
+        if S[3] <= S[6] or not wp.isfinite(S[3]) or not wp.isfinite(S[2]):
+            S[4] = wp.float64(0.0)
+        else:
+            S[0] = S[2]

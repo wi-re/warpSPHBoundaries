@@ -53,10 +53,13 @@ class NoSlipClosure:
         return b._solidAreaCache
 
 
-    def term(self, bi, x, w, n, d, viscf, rho, fac):
+    def term(self, bi, x, w, n, d, viscf, rho, fac, coverage=None):
         """the wall part of the viscous acceleration of a no-slip wall from the moments of the pair weight over the solid (sim/wallmoments.py): the velocity relative to the wall is a polynomial of the wall distance,
         w(s) = a s + (L / 2) s^2 (a, L per component in the frame (n, t)), with  w(d) = w_i  and the viscous balance of the particle (the fluid pair sum `viscf` plus this wall term = nu_p (lap w [+ 2 grad div w]),
-        nu_p = fac / 8; the normal component carries the factor 3 of the pair form, the tangential one the curvature terms of the wall kappa = div n: lap w_t = w_t'' + kappa w_t' - kappa^2 w_t)."""
+        nu_p = fac / 8; the normal component carries the factor 3 of the pair form, the tangential one the curvature terms of the wall kappa = div n: lap w_t = w_t'' + kappa w_t' - kappa^2 w_t).
+        `coverage` (the partition of unity sum V W + mu lambda): the complement moments assume that fluid and wall fill the support; where they do not (a free surface next to the wall) the missing surface
+        region would be booked as wall and the 2 x 2 solve goes near singular (a dam break: 9e4 m/s^2 on a near-wall particle under the collapsing column), so the complement is blended into the geometric
+        (table) moments, weight clamp((coverage - 0.92) / 0.05, 0, 1)."""
         morris = self.morris
         cache = self.__dict__.setdefault("_wpmCache", {})
         if morris not in cache:
@@ -74,8 +77,14 @@ class NoSlipClosure:
         if comp:
             if not morris:
                 raise NotImplementedError("complementMoments: Morris viscosity only (the alpha weight needs the lattice-anisotropic full-plane moments)")
+            Tt, M1t, kapt = T, M1, kap
             T, M1 = self.complement_moments(x, n, d, rho)
             kap = torch.zeros_like(kap)                                                          # fixed-frame continuation: no curvature terms
+            if coverage is not None:                                                             # incomplete support: towards the geometric tables
+                c = ((coverage - 0.92) / 0.05).clamp(0.0, 1.0)
+                T = c[:, None, None, None] * T + (1.0 - c)[:, None, None, None] * Tt
+                M1 = c[:, None] * M1 + (1.0 - c)[:, None] * M1t
+                kap = (1.0 - c) * kapt
             if corner is not None:                                                               # HYBRID at corners: the complement (discrete quadrature) plus the continuum difference of the turning-frame and the fixed-frame
                 cm, Tw, _, kw, Tf = corner                                                       # continuation over the wedge solid (k = 1, 2; k = 0 and M1 do not depend on the continuation), the turning-frame curvature
                 dT = torch.zeros_like(T)
