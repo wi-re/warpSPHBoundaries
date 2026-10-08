@@ -1,7 +1,7 @@
 From 5b48746db684c79827bc5bed56152e5c59157b82 Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
 Date: Thu, 8 Oct 2026 17:32:11 +0100
-Subject: [PATCH 3/7] boundary provider + analytic wall terms: provider adapter
+Subject: [PATCH 3/8] boundary provider + analytic wall terms: provider adapter
  (boundary/), wall continuity / pressure / viscosity terms
  (modules/analyticBoundary) hooked at stages 05b / 11 (inside the frozen
  diffusion tuple) / 12 / 13; equals the warpSPHBoundaries reference to 1e-13

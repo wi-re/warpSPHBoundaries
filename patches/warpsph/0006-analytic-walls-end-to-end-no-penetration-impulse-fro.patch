@@ -1,7 +1,7 @@
 From 2e2ed31e1c937074515227b4ac2a8fd214abfdd9 Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
 Date: Thu, 8 Oct 2026 18:05:46 +0100
-Subject: [PATCH 6/7] analytic walls end to end: no-penetration impulse from
+Subject: [PATCH 6/8] analytic walls end to end: no-penetration impulse from
  the provider's signed distance (finalize, impulse placement), wall flux in
  the system's time-centred continuity closure (drift_rates; without it the
  walls' compression was missing from the density update and the dam break

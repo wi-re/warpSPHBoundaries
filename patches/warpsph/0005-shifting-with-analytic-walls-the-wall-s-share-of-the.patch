@@ -1,7 +1,7 @@
 From 4222a7251447e40941a460c617f6b825623f887a Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
 Date: Thu, 8 Oct 2026 17:42:20 +0100
-Subject: [PATCH 5/7] shifting with analytic walls: the wall's share of the raw
+Subject: [PATCH 5/8] shifting with analytic walls: the wall's share of the raw
  delta+ sum (G and the tensile edge reduction, warpSPH's W0 convention) added
  in computeDeltaShift; solveShifting then runs unchanged on the analytic
  detector; equals the reference shift (curvature gate off) to float32

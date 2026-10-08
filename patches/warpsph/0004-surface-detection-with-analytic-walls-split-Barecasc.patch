@@ -1,7 +1,7 @@
 From 76c321483ac8efbb84d111b741fbadb8ae4ec4d2 Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
 Date: Thu, 8 Oct 2026 17:38:27 +0100
-Subject: [PATCH 4/7] surface detection with analytic walls: split Barecasco
+Subject: [PATCH 4/8] surface detection with analytic walls: split Barecasco
  modules (cover vector, wedge count as partial sums), detector adding the wall
  continuum between the passes, normals / lMin from the fluid + wall
  renormalisation matrix, hooked into detectFreeSurface; wall aggregates cached

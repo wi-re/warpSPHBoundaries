@@ -211,6 +211,7 @@ class DFSPHConfig:
     wallPressure: str = "hydrostatic"       # 'hydrostatic' (p_b = p_i + rho g.(x'-x_i): dp/dn = rho (g - a_wall).n), 'linear' (MLS gradient of the neighbours' pressure), 'mirror' (p_b = p_i)
     wallMass: float = 1.0                   # mass per area of the wall continuum (1 = omniSPH; 1/S for a calibrated lattice)
     periodic: Optional[object] = None       # `Periodic` box (sim/pairs.py): the fluid pairs take the minimum image of the raw positions (never wrapped), bodies via `Scene.setPeriodic`
+    pinned: Optional[object] = None         # a prescribed-velocity band of fluid particles (`Pinned`, sim/pinned.py): the free stream of a periodic flow past a body; the velocity inside is the stream after every step
     bodyForce: tuple = (0.0, 0.0)           # a uniform acceleration of the momentum equation (a periodic pressure-gradient driver); the hydrostatic wall pressure carries it like gravity
     viscosity: float = 0.0                  # kinematic viscosity nu (0: inviscid, omniSPH): the Morris operator on the fluid pairs (nu / morrisCalibration) and the shared no-slip wall closure (sim/wallclosure.py,
                                             # complement moments); the wall viscous force and torque per body are booked (incl. the Morris traction correction -2 mu Omega A); set boundaryFriction = 0 with it
@@ -972,6 +973,11 @@ class DFSPH2D:
             dxs = dxs * torch.where(nrm > cap, cap / nrm.clamp(min=1e-300), torch.ones_like(nrm))[:, None]
             shift = dxs if shift is None else shift + dxs
             self.lastShift = dxs
+        if cfg.pinned is not None:                                                                  # a prescribed-velocity band (pinned.py): the stream inside it, no shift there
+            w = cfg.pinned.weight(self.x, cfg.periodic)[:, None]
+            self.v = self.v + w * (torch.tensor(cfg.pinned.velocity, dtype=F64, device=self.dev)[None] - self.v)
+            if shift is not None:
+                shift = shift * (1.0 - w)
         self.x = self.x + dt * self.v
         if shift is not None:
             self.x = self.x + shift

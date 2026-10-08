@@ -36,6 +36,7 @@ src/warpSPHBoundaries/sim/          DFSPH2D and DeltaSPH2D solvers, cases, valid
 scripts/                    command-line runners (regression harness, profiler, validation, videos), scripts/studies, scripts/bench
 tests/                      pytest suite: tests/{edge,scene,sim,curvbound} (940 tests)
 notebooks/demo.ipynb        executed demo: geometry, curves, validation
+notebooks/examples/         nine example flows (Taylor-Green ... flow past a cylinder) on the delta+ and the DFSPH solver, against reference solutions
 docs/derivation.md          full mathematical write-up
 PLAN.md                     project status & roadmap
 results/symbolic/           Maple exports (committed; consumed by src/curvbound)
