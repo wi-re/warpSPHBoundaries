@@ -79,8 +79,9 @@ All in `scripts/derivation_checks/disk_element_checks.py` (run: `python scripts/
 
 * **Exactly on the circle (D = R) the reference returns lam off by 1/2** (the principal value of the singular circle integrand: half the jump of the indicator), and the other channels are off likewise.
   The functions are continuous there; evaluate at |D - R| >= 1e-9 R.  The tables are unaffected (interpolants of smooth panel data, nodes strictly inside the intervals).
-* **Conditioning near the surface**: the absolute error of `disk_channels` grows like 6e-17 R / |D - R| (measured 8e-12, 8e-10, 4e-8 at relative offsets 1e-5, 1e-7, 1e-9).  Build tables from nodes that
-  stay away from delta = 0 by more than the table's own tolerance (the w map clusters nodes at the interval ends; at the 12-node panels the nearest node is ~1e-3 of the interval).
+* **Conditioning near the surface**: the absolute error of `disk_channels` grows like 6e-17 R / |D - R| (measured 8e-12, 8e-10, 4e-8 at relative offsets 1e-5, 1e-7, 1e-9).  For the tables
+  (3 panels of 12 Chebyshev nodes in w, mapped through u = sin^2(pi w / 2)) the node nearest to an interval end is at w = 1.4e-3, u = 5.0e-6 of the interval, i.e. a relative offset of that order, so the
+  reference error at the worst node is ~ 6e-17 / 5e-6 = 1.2e-11, below the 5e-8 table tolerance.
 * Disks that overlap are summed, not united.
 
 ## 7. Open questions
