@@ -108,7 +108,7 @@ def run_array(a):
         sim.step()
         k += 1
         if k % 500 == 0:
-            print(f"  t {sim.time:.3f} dt {sim.dt:.2e} iters {sim.iters} vmax {float(sim.v.norm(dim=1).max()):.3e} rho [{float(sim.rho.min()):.4f}, {float(sim.rho.max()):.4f}] "
+            print(f"  t {sim.time:.3f} dt {sim.dt:.2e} iters {sim.iters} vmax {float(sim.v.norm(dim=1).max()):.3e} rho [{float(sim.rho.min()):.4f}, {float(sim.rho.max()):.4f}] rhoSum [{float(getattr(sim, 'rhoSum', sim.rho).min()):.4f}, {float(getattr(sim, 'rhoSum', sim.rho).max()):.4f}] "
                   f"U_x / U_ref {float(sim.v[:, 0].sum()) * dx * dx / Uref:.4f}  p [{float(sim.p.min()):.2e}, mean {float(sim.p.mean()):.2e}, {float(sim.p.max()):.2e}]  {time.time() - t0:.0f} s", flush=True)
     if a.save:
         np.savez(a.save, x=sim.x.cpu().numpy(), v=sim.v.cpu().numpy(), c=c, dx=dx, nu=a.nu, f=a.f)

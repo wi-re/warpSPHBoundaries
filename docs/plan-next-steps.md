@@ -425,6 +425,25 @@ Ladder (user): TGV (periodic, no walls) -> a static obstacle without forcing -> 
 - SPlisHSPlasH (`~/dev/SPlisHSPlasH`, density maps / volume maps): the same structure (wall term (p_i / rho_i^2) grad rho_b), both solves clamped, compression-only sources, capped warm starts, no closed-domain
   treatment; nothing that addresses this.
 - Next: the force budget at the steady state against the exact Stokes pressure; the openMaelstrom MLS wall-pressure extrapolation for comparison; a uniform-pressure-consistent wall coupling.
+- openMaelstrom (`~/dev/openMaelstrom/SPH/DFSPH/dfsph.cu`): p_b by a linear MLS fit of the fluid pressures around the closest wall point, per iterate, p_b >= 0; wall acceleration -(p_i / rho_i^2 + p_b) grad rho_b.
+  Ours `wallPressure='linear'` is the integrated variant; on the square 0.77 (no change): the extrapolation is not the limit.
+- **Pressure noise is the limit (2026-10-08).**  Exact Stokes pressure (Fourier, Brinkman, div(nu lap u) = 0) spans +-0.028; from the exact field the DFSPH divergence pressure has a fitted amplitude
+  0.13 / 1.47 / 0.65 (steps 1 / 5 / 20) and residual 16-52 % (near walls 54-137 %); the density pressure is noise 1.6-6.7x the exact spread.
+- **The converged projection is dissipative**: TGV decay / analytic 1.02 / 1.06 / 1.15 / 1.38 at 4 / 10 / 30 / 100 divergence iterations (nu = 0.0185; 2.2 / 6.7 at nu = 0.002): an exact discrete projection
+  removes the discrete divergence of the moving-particle field every step.  The divergence warm start with omniSPH's one-sided residual injects energy (stale pressure): not usable as is.
+- **Divergence-only variant** (`densitySolve=False`, summation density, `shifting='fixed'` shiftA 0.5 (D = A h_s^2 per step, grad C = sum V grad W + mu grad lambda), 4 divergence iterations, wall in the
+  divergence solve without clamp, min gauge): square n=48 U 0.970 / K 1.007; disk n=48 0.968 / 1.009; square n=96 0.956 / 1.024 (K_ref 25.80 for c = 0.1104); rho [0.98, 1.02]; TGV 1.011 (jitter 1.015),
+  monotone.  The Lind shift (D proportional to |u|) leaves rho 0.86-1.16 (stagnant regions unshifted); continuity density drifts with the incomplete projection.
+- **delta+ with the projection** (`DeltaSPHConfig.pressureSolver='projection'`: Jacobi on the scheme's own symmetric pressure force + continuity rate, 4 iterations, min gauge, torch path; delta+ shifting,
+  Morris + complement closure, no DDT): square n=48 H/dx 2.5 K 26.15 / K_ref 25.91 = 1.009 (U 0.978, F / balance 0.986) at t = 13.2 (run cut by its time limit; 1.03 at t = 10.7), against 1.17 with the EOS.  The small-support closure was not the limit:
+  the pressure was (EOS noise / density-solve noise).
+- **Converged projection (user: a result that relies on an unconverged solver is not reliable), 2026-10-08.**  `projection='compact'`: approximate projection (Cummins & Rudman 1999) with the compact
+  Morris / Brookshaw Laplacian, lattice-calibrated like the Morris viscosity, Neumann (mirror) walls, rows weighted by V/rho so the operator is exactly symmetric with the constant as null vector (the
+  unweighted rows have the left null vector V/rho: removing the plain mean left an inconsistent component and the CG diverged), the source normalised (a near-solenoidal field underflows the CG inner
+  products), Jacobi-preconditioned CG to `projectionTol`.  TGV converged to 1e-8: decay 1.003 (no shift), 1.006 (fixed shift), 1.010 at nu = 0.002 (DFSPH's operator at 100 iterations: 1.38 / 6.7),
+  1.008 with a 0.1 dx jitter; without the shift nu = 0.002 disorders and blows up at t = 2.45.  Arrays (summation density, fixed shift 0.5, min gauge, tol 1e-8): square n=48 K 1.013 / U 0.969, disk n=48
+  1.014 / 0.964, square n=96 1.031 / 0.954 (tol 1e-6, ~190 CG iterations / step); tolerance sweep 1e-3 / 1e-5 / 1e-8 / 1e-11 on the square: K 1.016 / 1.012 / 1.013 / 1.012 (converged, insensitive).
+  Cost: n=48 75-110 s for t = 15 (50-160 iterations / step, eager torch CG) vs 45 s for 4 Jacobi iterations.  tests/sim/test_dfsph_projection.py.
 
 ## Remaining items (short notes)
 

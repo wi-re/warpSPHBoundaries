@@ -62,7 +62,7 @@ def run(sim, a, label, dx, decay=None):
 
 def cfg(a, cal, **kw):
     return DFSPHConfig(gravity=(0.0, 0.0), viscosity=a.nu, boundaryFriction=0.0, wallMass=cal["mu"], maxDt=a.maxDt, cfl=0.4, recordForces=False, densityClamp=a.clamp,
-                       periodic=Periodic((0, 0), (1, 1)), **kw)
+                       periodic=Periodic((0, 0), (1, 1)), **{**eval("dict(" + a.set + ")"), **kw})
 
 
 def run_tgv(a):
@@ -103,6 +103,7 @@ def main():
     ap.add_argument("--every", type=int, default=250)
     ap.add_argument("--clamp", dest="clamp", action="store_true", default=True)
     ap.add_argument("--noClamp", dest="clamp", action="store_false")
+    ap.add_argument("--set", default="", help="extra DFSPHConfig fields")
     ap.add_argument("--device", default="cuda:0")
     a = ap.parse_args()
     {"tgv": run_tgv, "obstacle": run_obstacle}[a.case](a)

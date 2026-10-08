@@ -157,6 +157,20 @@ class DFSPHConfig:
                                              # admissible background, p >= 0 kept); 'none'; 'auto': 'min' iff closedDomain.
     divergenceGauge: str = "none"            # the same for the divergence solve's pressure (the physical one under densityShift): 'none' | 'min' (p -= min p) | 'mean' (p -= mean p)
     wallPressureFactor: float = 1.0          # scales the wall's p_i term (p_i / rho_i^2 + p_i) mu grad lambda: 1 = omniSPH (pressure mirrored, 2 p at rho = 1); 0.5 = SPlisHSPlasH's (p_i / rho_i^2) grad rho_b (Akinci / density / volume maps)
+    projection: str = "dfsph"                # the divergence solve: 'dfsph' (omniSPH: Jacobi on the composed operator div(grad p), a fixed iteration count; converged it is an exact discrete projection that also removes the
+                                             # divergence noise of the moving particles and damps the resolved flow: TGV decay 1.02 / 1.38 x analytic at 4 / 100 iterations) | 'compact' (approximate projection, Cummins & Rudman 1999:
+                                             # L p = the DFSPH divergence source / dt^2 with the compact Brookshaw / Morris Laplacian (lattice-calibrated like the Morris viscosity, mirror = Neumann walls), solved by
+                                             # Jacobi-preconditioned CG to `projectionTol`; the velocity is corrected with this scheme's pressure gradient)
+    projectionTol: float = 1e-8              # 'compact': relative residual of the CG
+    projectionMaxIterations: int = 2000
+    densitySolve: bool = True                # False: the divergence-free projection is the only pressure solve (isolates it from the density correction, whose pressure is a position-correction noise far above a Stokes
+                                             # pressure); the wall then has to be in the divergence solve (boundaryInDivergence defaults to True) and the distribution is kept by `shifting`
+    densityMode: str = "summation"           # 'summation' (rho = sum V W + mu lambda each step) | 'continuity' (integrated: d rho / dt = sum V_j (v_i - v_j) . grad W_ij + (v_i - v_b) . mu grad lambda; drift-free
+                                             # for a solenoidal field, decoupled from the particle arrangement)
+    shifting: str = "none"                   # 'fickian': delta x = -D grad C after the advection, grad C = sum V_j grad W_ij + mu grad lambda (the wall completes the concentration, so particles relax to the equilibrium
+                                             # distance from it), D = shiftA h_s |v_i| dt (Lind et al. 2012, h_s = support / 2) or 'fixed' D = shiftA h_s^2 per step; a position move only (no momentum)
+    shiftA: float = 2.0
+    shiftCap: float = 0.25                   # |delta x| <= shiftCap dx per step
     densityShift: bool = False               # VD+PS (Cornelis et al.): the density solve's correction moves the particles (x += dt^2 a_density) instead of changing their velocity; the velocity carries only the divergence-free
                                              # projection.  Its wall loads are then not momentum exchange and are left out of forcePressure (kept in forcePressureShift)
     divergenceClamp: bool = False            # clamp the divergence pressure of ALL particles at >= 0 as the density pressure is (omniSPH does not: its negative divergence pressure is the cohesion that keeps
@@ -479,6 +493,58 @@ class DFSPH2D:
             s = s - (self.V * s).sum() / self.V.sum()
         return s
 
+    def _solve_compact(self, acc):
+        """the approximate projection: dt^2 L p = s (s the DFSPH divergence source: -dt div v* with the wall flux), L_i p = 2 sum_j Vt_j (p_i - p_j) (x_ij . grad W_ij) / (r^2 + eta^2 h^2) / cal (the Morris form, ~ lap p,
+        Neumann at the walls), Jacobi-preconditioned CG to projectionTol (closed domains: the source's mean removed, the constant null space), then v -= dt grad p / rho with this scheme's pressure gradient
+        (fluid pairs + the wall term, no clamp) after the divergence gauge."""
+        from .wallmoments import MORRIS_ETA2
+        cfg, dt = self.cfg, self.dt
+        i, j = self.pi, self.pj
+        Vt = self.V / self.rho
+        vp = self.v + dt * acc
+        src = Vt * self._source(dt, Vt, vp, False, True)                                           # rows weighted by Vt_i: the operator below is then exactly symmetric (its null vector the constant)
+        if self._closed():
+            src = src - src.mean()                                                                  # = the Vt-weighted compatibility condition of the unweighted rows
+        d = self._delta(self.x, i, j)
+        w = 2.0 * Vt[i] * Vt[j] * (d * self.gW).sum(1) / ((d * d).sum(1) + MORRIS_ETA2 * self.h[i] ** 2) / self._morris_cal() * dt * dt     # <= 0, symmetric in (i, j)
+        A = lambda p: self._sum(w * (p[i] - p[j]))                                                  # ~ Vt dt^2 lap p (symmetric negative semi-definite)
+        dg = self._sum(w)
+        Minv = torch.where(dg.abs() > 0, 1.0 / dg, torch.zeros_like(dg))
+        # CG on (-A) p = -src (symmetric positive semi-definite up to the volume weights)
+        scale = float(src.norm())
+        p = torch.zeros_like(src)
+        it, relres = 0, 0.0
+        if scale > 1e-30:                                                                           # normalised right-hand side: the inner products of a near-solenoidal field underflow otherwise
+            b = -src / scale
+            r = b.clone()
+            z = -Minv * r
+            q = z.clone()
+            rz = (r * z).sum()
+            for it in range(1, cfg.projectionMaxIterations + 1):
+                Aq = -A(q)
+                alpha = rz / (q * Aq).sum()
+                p = p + alpha * q
+                r = r - alpha * Aq
+                if it % 10 == 0:
+                    relres = float(r.norm())
+                    if not math.isfinite(relres) or relres < cfg.projectionTol:
+                        break
+                z = -Minv * r
+                rz2 = (r * z).sum()
+                q = z + (rz2 / rz) * q
+                rz = rz2
+            p = p * scale
+        p = self._gauge(p, False)
+        self.pDiv = p
+        pred = self._fluid_accel(p)
+        if self.scene is not None and self.nb > 0:
+            ab = self._boundary_accel(p, False, perBody=True)
+            pred = pred + ab.sum(0)
+            self.forcePressure = self.forcePressure - (self.V[None, :, None] * ab).sum(1)
+            self.forcePressureDiv = -(self.V[None, :, None] * ab).sum(1)
+        self.err = relres
+        return acc + pred, it
+
     def _gauge(self, p, density=True):
         g = self.cfg.pressureGauge if density else self.cfg.divergenceGauge
         if g == "auto":
@@ -776,7 +842,7 @@ class DFSPH2D:
 
     def step(self):
         cfg, dt = self.cfg, self.dt
-        self._bdiv = cfg.boundaryInDivergence if cfg.boundaryInDivergence is not None else self._moving()
+        self._bdiv = cfg.boundaryInDivergence if cfg.boundaryInDivergence is not None else (self._moving() or not cfg.densitySolve)
         self._clampWallDiv = cfg.wallDivergenceClamp if cfg.wallDivergenceClamp is not None else self._bdiv
         self.forcePressure = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
         self.forcePressureDiv = torch.zeros((self.nb, 2), dtype=F64, device=self.dev)
@@ -785,6 +851,11 @@ class DFSPH2D:
         i, j = self.pi, self.pj
         v0 = self.v.clone()
         self.rho = self._sum(self.V[j] * self.W) + self.lam
+        if cfg.densityMode == "continuity":
+            if getattr(self, "_rhoC", None) is None:
+                self._rhoC = self.rho.clone()
+            self.rhoSum = self.rho
+            self.rho = self._rhoC
         if self._graphs_on():
             self._pin_step()
             i, j = self.pi, self.pj
@@ -796,9 +867,11 @@ class DFSPH2D:
             acc = acc + self._viscous_accel()
         nd = 0
         if cfg.divergenceSolve:
-            acc, nd = self._solve(acc, False)
+            acc, nd = self._solve_compact(acc) if cfg.projection == "compact" else self._solve(acc, False)
         accDiv, fpDiv = acc, self.forcePressure.clone()
-        acc, nq = self._solve(acc, True)
+        nq = 0
+        if cfg.densitySolve:
+            acc, nq = self._solve(acc, True)
         self.iters = (nd, nq)
         shift = None
         if cfg.densityShift:
@@ -811,6 +884,22 @@ class DFSPH2D:
         self.v = self.v + cfg.xsph * self._sum(w[:, None] * (self.v[j] - self.v[i]))
         # integrate; prescribed bodies move with the fluid
         self.v = self.v + dt * acc
+        if cfg.densityMode == "continuity":                                                   # with the new velocity on this step's pairs (symplectic Euler)
+            drho = self._sum((self.V[j][:, None] * (self.v[i] - self.v[j]) * self.gW).sum(1))
+            if self.scene is not None and self.nb > 0:
+                for bi, b in enumerate(self.scene.bodies):
+                    drho = drho + ((self.v - b.velocityAt(self.x)) * self.gkb[bi]).sum(1)
+            self._rhoC = self.rho + dt * drho
+        if cfg.shifting != "none":
+            gC = self._sum(self.V[j][:, None] * self.gW) + (self.gkb.sum(0) if self.nb > 0 else 0.0)
+            hs = 0.5 * self.h
+            D = cfg.shiftA * hs * self.v.norm(dim=1) * dt if cfg.shifting == "fickian" else cfg.shiftA * hs * hs * torch.ones_like(self.V)
+            dxs = -D[:, None] * gC
+            cap = cfg.shiftCap * PACKING * self.h
+            nrm = dxs.norm(dim=1)
+            dxs = dxs * torch.where(nrm > cap, cap / nrm.clamp(min=1e-300), torch.ones_like(nrm))[:, None]
+            shift = dxs if shift is None else shift + dxs
+            self.lastShift = dxs
         self.x = self.x + dt * self.v
         if shift is not None:
             self.x = self.x + shift
