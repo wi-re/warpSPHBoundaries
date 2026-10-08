@@ -805,6 +805,11 @@ class Body:
     def pose(self):
         return Pose(self.center, self.angle if getattr(self, "_cs", None) is not None else float(self.angle), getattr(self, "_cs", None))
 
+    def massProperties(self, rho: float = 1.0):
+        """mass, centre of mass (body frame), polar inertia about it of the body's solid at uniform density `rho` (scene/massprops.py)."""
+        from .massprops import mass_properties
+        return mass_properties(self, rho)
+
     def move(self, dt: float):
         """explicit Euler pose update (as `warpSPH.rigidBody.integrateRigidBody`); nothing else is rebuilt."""
         self.center = self.center + dt * self.linearVelocity
