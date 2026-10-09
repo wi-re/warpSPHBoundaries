@@ -124,3 +124,11 @@ Open: this repo's `main` (bc85c32) does not yet contain `tests/warpsph/`, `docs/
 * `scripts/publish_pypi.sh` / `setup_pypi_token.sh` copied from warpSPH (version check on `src/warpSPHBoundaries/__init__.py`), plus `--build-only`. `--build-only` run: wheel and sdist (2.8 MB each) pass `twine check`; wheel contains only the package and its 18 data files; `pip install --dry-run` of the wheel resolves against the live PyPI. `MANIFEST.in` keeps tests/docs out of the sdist.
 * Tests: this repo's full suite 1075 passed, 1 failed; the failure was a flaw in the new wheel-test assertion (string comparison of mpmath values at different global precisions), fixed (float comparison); the packaging tests pass in the order that triggered it.
 * Open: `License ::` classifiers are deprecated by setuptools in favour of an SPDX expression (the stack's other repos use the classifier too, kept for parity); name `warpSPHBoundaries` was free on PyPI on 2026-10-09; first upload is the owner's (token, optional TestPyPI first: `bash scripts/publish_pypi.sh --testpypi`).
+
+## 9. Landed in warpSPH (2026-10-09, owner)
+
+The series is merged into warpSPH `dev` (95343c1 ... cf525cb; 4b01541 bumps warpSPH to 0.6.0), with one documentation-only conflict resolved by the owner. Checked here, without touching `~/dev/warpSPH`: the local `dev` has all commits and the `boundaries = ["warpSPHBoundaries>=0.1"]` extra; `tests/warpsph/` pass 9 of 9 in float64 and float32 against the merged tree imported from the environment (no `PYTHONPATH` override). PyPI state (re-checked after the owner's upload): warpSPH 0.6.0, warpSPHCore 0.6.0, warpSPHPlotting 0.6.0, warpSPHIntegrators 0.6.1 are published; warpSPHBoundaries is not yet.
+
+* `solvers` extra now `warpSPH>=0.6.0`; `pip install --dry-run "warpsphboundaries-0.1.0-py3-none-any.whl[solvers]"` resolves the whole stack from PyPI.
+* **The one open link:** warpSPH 0.6.0's `boundaries` extra requires `warpSPHBoundaries>=0.1`, which is not on PyPI until `scripts/publish_pypi.sh` is run here, so `pip install "warpSPH[boundaries]"` cannot resolve right now (a plain `pip install warpSPH` is unaffected).
+* Patch series kept in `patches/warpsph/` as the record; its README carries the status.

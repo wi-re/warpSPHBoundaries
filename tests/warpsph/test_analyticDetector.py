@@ -3,9 +3,8 @@ warpSPHBoundaries (`DeltaSPH2D._surface_state`): the same raw and dilated surfac
 renormalisation matrix of fluid + wall, and the lambda-gradient normals, for a fluid block with a free surface and wall
 contact on three sides (and at the corners), regular and jittered.
 Lives in warpSPHBoundaries, not in warpSPH: it compares the analytic-boundary code of warpSPH (patches/warpsph/, `warpSPH.modules.analyticBoundary`) with this
-package's reference solver `DeltaSPH2D`, and warpSPH does not import the package's `sim` layer.  Skipped when the installed warpSPH has no analytic-boundary code.
-Run in both precisions (the tolerances follow the state's dtype):  `pytest tests/warpsph`  and  `warpSPHCore_PRECISION=float32 pytest tests/warpsph`
-with `PYTHONPATH=<patched warpSPH>/src`.
+package's reference solver `DeltaSPH2D`, and warpSPH does not import the package's `sim` layer.  Skipped when the installed warpSPH has no analytic-boundary code (warpSPH >= 0.6.0 has it; for an older tree put a patched `src` on PYTHONPATH, patches/warpsph/).
+Run in both precisions (the tolerances follow the state's dtype):  `pytest tests/warpsph`  and  `warpSPHCore_PRECISION=float32 pytest tests/warpsph`.
 """
 from types import SimpleNamespace
 

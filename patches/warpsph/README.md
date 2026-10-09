@@ -1,4 +1,6 @@
-# warpSPH patch series: analytic boundaries (not pushed)
+# warpSPH patch series: analytic boundaries (merged into warpSPH dev, released as warpSPH 0.6.0)
+
+> **Status 2026-10-09:** this series is merged into warpSPH `dev` (commits 95343c1 ... cf525cb, version bump 4b01541 = 0.6.0). The patches are kept as the record of what was reviewed; with warpSPH >= 0.6.0 nothing needs to be applied, and `tests/warpsph/` run against the installed warpSPH without a `PYTHONPATH` override (9 of 9 pass, float64 and float32).
 
 Eleven commits on warpSPH `dev` at `27e32f3` that let the weakly compressible delta+ scheme run with ANALYTIC boundaries (this package's `warpSPHBoundaries`: exact kernel integrals over the
 solid) instead of boundary particles. The particle path is untouched: every hook is guarded by `schemeConfig.boundaryProvider is not None`. This is the restructured series prepared for

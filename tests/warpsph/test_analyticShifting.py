@@ -4,9 +4,8 @@ on the same particles. The reference's tensile value W0 is set to warpSPH's (the
 reference otherwise takes at dx: 3.7 % of the tensile term, docs/audit-warpsph-boundary-hooks.md), so the comparison isolates
 the wall part: raw sum with the wall continuum, the detector, the curvature / lambda gates, the cap and the clamp.
 Lives in warpSPHBoundaries, not in warpSPH: it compares the analytic-boundary code of warpSPH (patches/warpsph/, `warpSPH.modules.analyticBoundary`) with this
-package's reference solver `DeltaSPH2D`, and warpSPH does not import the package's `sim` layer.  Skipped when the installed warpSPH has no analytic-boundary code.
-Run in both precisions (the tolerances follow the state's dtype):  `pytest tests/warpsph`  and  `warpSPHCore_PRECISION=float32 pytest tests/warpsph`
-with `PYTHONPATH=<patched warpSPH>/src`.
+package's reference solver `DeltaSPH2D`, and warpSPH does not import the package's `sim` layer.  Skipped when the installed warpSPH has no analytic-boundary code (warpSPH >= 0.6.0 has it; for an older tree put a patched `src` on PYTHONPATH, patches/warpsph/).
+Run in both precisions (the tolerances follow the state's dtype):  `pytest tests/warpsph`  and  `warpSPHCore_PRECISION=float32 pytest tests/warpsph`.
 """
 import math
 from types import SimpleNamespace

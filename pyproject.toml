@@ -24,7 +24,7 @@ dependencies = ["numpy", "scipy", "mpmath", "torch", "warp-lang", "warpSPHCore>=
 
 [project.optional-dependencies]
 # the solvers (`sim/`: delta+-SPH and DFSPH on analytic boundaries) run on warpSPH; warpSPH in turn uses this package for `--wallRepresentation analytic` (its `boundaries` extra)
-solvers = ["warpSPH", "warpSPHCore>=0.6.0"]
+solvers = ["warpSPH>=0.6.0", "warpSPHCore>=0.6.0"]
 scripts = ["matplotlib"]
 test = ["pytest"]
 
