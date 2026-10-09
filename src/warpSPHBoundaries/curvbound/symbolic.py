@@ -1,4 +1,4 @@
-"""Evaluators for the Maple-generated closed forms in results/symbolic/.
+"""Evaluators for the Maple-generated closed forms in data/symbolic/ (package data of warpSPHBoundaries).
 
 The export files are produced by maple/01_planar.mpl and maple/03_sphere.mpl.
 Two result types:
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import mpmath as mp
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-PLANAR_EXPORT = REPO_ROOT / "results" / "symbolic" / "planar_export.txt"
-SPHERE_EXPORT = REPO_ROOT / "results" / "symbolic" / "sphere_export.txt"
+DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "symbolic"          # shipped with the package; maple/01_planar.mpl, 13_halfplane.mpl and 03_sphere.mpl write here
+PLANAR_EXPORT = DATA_DIR / "planar_export.txt"
+SPHERE_EXPORT = DATA_DIR / "sphere_export.txt"
 
 _planar_cache = None
 _sphere_cache = None

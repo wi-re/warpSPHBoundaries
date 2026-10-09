@@ -4,7 +4,7 @@ from fractions import Fraction as F
 import mpmath as mp
 import pytest
 
-from curvbound.kernels import KERNELS as SRC
+from warpSPHBoundaries.curvbound.kernels import KERNELS as SRC
 from warpSPHBoundaries.edge.kernels import disk_moment, kernel, peval
 from warpSPHBoundaries.edge.mpq import mpq
 from .conftest import KERNELS as NAMES

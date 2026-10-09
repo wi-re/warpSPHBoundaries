@@ -3,8 +3,8 @@ from fractions import Fraction
 
 import mpmath as mp
 
-from curvbound import KERNELS, kernel
-from curvbound.oracle import _c2, _c3, _w_hat_mp  # private, exercised here
+from warpSPHBoundaries.curvbound import KERNELS, kernel
+from warpSPHBoundaries.curvbound.oracle import _c2, _c3, _w_hat_mp  # private, exercised here
 
 
 mp.mp.dps = 40

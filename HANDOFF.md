@@ -379,7 +379,7 @@ Original (2026-10-01):
 - `scripts/derivation_checks/monomial_edge_forms.py` — [D] closed-form primitives + §4/§6(b); brute-force reference timed out
   (discontinuity at $r=R$); swap in a polar reference (radial breakpoint at $R$) or Maple.
 
-Since: the package `src/warpSPHBoundaries/` (module map in Part A §A1 and `docs/README.md`), `maple/` (`run_edge.sh`), `tests/edge/`, `tests/fixtures/` (golden fixtures), `docs/` (index in `docs/README.md`), `notebooks/edge2d_demo.ipynb`, `results/deltasph/` (tracked δ⁺ series and figures), `src/warpSPHBoundaries/data/tables/` (tier-3 Hermite tables), `results/symbolic/`.
+Since: the package `src/warpSPHBoundaries/` (module map in Part A §A1 and `docs/README.md`), `maple/` (`run_edge.sh`), `tests/edge/`, `tests/fixtures/` (golden fixtures), `docs/` (index in `docs/README.md`), `notebooks/edge2d_demo.ipynb`, `results/deltasph/` (tracked δ⁺ series and figures), `src/warpSPHBoundaries/data/tables/` (tier-3 Hermite tables), `src/warpSPHBoundaries/data/symbolic/`.
 
 ## 15. References
 

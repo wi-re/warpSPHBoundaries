@@ -1,6 +1,6 @@
-"""curvbound — curvature-aware SPH boundary integrals.
+"""warpSPHBoundaries.curvbound — curvature-aware SPH boundary integrals (the PLAN track; formerly the top-level package `curvbound`).
 
-Closed forms (Maple-generated, results/symbolic/) plus independent
+Closed forms (Maple-generated, data/symbolic/) plus independent
 high-precision quadrature oracles, for the semi-analytic SPH boundary
 handling of Winchenbach, Akhunov, Kolb (2020) extended to Wendland kernels
 and to curved (solid-sphere) boundaries.

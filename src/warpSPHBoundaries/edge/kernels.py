@@ -1,6 +1,6 @@
 """Kernels as truncated monomials  W(r) = (1/pi) sum_j sum_n c_{j,n} r^n 1[r <= R_j]  (h = 1).
 
-Built from the exact piecewise-polynomial shapes of `curvbound.kernels`
+Built from the exact piecewise-polynomial shapes of `warpSPHBoundaries.curvbound.kernels`
 (the PLAN track's kernel table; only imported, not modified):
 
     W_hat piecewise polynomial on knots 0 = k_0 < k_1 < ... < k_m = 1
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Tuple
 
-from curvbound.kernels import KERNELS as _SRC
+from ..curvbound.kernels import KERNELS as _SRC
 
 
 # ---- tiny exact polynomial arithmetic (coefficient lists, ascending powers) ----

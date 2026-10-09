@@ -45,7 +45,7 @@ PROBE = textwrap.dedent('''
         return {k: v.sum(0).cpu().numpy().tolist() for k, v in ag.out.items()}
 
     if __name__ == "__main__":
-        print(json.dumps(dict(file=warpSPHBoundaries.__file__, root=None if paths.REPO_ROOT is None else str(paths.REPO_ROOT), tables=str(paths.packaged_tables_dir()), out=evaluate())))
+        print(json.dumps(dict(file=warpSPHBoundaries.__file__, root=None if paths.REPO_ROOT is None else str(paths.REPO_ROOT), tables=str(paths.packaged_tables_dir()), curv=float(__import__("warpSPHBoundaries.curvbound", fromlist=["planar2d"]).planar2d("w2", 0.3, dps=20)), out=evaluate())))
 ''')
 
 
@@ -62,6 +62,8 @@ def test_the_wheel_installs_and_evaluates_a_disk_without_the_checkout(tmp_path):
     names = zipfile.ZipFile(wheel).namelist()
     assert any(n.startswith("warpSPHBoundaries/data/tables/") and n.endswith(".npz") for n in names), "the tier-3 tables must ship in the wheel"
     assert not any(n.startswith("tests/") or "/tests/" in n for n in names)
+    assert "warpSPHBoundaries/data/symbolic/planar_export.txt" in names and "warpSPHBoundaries/curvbound/oracle.py" in names, "curvbound and its Maple exports ship inside the package"
+    assert not any(n.startswith("curvbound/") for n in names), "no second top-level package"
 
     venv = tmp_path / "venv"
     subprocess.run([sys.executable, "-m", "venv", "--system-site-packages", str(venv)], check=True, capture_output=True, text=True)
@@ -79,6 +81,8 @@ def test_the_wheel_installs_and_evaluates_a_disk_without_the_checkout(tmp_path):
     assert str(venv) in got["file"], got["file"]                                              # the venv's copy, not the checkout's editable one
     assert got["root"] is None                                                               # no checkout above the child's package
     assert Path(got["tables"]).is_dir() and list(Path(got["tables"]).glob("*.npz"))
+    from warpSPHBoundaries.curvbound import planar2d
+    assert abs(got["curv"] - float(planar2d("w2", 0.3, dps=20))) <= 1e-14                    # the closed forms read the packaged Maple export, not results/ (floats: the global mpmath precision differs between the processes)
 
     ns = {}
     exec(compile(PROBE, "probe", "exec"), ns)

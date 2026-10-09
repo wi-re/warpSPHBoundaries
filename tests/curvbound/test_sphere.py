@@ -10,7 +10,7 @@ from fractions import Fraction
 import mpmath as mp
 import pytest
 
-from curvbound import planar3d, quad_planar3d, quad_sphere, sphere
+from warpSPHBoundaries.curvbound import planar3d, quad_planar3d, quad_sphere, sphere
 
 mp.mp.dps = 40
 TOL = mp.mpf("1e-25")

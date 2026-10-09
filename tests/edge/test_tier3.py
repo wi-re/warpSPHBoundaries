@@ -5,7 +5,7 @@ import mpmath as mp
 import pytest
 import sympy as sp
 
-from curvbound import planar2d
+from warpSPHBoundaries.curvbound import planar2d
 from warpSPHBoundaries.edge import tier3
 from warpSPHBoundaries.edge.kernels import kernel as get_kernel
 from warpSPHBoundaries.edge.mpq import mpq

@@ -11,7 +11,7 @@ from fractions import Fraction
 import mpmath as mp
 import pytest
 
-from curvbound import (
+from warpSPHBoundaries.curvbound import (
     physical_planar3d,
     planar2d,
     planar3d,
@@ -19,7 +19,7 @@ from curvbound import (
     quad_planar2d_cartesian,
     quad_planar3d,
 )
-from curvbound.symbolic import _eval_maple_expr, _load_planar
+from warpSPHBoundaries.curvbound.symbolic import _eval_maple_expr, _load_planar
 
 mp.mp.dps = 40
 TOL = mp.mpf("1e-25")

@@ -209,7 +209,7 @@ tempCodeRunnerFile.py
 # Scratch / intermediate files
 .tmp/
 
-# Generated notebook figures (results/symbolic/ is committed: python/ depends on it)
+# Generated notebook figures (the Maple exports are committed as package data: src/warpSPHBoundaries/data/symbolic/)
 results/figures/
 
 # PyPI configuration file

@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from warpSPHCore import GradientScheme, KernelFunctions, OperationDirection, OperationProperties, ParticleState, WarpOperation
-from curvbound import planar2d
+from warpSPHBoundaries.curvbound import planar2d
 import warpSPHBoundaries as eb
 from warpSPHBoundaries.scene import boundaryOps as B
 from warpSPHBoundaries.scene.implicitBodies import DiskBody, HalfPlaneBody, TierPolicy

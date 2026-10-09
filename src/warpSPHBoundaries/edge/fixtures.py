@@ -240,7 +240,7 @@ def _generate(path, verbose):
             rec = dict(id=c["id"], tags=c["tags"], kind="element", polygon=poly_json(c["P"]), x=pt(c["x"]),
                        h=fs(c["h"]), where=where, kernels=ker, expect={})
             if "half_plane_d" in c["expect"]:
-                from curvbound import planar2d
+                from ..curvbound import planar2d
                 d = F(c["expect"]["half_plane_d"])
                 lam = {}
                 for k in KERNEL_NAMES:

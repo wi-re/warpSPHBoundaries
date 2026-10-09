@@ -93,7 +93,7 @@ def strip_series(kname, a, d, K, dps=40):
 
 def strip_exact(kname, a, d, dps=40):
     """exact strip value for x outside the strip (d > a): lambda_2(d - a) - lambda_2(d + a)  (PLAN-track closed forms)."""
-    from curvbound import planar2d
+    from ..curvbound import planar2d
     with mp.workdps(dps + 10):
         a, d = mpq(Fraction(a)), mpq(Fraction(d))
         lam = lambda t: planar2d(kname, t, dps=dps + 10) if t < 1 else mp.mpf(0)

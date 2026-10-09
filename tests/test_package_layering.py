@@ -59,4 +59,5 @@ def test_tabulated_kernels_ship_with_the_package():
     assert {"tier3_w2.npz", "tier3_w4.npz"} <= names
     pyproject = (SRC.parents[1] / "pyproject.toml").read_text() if (SRC.parents[1] / "pyproject.toml").exists() else None
     if pyproject is not None:
-        assert 'warpSPHBoundaries = ["data/tables/*.npz"]' in pyproject
+        assert '"data/tables/*.npz"' in pyproject and '"data/symbolic/*.txt"' in pyproject
+    assert {p.name for p in (SRC / "data" / "symbolic").glob("*_export.txt")} == {"planar_export.txt", "sphere_export.txt"}          # the Maple exports of warpSPHBoundaries.curvbound

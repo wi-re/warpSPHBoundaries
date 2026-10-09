@@ -6,7 +6,7 @@ import pytest
 
 import warpSPHBoundaries as eb
 from warpSPHBoundaries.edge.mpq import mpq
-from curvbound import planar2d
+from warpSPHBoundaries.curvbound import planar2d
 
 from .conftest import KERNELS, rand_point, rand_triangle
 from .conftest import big_triangle

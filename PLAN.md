@@ -10,7 +10,7 @@
 - [x] Wendland planar closed forms derived + validated (w2/w4/w6; Maple symbolic + 50-digit quad + independent 40-digit Python oracle)
 - [x] Spherical boundary derived and validated **for Wendland kernels w2/w4/w6** (two-branch closed form, exact branch join, planar limit — see §18b)
 - [x] **2-D planar closed forms derived + validated for all 4 kernels** (cubic-spline branches A/B + Wendland by-parts/arccos-ln forms; exact join & boundary values — see §18c)
-- [x] **Toy harnesses promoted to repo layout** (`maple/`, `src/curvbound/`, `tests/` = 49 passing, `docs/derivation.md`, executed `notebooks/demo.ipynb` — see §18c)
+- [x] **Toy harnesses promoted to repo layout** (`maple/`, `src/warpSPHBoundaries/curvbound/`, `tests/` = 49 passing, `docs/derivation.md`, executed `notebooks/demo.ipynb` — see §18c)
 - [ ] 2-D circle boundary derived and validated *(next; oracle for tier 3 in 2-D)*
 - [ ] Cylindrical boundary derived and validated *(optional exact; likely Decision B — see "Relation to HANDOFF.md")*
 - [x] Docs skeleton + backends/verification plan added (`docs/README.md`, `docs/notation.md`, `docs/derivations/`, `docs/backends-and-verification.md`)
@@ -1271,10 +1271,10 @@ The `.tmp/toy_planar/` harnesses were promoted to the §9 layout:
 
 ```
 maple/00_setup.mpl          kernel table, normalization, F(n,p,x) checks
-maple/01_planar.mpl         2-D + 3-D planar, all kernels -> results/symbolic/planar_export.txt
-maple/03_sphere.mpl         sphere (Wendland) -> results/symbolic/sphere_export.txt
+maple/01_planar.mpl         2-D + 3-D planar, all kernels -> src/warpSPHBoundaries/data/symbolic/planar_export.txt
+maple/03_sphere.mpl         sphere (Wendland) -> src/warpSPHBoundaries/data/symbolic/sphere_export.txt
 maple/run_all.sh
-src/curvbound/           kernels.py, symbolic.py (Maple->mpmath translator), oracle.py
+src/warpSPHBoundaries/curvbound/           kernels.py, symbolic.py (Maple->mpmath translator), oracle.py
 tests/                      test_kernels.py, test_planar.py, test_sphere.py (49 tests)
 notebooks/demo.ipynb        executed demo (8 figures in results/figures/)
 docs/derivation.md          full write-up
@@ -1282,7 +1282,7 @@ docs/derivation.md          full write-up
 
 Sphere export format changed to a single `N(R,d)` triple set per branch
 (branch 1 is linear in R — the `i=1` row equals the 3-D planar Wendland
-polynomial, which is why `R→∞` recovers it exactly); `src/curvbound/sphere`
+polynomial, which is why `R→∞` recovers it exactly); `src/warpSPHBoundaries/curvbound/sphere`
 now works for **any** R, not just the toy's per-R rows.
 
 ## Notes / gotchas found

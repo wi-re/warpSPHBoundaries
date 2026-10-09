@@ -27,8 +27,8 @@ Kernels and conventions follow warpSPHCore
 maple/00_setup.mpl          kernel table, normalization, F(n,p,x) basis checks
 maple/01_planar.mpl         2-D + 3-D planar, all kernels
 maple/03_sphere.mpl         solid sphere (Wendland w2/w4/w6)
-maple/run_all.sh            regenerate results/symbolic/ (needs Maple 2026)
-src/curvbound/              PLAN track: kernel table, closed-form evaluators, oracles (curvature-aware planar / sphere integrals)
+maple/run_all.sh            regenerate src/warpSPHBoundaries/data/symbolic/ (needs Maple 2026)
+src/warpSPHBoundaries/curvbound/              PLAN track: kernel table, closed-form evaluators, oracles (curvature-aware planar / sphere integrals)
 src/warpSPHBoundaries/edge/         HANDOFF track: exact 2D edge-reduction integrals (mpmath -> numpy -> torch -> Warp), FEM weights, tiers 3 / 4
 src/warpSPHBoundaries/scene/        bodies and representations, boundary operations, wall operators of the delta+-SPH solver, the boundary provider (`AnalyticBoundary`, `scene/provider.py`)
 src/warpSPHBoundaries/data/tables/  pre-tabulated tier-3 kernel tables (package data)
@@ -39,7 +39,7 @@ notebooks/demo.ipynb        executed demo: geometry, curves, validation
 notebooks/examples/         nine example flows (Taylor-Green ... flow past a cylinder) on the delta+ and the DFSPH solver, against reference solutions
 docs/derivation.md          full mathematical write-up
 PLAN.md                     project status & roadmap
-results/symbolic/           Maple exports (committed; consumed by src/curvbound)
+src/warpSPHBoundaries/data/symbolic/  Maple exports (committed, shipped with the package; consumed by warpSPHBoundaries.curvbound)
 results/figures/            notebook figures (generated, git-ignored)
 ```
 
@@ -79,7 +79,7 @@ sphere("w4", Fraction(4, 10), Fraction(1, 5))   # solid ball R=0.4, d=0.2
 
 Every closed form is validated three ways (details in `docs/derivation.md`
 §5): exact symbolic identities in Maple, 50-digit Maple quadrature, and
-independent 40-digit mpmath oracles in `src/curvbound/oracle.py`
+independent 40-digit mpmath oracles in `src/warpSPHBoundaries/curvbound/oracle.py`
 (including a true 2-D Cartesian quadrature and the h-scaling identity).
 Worst observed error: ~1e-39.
 

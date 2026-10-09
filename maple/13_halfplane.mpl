@@ -2,7 +2,7 @@
 # 13_halfplane.mpl -- HALF-PLANE cross-check between the two tracks:
 #   the edge value / gradient / first-moment identity with ONE infinite edge at
 #   distance d  must equal  lambda_2(d), -d lambda_2/dd  (docs/derivation.md s.3,
-#   results/symbolic/planar_export.txt) for all four kernels.
+#   src/warpSPHBoundaries/data/symbolic/planar_export.txt) for all four kernels.
 #
 #   x outside the solid {y > d}:  n = (0,-1), z = -d, indicator 0, chord [-L,L], L = sqrt(R^2-d^2)
 #   value   = sum_blocks sum_n c_n/(n+2) [ -2 d I_n(L) + 2 R^(n+2) arccos(d/R) ]        (R = 1, 1/2)
@@ -81,7 +81,7 @@ edge_m01 := proc(kname, dmax_branch) local tot, b, n, Rv, cs;
 end proc:
 
 # ---- load the closed forms lambda_2 from the PLAN track's export ------------------
-file := "results/symbolic/planar_export.txt":
+file := "src/warpSPHBoundaries/data/symbolic/planar_export.txt":
 lam := table([]):
 fd := fopen(file, READ, TEXT):
 line := readline(fd):
