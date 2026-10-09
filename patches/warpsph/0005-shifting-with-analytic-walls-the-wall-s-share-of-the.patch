@@ -1,20 +1,19 @@
-From 4222a7251447e40941a460c617f6b825623f887a Mon Sep 17 00:00:00 2001
+From e7b785347d7ff67153f320703021cd060ea91617 Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
-Date: Thu, 8 Oct 2026 17:42:20 +0100
-Subject: [PATCH 5/8] shifting with analytic walls: the wall's share of the raw
- delta+ sum (G and the tensile edge reduction, warpSPH's W0 convention) added
- in computeDeltaShift; solveShifting then runs unchanged on the analytic
+Date: Fri, 9 Oct 2026 08:16:27 +0100
+Subject: [PATCH 05/11] shifting with analytic walls: the wall's share of the
+ raw delta+ sum (G and the tensile edge reduction, warpSPH's W0 convention)
+ added in computeDeltaShift; solveShifting then runs unchanged on the analytic
  detector; equals the reference shift (curvature gate off) to float32
  round-off
 
+(The comparison against the warpSPHBoundaries reference solver lives in warpSPHBoundaries, tests/warpsph.)
 ---
  .../modules/analyticBoundary/__init__.py      |  3 +-
- .../modules/analyticBoundary/shifting.py      | 45 ++++++++++
- src/warpSPH/modules/shifting/delta.py         |  8 ++
- tests/test_analyticShifting.py                | 87 +++++++++++++++++++
- 4 files changed, 142 insertions(+), 1 deletion(-)
+ .../modules/analyticBoundary/shifting.py      | 46 +++++++++++++++++++
+ src/warpSPH/modules/shifting/delta.py         |  8 ++++
+ 3 files changed, 56 insertions(+), 1 deletion(-)
  create mode 100644 src/warpSPH/modules/analyticBoundary/shifting.py
- create mode 100644 tests/test_analyticShifting.py
 
 diff --git a/src/warpSPH/modules/analyticBoundary/__init__.py b/src/warpSPH/modules/analyticBoundary/__init__.py
 index d2e9756..9d84e8b 100644
@@ -32,10 +31,10 @@ index d2e9756..9d84e8b 100644
 +__all__ = ['wallShiftRaw', 'kernelAtSpacing', 'detectFreeSurfaceAnalytic', 'sym2LamPinv', 'WallState', 'evaluateWall', 'wallContinuity', 'wallPressureAcceleration', 'wallViscousAcceleration', 'viscousPrefactor']
 diff --git a/src/warpSPH/modules/analyticBoundary/shifting.py b/src/warpSPH/modules/analyticBoundary/shifting.py
 new file mode 100644
-index 0000000..24dc757
+index 0000000..70c22b1
 --- /dev/null
 +++ b/src/warpSPH/modules/analyticBoundary/shifting.py
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,46 @@
 +"""The wall's share of the delta+ shift sum with analytic walls.
 +
 +warpSPH's `computeDeltaShiftWarp` returns the raw fluid sum
@@ -52,6 +51,8 @@ index 0000000..24dc757
 +(the kernel at dx / kernelScale, not at dx: a 3.7 % difference of the tensile term for Wendland C2 at h = 4 dx), so
 +the fluid and the wall part of the sum are consistent.
 +"""
++import math
++
 +import torch
 +
 +from warpSPHCore import KernelFunctions
@@ -66,11 +67,10 @@ index 0000000..24dc757
 +
 +def kernelAtSpacing(kernel, support, mass, rho0):
 +    """warpSPH's tensile reference value W0 = W(r = (m / rho0)^(1/2) / kernelScale; support) of `computeDeltaShiftWarp` (2D)."""
-+    from warpSPHBoundaries.sim.pairs import wendland2
 +    if kernel != KernelFunctions.Wendland2:
 +        raise NotImplementedError('analytic-wall shifting: Wendland C2 only')
-+    r = (mass / rho0) ** 0.5 / KERNEL_SCALE[kernel]
-+    return float(wendland2(torch.tensor(r, dtype=F64), torch.tensor(float(support), dtype=F64)))
++    q = (mass / rho0) ** 0.5 / KERNEL_SCALE[kernel] / float(support)          # host double: warpSPHCore's wendland2_k is a Warp function at the process precision
++    return 7.0 / (math.pi * float(support) ** 2) * (1.0 - q) ** 4 * (1.0 + 4.0 * q) if q < 1.0 else 0.0
 +
 +
 +def wallShiftRaw(wall, state, config, schemeConfig, R):
@@ -100,99 +100,6 @@ index e0a1114..9070446 100644
          shift = shift * scalingDeltaPlus.unsqueeze(-1)
  
          # print(f'Iteration {i}, shift magnitude: {shift.norm(dim=1).mean().item()}, max: {shift.norm(dim=1).max().item()} [dx: {config.dx.item()}/dt: {config.dt}/mean support: {currentState.supports.mean().item()}]')
-diff --git a/tests/test_analyticShifting.py b/tests/test_analyticShifting.py
-new file mode 100644
-index 0000000..b122d11
---- /dev/null
-+++ b/tests/test_analyticShifting.py
-@@ -0,0 +1,87 @@
-+"""Shifting with analytic walls: warpSPH's own `solveShifting` (surfaceNormal projection, Sun et al. 2017 Eq. 7 constants)
-+on the dam break's initial state with analytic tank walls, against the reference `DeltaSPH2D.shift` of warpSPHBoundaries
-+on the same particles. The reference's tensile value W0 is set to warpSPH's (the kernel at dx / kernelScale, which the
-+reference otherwise takes at dx: 3.7 % of the tensile term, docs/audit-warpsph-boundary-hooks.md), so the comparison isolates
-+the wall part: raw sum with the wall continuum, the detector, the curvature / lambda gates, the cap and the clamp.
-+"""
-+import math
-+from types import SimpleNamespace
-+
-+import numpy as np
-+import pytest
-+import torch
-+
-+pytest.importorskip('warpSPHBoundaries')
-+
-+from warpSPHCore import SupportScheme, buildVerletList  # noqa: E402
-+
-+from warpSPH.cases import importAll  # noqa: E402
-+from warpSPH.configurations.moduleConfigurations.shifting import ShiftingProjectionScheme  # noqa: E402
-+from warpSPH.modules.analyticBoundary import kernelAtSpacing  # noqa: E402
-+from warpSPH.modules.shifting import solveShifting  # noqa: E402
-+from warpSPH.runner import buildContext, getCase  # noqa: E402
-+from warpSPH.runner.caseSpec import CaseSpec  # noqa: E402
-+from warpSPHBoundaries.scene import Body  # noqa: E402
-+from warpSPHBoundaries.scene.scene import BoxRep, Scene  # noqa: E402
-+from warpSPHBoundaries.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig  # noqa: E402
-+
-+pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
-+F64 = torch.float64
-+DEV = 'cuda'
-+
-+
-+def build(nx=32):
-+    importAll()
-+    case = getCase('dambreak')
-+    spec = CaseSpec(caseName=case.name, scheme=case.scheme, params={**case.params, 'wallRepresentation': 'analytic'})
-+    spec = spec.merged(**case.defaults).merged(nx=nx)
-+    ctx = buildContext(case, spec)
-+    case.configureScheme(ctx)
-+    return ctx, case.buildSystem(ctx)
-+
-+
-+@pytest.mark.parametrize('curvatureGate', [False, True])
-+def test_solveShifting_with_analytic_walls_equals_the_reference_shift(curvatureGate):
-+    """curvatureGate=False: everything but the Sun 2019 Eq. (21) curvature gate agrees to round-off. With the gate on, a few free-surface
-+    particles differ: warpSPH's `_curvatureGate` takes the minimum normal dot product over the RAW Verlet list (pairs up to verletScale x
-+    support), the reference over the pairs inside the support, so warpSPH gates more (a property of the shared warpSPH code path, the same for
-+    boundary particles; the analytic flavour uses warpSPH's own `solveShifting`)."""
-+    ctx, system = build()
-+    st, config, sc = system.state, ctx.config, ctx.schemeConfig
-+    n = st.positions.shape[0]
-+    rng = np.random.default_rng(5)
-+    st.velocities = torch.as_tensor(rng.normal(scale=0.5, size=(n, 2)), device=st.positions.device, dtype=st.positions.dtype)
-+    sc.fluid.fixedSoundSpeed = 20.0
-+    sc.surfaceDetectionConfig.active = True
-+    sp = sc.shiftProperties
-+    sp.projectionScheme, sp.sun2017Eq7Shift, sp.reuseNormals, sp.iterations = ShiftingProjectionScheme.surfaceNormal, True, False, 1
-+    sp.surfaceCurvatureAngle = 15.0 if curvatureGate else 0.0                              # 0: no gate in warpSPH
-+    dt = 1e-3
-+    adj = buildVerletList(st, config.domain, verletScale=config.verletScale, supportMode=SupportScheme.SuperSymmetric, verbose=False)
-+    got = solveShifting(st, config, sc, adj, dt).to(F64)
-+
-+    # the reference: same particles, same tank
-+    pos = st.positions.double().cpu().numpy()
-+    vel = st.velocities.double().cpu().numpy()
-+    dx = float(config.dx)
-+    H = float(st.supports.max())
-+    lo, hi = [float(a) for a in config.domain.min.cpu()], [float(a) for a in config.domain.max.cpu()]
-+    interior = ctx.scratch['interiorDomain']
-+    lo, hi = [float(a) for a in interior.min], [float(a) for a in interior.max]
-+    tank = Scene([Body(bodyId=0, reps=[BoxRep(tuple(lo), tuple(hi), solid='outside')])], DEV)
-+    cfg = DeltaSPHConfig(gravity=(0.0, -9.81), c0=20.0, shiftCFL=sp.CFL, shiftR=0.2, shiftCapFraction=sp.maxShiftVelocityFraction, shiftThreshold=sp.threshold,
-+                         shiftCurvatureAngle=sp.surfaceCurvatureAngle if curvatureGate else 180.0, shiftLambda=sp.surfaceLambdaThreshold, noPen='impulse', shifting=True, graphStep=False, fluidWarp=True, fusedWall=True)
-+    sim = DeltaSPH2D(pos, vel, np.ones(n), dx, tank, cfg, DEV, support=H)
-+    sim._w0 = kernelAtSpacing(config.kernel, H, float(st.masses.mean()), sc.fluid.restDensity)
-+    ref = sim.shift(dt)
-+
-+    scale = float(ref.abs().max())
-+    assert scale > 0
-+    err = float((got - ref).abs().max())
-+    near = (got.norm(dim=1) > 0).sum()
-+    print(f'shift scale {scale:.3e}, max |difference| {err:.3e}, nonzero {int(near)} of {n}')
-+    if curvatureGate:                                                                      # warpSPH gates more: the difference is bounded by the largest shift of the gated particles
-+        assert err <= 0.25 * scale
-+        return
-+    tol = 2e-3 if st.positions.dtype == torch.float32 else 1e-8
-+    assert err <= tol * scale
 -- 
 2.43.0
 

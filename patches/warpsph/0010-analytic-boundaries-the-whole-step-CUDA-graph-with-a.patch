@@ -1,0 +1,145 @@
+From d8e99ddfa136213bc9ea92ec24767524d2f04c41 Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Fri, 9 Oct 2026 08:16:27 +0100
+Subject: [PATCH 10/11] analytic boundaries: the whole-step CUDA graph with
+ analytic walls (host constants `_analyticSupport` / `_analyticMass` /
+ `_analyticDx` fixed at initialisation; moving or dynamic bodies, implicit
+ shifting and mixed scenes refused up front), test
+
+---
+ .../initializers/weaklyCompressible.py        |  3 ++
+ .../modules/analyticBoundary/shifting.py      |  3 +-
+ src/warpSPH/schemes/deltaSPH.py               | 19 +++++++-
+ src/warpSPH/systems/weaklyCompressible.py     |  2 +-
+ tests/test_analyticGraph.py                   | 47 +++++++++++++++++++
+ 5 files changed, 71 insertions(+), 3 deletions(-)
+ create mode 100644 tests/test_analyticGraph.py
+
+diff --git a/src/warpSPH/initializers/weaklyCompressible.py b/src/warpSPH/initializers/weaklyCompressible.py
+index 5d3083d..f2e2007 100644
+--- a/src/warpSPH/initializers/weaklyCompressible.py
++++ b/src/warpSPH/initializers/weaklyCompressible.py
+@@ -268,6 +268,9 @@ def initializeSimulation(regions, config, schemeConfig, SimulationSystem, Simula
+     if provider is not None:
+         provider.rigidBodies = [rb for rb in rigidBodies if getattr(rb, 'representation', None) is not None]
+         schemeConfig.rigidBodies = rigidBodies          # the system's finalize integrates the analytic bodies like the particle ones
++        schemeConfig._analyticMass = float(particleState.masses[particleState.kinds == 0].mean())          # the fluid's particle mass (the tensile reference value of the shifting)
++        schemeConfig._analyticDx = float(config.dx)                                       # host constant (the no-penetration law), see _analyticSupport
++        schemeConfig._analyticSupport = float(particleState.supports.max())          # the (constant) support of the wall integrals: a host float fixed here, so the right-hand side needs no device-to-host read
+     config.regions = regions
+     
+     compressibleSystem = SimulationSystem(
+diff --git a/src/warpSPH/modules/analyticBoundary/shifting.py b/src/warpSPH/modules/analyticBoundary/shifting.py
+index 9ca81c4..be96cbb 100644
+--- a/src/warpSPH/modules/analyticBoundary/shifting.py
++++ b/src/warpSPH/modules/analyticBoundary/shifting.py
+@@ -43,7 +43,8 @@ def wallShiftRaw(wall, state, config, schemeConfig, R, volumeWeighted=False):
+     from warpSPHBoundaries.scene.tensile import tensile_factor
+     rho0 = schemeConfig.fluid.restDensity
+     H, wm = wall.support, wall.wm
+-    w0 = kernelAtSpacing(config.kernel, H, float(state.masses.mean()), rho0)
++    mass = getattr(schemeConfig, '_analyticMass', None) or float(state.masses.mean())          # the host constant fixed at initialisation: no device-to-host read inside a graph capture
++    w0 = kernelAtSpacing(config.kernel, H, mass, rho0)
+     tens = wm * R / w0 ** 4 * tensile_factor(H, FAMILY[config.kernel]) * wall.agg.out['tens'].sum(0) * wall.near[:, None]
+     pref = (1.0 if volumeWeighted else 0.25) * rho0 / state.densities.to(F64)
+     return pref[:, None] * (wall.G.sum(0) + tens)
+diff --git a/src/warpSPH/schemes/deltaSPH.py b/src/warpSPH/schemes/deltaSPH.py
+index 299255f..e411150 100644
+--- a/src/warpSPH/schemes/deltaSPH.py
++++ b/src/warpSPH/schemes/deltaSPH.py
+@@ -99,8 +99,25 @@ def _rhsIsGraphable(schemeConfig, stageIndex) -> bool:
+     symplectic Euler, recomputes the diffusion every call and never reads it.)"""
+     if getattr(schemeConfig, 'mdbcNoPenShiftMode', 'derivative') == 'derivative':
+         return False
+-    # analytic walls: the wall aggregates are cached in Python and the support is a host float (modules/analyticBoundary); not capturable yet
++    # analytic walls: capturable when the support is the host constant fixed at initialisation (no device-to-host read inside the capture)
+     if getattr(schemeConfig, 'boundaryProvider', None) is not None:
++        if not getattr(schemeConfig, '_analyticSupport', None):
++            return False
++        # a mixed scene's particle bodies are moved by `updateBodyParticlesWCSPH` (host reads), not capturable
++        bodies = getattr(schemeConfig, 'rigidBodies', None) or []
++        if any(getattr(rb, 'representation', None) is None for rb in bodies):
++            return False
++        # a moving analytic body (prescribed or driven by the fluid) is advanced in place by every execution of the step, and the graph's validation executes it more than once: only static bodies
++        # (evaluated once, at the first call)
++        static = getattr(schemeConfig, '_analyticBodiesStatic', None)
++        if static is None:
++            static = not any(rb.dynamic or float(rb.angularVelocity) != 0.0 or float(rb.linearVelocity.abs().max()) != 0.0 for rb in bodies)
++            schemeConfig._analyticBodiesStatic = static
++        if not static:
++            return False
++    # the implicit shifting solves its linear system with host-synchronising Krylov solvers: a capture of the step fails and leaves the CUDA context in an error state
++    sp = getattr(schemeConfig, 'shiftProperties', None)
++    if sp is not None and sp.active and getattr(sp.scheme, 'name', None) in ('implicit', 'dynamic'):
+         return False
+     if getattr(schemeConfig, 'freezeDiffusionAcrossStages', False) and stageIndex is not None:
+         return False
+diff --git a/src/warpSPH/systems/weaklyCompressible.py b/src/warpSPH/systems/weaklyCompressible.py
+index 765e87f..9299f85 100644
+--- a/src/warpSPH/systems/weaklyCompressible.py
++++ b/src/warpSPH/systems/weaklyCompressible.py
+@@ -313,7 +313,7 @@ class WeaklyCompressibleSystem(BaseIntegrationSystem):
+             shift = computeMdbcNoPenShift(self.state, config, schemeConfig, self.adjacency)
+         if provider is not None:
+             from ..modules.analyticBoundary import analyticNoPenShift
+-            analytic = analyticNoPenShift(provider, self.state, config, schemeConfig, float(config.dx))
++            analytic = analyticNoPenShift(provider, self.state, config, schemeConfig, getattr(schemeConfig, '_analyticDx', None) or float(config.dx))
+             shift = analytic if shift is None else shift + analytic
+         return shift
+ 
+diff --git a/tests/test_analyticGraph.py b/tests/test_analyticGraph.py
+new file mode 100644
+index 0000000..ed45c60
+--- /dev/null
++++ b/tests/test_analyticGraph.py
+@@ -0,0 +1,47 @@
++"""CUDA graphs with analytic boundaries: the whole step (right-hand side, shifting, no-penetration, finalize) is captured and replayed, bitwise the eager step, for the tank, the tank with an
++analytic obstacle and the Michel shifting; configurations that cannot be captured (implicit shifting: host-synchronising Krylov solvers; moving or dynamic analytic bodies, which every execution of
++the step advances in place and the graph's validation executes more than once; particle bodies of a mixed scene) are refused up front instead of capturing."""
++import numpy as np
++import pytest
++import torch
++
++pytest.importorskip('warpSPHBoundaries')
++
++from warpSPH.cases import importAll  # noqa: E402
++from warpSPH.runner import getCase, run  # noqa: E402
++from test_analyticDambreak import spec_of  # noqa: E402
++
++pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
++
++OBSTACLE = dict(obstacleActive=True, obstacleType='circleBottom', maxExtent=0.5, offsetX=-0.4)
++
++
++def final(case, graph, params, nSteps=100):
++    res = run(case, spec_of(case, 'analytic', nSteps=nSteps, params=params, cudaGraph=graph, plot=False, store=False, progress=False, video=False, show=False, quiet=True, pipelineOutputs=False))
++    s = res.state.state
++    f = s.kinds == 0
++    return res, [a[f].double().cpu().numpy() for a in (s.positions, s.velocities, s.densities)]
++
++
++@pytest.mark.parametrize('params', [{}, OBSTACLE, dict(shiftScheme='michel2022', shiftProjection='michel2022')], ids=['tank', 'obstacle', 'michel'])
++def test_whole_step_graph_is_bitwise_the_eager_step(params):
++    importAll()
++    case = getCase('dambreak')
++    _, eager = final(case, False, params)
++    res, graphed = final(case, True, params)
++    sg = res.ctx.scratch.get('stepGraph')
++    assert sg is not None and sg.captures >= 1 and getattr(sg, 'disabled', None) is None, 'the step was not captured'
++    for a, b in zip(eager, graphed):
++        assert np.array_equal(a, b)
++
++
++@pytest.mark.parametrize('params', [dict(shiftScheme='implicit', shiftProjection='surfaceNormal'), dict(OBSTACLE, obstacleDynamic=True),
++                                    dict(OBSTACLE, obstacleRepresentation='particles')], ids=['implicit', 'dynamic-body', 'mixed'])
++def test_uncapturable_configurations_run_eagerly(params):
++    importAll()
++    case = getCase('dambreak')
++    _, eager = final(case, False, params, nSteps=40)
++    res, graphed = final(case, True, params, nSteps=40)
++    assert res.ctx.scratch.get('stepGraph') is None
++    for a, b in zip(eager, graphed):
++        assert np.allclose(a, b, rtol=0, atol=5e-4 * max(1.0, float(np.abs(a).max())))         # the implicit solve's atomics: two identical eager runs differ by 2e-5 in the velocity (float32, 40 steps)
+-- 
+2.43.0
+

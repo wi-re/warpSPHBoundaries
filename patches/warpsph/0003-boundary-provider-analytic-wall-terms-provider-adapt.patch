@@ -1,12 +1,13 @@
-From 5b48746db684c79827bc5bed56152e5c59157b82 Mon Sep 17 00:00:00 2001
+From dab9f1a6812d5a13b97b667088a353661e47f3ca Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
-Date: Thu, 8 Oct 2026 17:32:11 +0100
-Subject: [PATCH 3/8] boundary provider + analytic wall terms: provider adapter
- (boundary/), wall continuity / pressure / viscosity terms
+Date: Fri, 9 Oct 2026 08:16:27 +0100
+Subject: [PATCH 03/11] boundary provider + analytic wall terms: provider
+ adapter (boundary/), wall continuity / pressure / viscosity terms
  (modules/analyticBoundary) hooked at stages 05b / 11 (inside the frozen
  diffusion tuple) / 12 / 13; equals the warpSPHBoundaries reference to 1e-13
  (free slip and no slip)
 
+(The comparison against the warpSPHBoundaries reference solver lives in warpSPHBoundaries, tests/warpsph.)
 ---
  src/warpSPH/boundary/__init__.py              |  11 ++
  src/warpSPH/boundary/provider.py              |  59 ++++++++
@@ -15,13 +16,11 @@ Subject: [PATCH 3/8] boundary provider + analytic wall terms: provider adapter
  .../modules/analyticBoundary/__init__.py      |  10 ++
  .../modules/analyticBoundary/wallTerms.py     | 142 ++++++++++++++++++
  src/warpSPH/schemes/deltaSPH.py               |  25 +++
- tests/test_analyticWallTerms.py               |  96 ++++++++++++
- 8 files changed, 351 insertions(+)
+ 7 files changed, 255 insertions(+)
  create mode 100644 src/warpSPH/boundary/__init__.py
  create mode 100644 src/warpSPH/boundary/provider.py
  create mode 100644 src/warpSPH/modules/analyticBoundary/__init__.py
  create mode 100644 src/warpSPH/modules/analyticBoundary/wallTerms.py
- create mode 100644 tests/test_analyticWallTerms.py
 
 diff --git a/src/warpSPH/boundary/__init__.py b/src/warpSPH/boundary/__init__.py
 new file mode 100644
@@ -363,108 +362,6 @@ index 1bcf080..9bd349f 100644
  
      # 14. Apply forcing
      # with TimedBlock('compute forcing', use_cuda=True, device=config.device) as tb_forcing:
-diff --git a/tests/test_analyticWallTerms.py b/tests/test_analyticWallTerms.py
-new file mode 100644
-index 0000000..5838a6c
---- /dev/null
-+++ b/tests/test_analyticWallTerms.py
-@@ -0,0 +1,96 @@
-+"""The wall terms of the analytic-boundary flavour (modules/analyticBoundary/wallTerms.py) against the reference
-+implementation in warpSPHBoundaries (`DeltaSPH2D.rhs`): the wall contribution to d rho / dt and to the acceleration.
-+
-+Reference: `DeltaSPH2D.rhs(x, v, rho)` with the tank minus the same call without any wall (the fluid-fluid terms
-+cancel). The state has P >= 0 everywhere (rho >= rho0), so the Antuono switch is +1 for every particle whatever the
-+surface detection says. Compared: continuity (free-slip mirror), the pressure force (with the p_b >= 0 clamp) and the
-+viscous wall term, for a free-slip tank and a no-slip tank; the sum of the three equals the difference of the
-+reference right-hand sides.
-+"""
-+import math
-+from types import SimpleNamespace
-+
-+import numpy as np
-+import pytest
-+import torch
-+
-+pytest.importorskip('warpSPHBoundaries')
-+
-+from warpSPHCore import KernelFunctions  # noqa: E402
-+
-+from warpSPH.boundary import buildBoundaryProvider  # noqa: E402
-+from warpSPH.configurations.region import BCType, RegionType  # noqa: E402
-+from warpSPH.modules.analyticBoundary import (evaluateWall, wallContinuity, wallPressureAcceleration, wallViscousAcceleration)  # noqa: E402
-+from warpSPH.rigidBody import buildAnalyticRigidBody  # noqa: E402
-+from warpSPH.systems.weaklyCompressible import WeaklyCompressibleState  # noqa: E402
-+from warpSPHBoundaries.scene import Body  # noqa: E402
-+from warpSPHBoundaries.scene.scene import BoxRep  # noqa: E402
-+from warpSPHBoundaries.sim.deltasph2d import DeltaSPH2D, DeltaSPHConfig  # noqa: E402
-+from warpSPHBoundaries.scene.scene import Scene  # noqa: E402
-+
-+pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
-+DEV = 'cuda'
-+F64 = torch.float64
-+LO, HI = (0.0, 0.0), (0.6, 0.5)
-+G = (0.0, -9.81)
-+ALPHA, C0 = 0.1, 20.0
-+
-+
-+def block(dx=0.025):
-+    nx, ny = int(0.6 / dx), int(0.3 / dx)
-+    X, Y = np.meshgrid(dx * (np.arange(nx) + 0.5), dx * (np.arange(ny) + 0.5), indexing='ij')
-+    return np.stack([X.ravel(), Y.ravel()], 1), dx
-+
-+
-+def state_of(pos, v, rho, H):
-+    n = len(pos)
-+    z = torch.zeros(n, device=DEV, dtype=F64)
-+    t = lambda a: torch.as_tensor(a, device=DEV, dtype=F64)
-+    return WeaklyCompressibleState(
-+        positions=t(pos), velocities=t(v), supports=z + H, masses=z + 0.025 ** 2, densities=t(rho),
-+        kinds=torch.zeros(n, dtype=torch.int32, device=DEV), materials=torch.zeros(n, dtype=torch.int32, device=DEV),
-+        UIDs=torch.arange(n, device=DEV), UIDcounter=n, pressures=C0 ** 2 * (t(rho) - 1.0), soundspeeds=z + C0,
-+        ghostIndices=-torch.ones(n, dtype=torch.int32, device=DEV), ghostOffsets=torch.zeros((n, 2), device=DEV, dtype=F64))
-+
-+
-+def setup(kind):
-+    pos, dx = block()
-+    H = 4 * dx
-+    rng = np.random.default_rng(3)
-+    v = rng.normal(scale=0.3, size=pos.shape)
-+    rho = 1.0 + 0.002 * (1.0 + 0.5 * np.sin(8 * pos[:, 0]) * np.cos(5 * pos[:, 1])) + 9.81 * np.clip(0.3 - pos[:, 1], 0, None) / C0 ** 2
-+    st = state_of(pos, v, rho, H)
-+    body = Body(bodyId=0, reps=[BoxRep(LO, HI, solid='outside')])
-+    region = SimpleNamespace(type=RegionType.Boundary, representation=body, sdf=None, kind=kind)
-+    rb = buildAnalyticRigidBody(region, 0, st)
-+    provider = buildBoundaryProvider([region], DEV)
-+    provider.rigidBodies = [rb]
-+    config = SimpleNamespace(kernel=KernelFunctions.Wendland2)
-+    schemeConfig = SimpleNamespace(analyticWallMass=1.0, fluid=SimpleNamespace(restDensity=1.0))
-+    wall = evaluateWall(provider, st, config, schemeConfig, torch.tensor(G, device=DEV, dtype=F64))
-+    return pos, v, rho, H, dx, st, wall
-+
-+
-+def reference(pos, v, rho, H, dx, form):
-+    kw = dict(gravity=G, c0=C0, alpha=ALPHA, wallViscosityForm=form, noPen='impulse', shifting=False, graphStep=False, fluidWarp=False, fusedWall=True)
-+    tank = Scene([Body(bodyId=0, reps=[BoxRep(LO, HI, solid='outside')])], DEV)
-+    withWall = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, tank, DeltaSPHConfig(**kw), DEV, support=H)
-+    noWall = DeltaSPH2D(pos, np.zeros_like(pos), np.ones(len(pos)), dx, None, DeltaSPHConfig(**kw), DEV, support=H)
-+    xt, vt, rt = (torch.as_tensor(a, device=DEV, dtype=F64) for a in (pos, v, rho))
-+    a1, d1, _ = withWall.rhs(xt, vt, rt)
-+    a0, d0, _ = noWall.rhs(xt, vt, rt)
-+    return (a1 - a0), (d1 - d0)
-+
-+
-+@pytest.mark.parametrize('kind,form', [(BCType.freeSlip, 'laplacian'), (BCType.noSlip, 'noslipMirror')])
-+def test_wall_terms_equal_the_reference_wall_contribution(kind, form):
-+    pos, v, rho, H, dx, st, wall = setup(kind)
-+    dacc, ddrho = reference(pos, v, rho, H, dx, form)
-+    ours_drho = wallContinuity(wall, st.densities, st.velocities)
-+    s = torch.ones_like(st.densities)
-+    ours_acc = (wallPressureAcceleration(wall, st.pressures, s, st.densities, wallMass=1.0, h=H)
-+                + wallViscousAcceleration(wall, st.densities, st.velocities, ALPHA * C0 * H / 2.8213846683502197, H, wallMass=1.0))
-+    scale = float(dacc.abs().max())
-+    assert scale > 1.0                                                                     # the walls act: hydrostatic support and viscous drag
-+    assert float((ours_drho - ddrho).abs().max()) <= 1e-9 * max(1.0, float(ddrho.abs().max()))
-+    assert float((ours_acc - dacc).abs().max()) <= 1e-9 * scale
 -- 
 2.43.0
 

@@ -1,21 +1,23 @@
-From 2e2ed31e1c937074515227b4ac2a8fd214abfdd9 Mon Sep 17 00:00:00 2001
+From b3b4234c7bf15b50356b2fa1f3083e344645880f Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
-Date: Thu, 8 Oct 2026 18:05:46 +0100
-Subject: [PATCH 6/8] analytic walls end to end: no-penetration impulse from
+Date: Fri, 9 Oct 2026 08:16:27 +0100
+Subject: [PATCH 06/11] analytic walls end to end: no-penetration impulse from
  the provider's signed distance (finalize, impulse placement), wall flux in
  the system's time-centred continuity closure (drift_rates; without it the
  walls' compression was missing from the density update and the dam break
  diverged within 0.06 s), analyticWallPressure 'normal' option, dam break
  regression vs the particle walls
 
+deltaSPH: the right-hand-side CUDA graph refuses analytic boundaries (host support, Python-side wall cache) (folded in: 0007)
 ---
  src/warpSPH/cases/dambreak.py                 |  5 ++
  .../modules/analyticBoundary/__init__.py      |  3 +-
  .../modules/analyticBoundary/noPenetration.py | 34 ++++++++++
  .../modules/analyticBoundary/wallTerms.py     | 19 ++++--
+ src/warpSPH/schemes/deltaSPH.py               |  3 +
  src/warpSPH/systems/weaklyCompressible.py     | 28 ++++++--
  tests/test_analyticDambreak.py                | 67 +++++++++++++++++++
- 6 files changed, 147 insertions(+), 9 deletions(-)
+ 7 files changed, 150 insertions(+), 9 deletions(-)
  create mode 100644 src/warpSPH/modules/analyticBoundary/noPenetration.py
  create mode 100644 tests/test_analyticDambreak.py
 
@@ -143,6 +145,20 @@ index 224a60e..69c6910 100644
      A = wm * agg.evaluate((WallOutput('A', 0, 'a1g1'),), a1=a1)['A']
      near = (lam.sum(0) > 1e-9).to(F64)
      return WallState(agg, kin, lam, G, A, near, pinned, mirror, state.positions.dtype, support, wm)
+diff --git a/src/warpSPH/schemes/deltaSPH.py b/src/warpSPH/schemes/deltaSPH.py
+index 9bd349f..3e6b405 100644
+--- a/src/warpSPH/schemes/deltaSPH.py
++++ b/src/warpSPH/schemes/deltaSPH.py
+@@ -99,6 +99,9 @@ def _rhsIsGraphable(schemeConfig, stageIndex) -> bool:
+     symplectic Euler, recomputes the diffusion every call and never reads it.)"""
+     if getattr(schemeConfig, 'mdbcNoPenShiftMode', 'derivative') == 'derivative':
+         return False
++    # analytic walls: the wall aggregates are cached in Python and the support is a host float (modules/analyticBoundary); not capturable yet
++    if getattr(schemeConfig, 'boundaryProvider', None) is not None:
++        return False
+     if getattr(schemeConfig, 'freezeDiffusionAcrossStages', False) and stageIndex is not None:
+         return False
+     # both keep Python-side per-step state (the stage-0 mask, flip counters)
 diff --git a/src/warpSPH/systems/weaklyCompressible.py b/src/warpSPH/systems/weaklyCompressible.py
 index 16739fe..902f97c 100644
 --- a/src/warpSPH/systems/weaklyCompressible.py

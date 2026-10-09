@@ -1,7 +1,7 @@
-From 4517596eff14cc12ebbc05b543a0e033ccadfed2 Mon Sep 17 00:00:00 2001
+From f040003842e5afacce51e9daadcb70f2ca319125 Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
-Date: Thu, 8 Oct 2026 17:19:52 +0100
-Subject: [PATCH 1/8] rigidBody: RigidBody.representation and
+Date: Fri, 9 Oct 2026 08:16:26 +0100
+Subject: [PATCH 01/11] rigidBody: RigidBody.representation and
  buildAnalyticRigidBody (a body without boundary particles; mass / inertia
  from the representation)
 

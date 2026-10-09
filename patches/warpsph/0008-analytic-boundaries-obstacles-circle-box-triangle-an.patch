@@ -1,0 +1,164 @@
+From 881e58bcc3d88f1c216948c302da5c7c80cfde2b Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Fri, 9 Oct 2026 08:16:27 +0100
+Subject: [PATCH 08/11] analytic boundaries: obstacles (circle, box, triangle)
+ and mixed scenes in the dam break (the obstacle an analytic body, or boundary
+ particles next to the analytic tank), tests
+
+---
+ src/warpSPH/caseUtils/weaklyCompressible.py | 36 ++++++++++-
+ src/warpSPH/cases/dambreak.py               |  2 +
+ tests/test_analyticObstacle.py              | 70 +++++++++++++++++++++
+ 3 files changed, 106 insertions(+), 2 deletions(-)
+ create mode 100644 tests/test_analyticObstacle.py
+
+diff --git a/src/warpSPH/caseUtils/weaklyCompressible.py b/src/warpSPH/caseUtils/weaklyCompressible.py
+index 4e5ca57..a42291b 100644
+--- a/src/warpSPH/caseUtils/weaklyCompressible.py
++++ b/src/warpSPH/caseUtils/weaklyCompressible.py
+@@ -807,6 +807,28 @@ def analyticTankBody(interiorDomain):
+     return Body(bodyId = 0, reps = [BoxRep(tuple(lo), tuple(hi), solid = 'outside')])
+ 
+ 
++def analyticObstacleBody(obstacle, bodyId=1):
++    """The obstacle of `buildPresetObstacles` / `buildObstacleSDF` as an analytic `warpSPHBoundaries` Body (a solid island: the fluid is outside it). The SDF sees a point through
++    x -> S R(aoa) (x - t) with S = diag(1, 1 / aspectRatio), so the shape in its own frame is compressed by the aspect ratio in y (the SDF divides the y coordinate by scale / aspectRatio) and the body is posed at t with angle -aoa. Circle, box and
++    equilateral triangle (side 2 r, base at y = -r / sqrt(3), apex at 2 r / sqrt(3)); the other presets have no analytic counterpart here."""
++    import math
++    from warpSPHBoundaries.scene import Body
++    from warpSPHBoundaries.scene.implicitBodies import DiskBody
++    from warpSPHBoundaries.scene.scene import BoxRep, ImplicitRep, SurfaceRep
++    kind, r, a = obstacle['obstacleType'], float(obstacle['maxExtent']), float(obstacle['aspectRatio'])
++    pose = dict(center = (float(obstacle['offsetX']), float(obstacle['offsetY'])), angle = -math.radians(float(obstacle['aoa'])))
++    if kind == 'circle':
++        if a != 1.0:
++            raise NotImplementedError('analytic obstacle: an ellipse (aspectRatio != 1)')
++        return Body(bodyId = bodyId, reps = [ImplicitRep(DiskBody(center = (0.0, 0.0), radius = r))], **pose)
++    if kind == 'box':
++        return Body(bodyId = bodyId, reps = [BoxRep((-r, -r / a), (r, r / a), solid = 'inside')], **pose)
++    if kind == 'equilateralTriangle':
++        k = math.sqrt(3.0)
++        return Body(bodyId = bodyId, reps = [SurfaceRep.polygon([(-r, -r / k / a), (r, -r / k / a), (0.0, 2.0 * r / k / a)])], **pose)
++    raise NotImplementedError(f"analytic obstacle: {kind!r} (circle, box and equilateralTriangle are served)")
++
++
+ def buildRegions(config, schemeConfig, simSetup, args, domain, interiorDomain, obstacle):
+     regions, _, domain_sdf, _ = build_sdfs(config, schemeConfig, args.band, args, domain, interiorDomain, obstacle)
+ 
+@@ -847,12 +869,22 @@ def buildRegions(config, schemeConfig, simSetup, args, domain, interiorDomain, o
+     # particles. The region keeps `domain_sdf` (the fluid is clipped against it as usual) but is not sampled; an obstacle
+     # is not supported in this mode (its sdf is merged into `domain_sdf` above).
+     representation = None
++    obstacleRegion = []
+     if getattr(args, 'wallRepresentation', 'particles') == 'analytic':
+-        if getattr(args, 'obstacleActive', False):
+-            raise NotImplementedError("wallRepresentation='analytic' is for the plain tank (no obstacle yet)")
+         representation = analyticTankBody(interiorDomain)
++        if getattr(args, 'obstacleActive', False):
++            # the tank and the obstacle are two analytic bodies, two (unsampled) boundary regions; the fluid is clipped against both SDFs as usual
++            tank_sdf = lambda x: sampleSDF(x, lambda y: domainSDF(y, interiorDomain, invert = False), invert = False)
++            obstacle_sdf = buildObstacleSDF(obstacle['obstacleType'], obstacle['offsetX'], obstacle['offsetY'], obstacle['maxExtent'], obstacle['aspectRatio'], obstacle['aoa'],
++                                            config, schemeConfig, args.L, args.W, interior = interiorDomain)
++            domain_sdf = tank_sdf
++            # obstacleRepresentation='particles': a MIXED scene, the tank analytic and the obstacle sampled by boundary particles (mDBC), each with its own wall treatment
++            mixed = getattr(args, 'obstacleRepresentation', 'analytic') == 'particles'
++            obstacleRegion = [buildRegion(config, schemeConfig, lambda x: sampleSDF(x, obstacle_sdf, invert = False), RegionType.Boundary, initialConditions = {}, kind = wallBC,
++                                          representation = None if mixed else analyticObstacleBody(obstacle))]
+     regions = [
+         buildRegion(config, schemeConfig, domain_sdf, RegionType.Boundary, initialConditions={}, kind=wallBC, representation=representation),
++        *obstacleRegion,
+         buildRegion(config, schemeConfig, box_sdf, RegionType.Fluid, initialConditions={}),
+     ]
+ 
+diff --git a/src/warpSPH/cases/dambreak.py b/src/warpSPH/cases/dambreak.py
+index 0594f75..6d6eaa4 100644
+--- a/src/warpSPH/cases/dambreak.py
++++ b/src/warpSPH/cases/dambreak.py
+@@ -986,6 +986,8 @@ dambreakCase = registerCase(Case(
+         # 'particles' (default): boundary particles + ghost nodes (mDBC). 'analytic': the tank walls are a
+         # warpSPHBoundaries body (exact boundary integrals, no wall particles); plain tank only.
+         wallRepresentation='particles',
++        # with wallRepresentation='analytic' and an obstacle: 'analytic' (the obstacle is an analytic body too) or 'particles' (a mixed scene: the obstacle stays boundary particles)
++        obstacleRepresentation='analytic',
+         # analytic walls only: 'hydrostatic' (the wall pressure gradient rho (g - a_w) in all directions: exact for a fluid in hydrostatic balance) or
+         # 'normal' (only dp/dn = rho (g - a_w) . n, as the boundary particles' ghost extrapolation: no tangential force on a fluid in free fall)
+         analyticWallPressure='hydrostatic',
+diff --git a/tests/test_analyticObstacle.py b/tests/test_analyticObstacle.py
+new file mode 100644
+index 0000000..3771189
+--- /dev/null
++++ b/tests/test_analyticObstacle.py
+@@ -0,0 +1,70 @@
++"""The analytic obstacles of the dam break (`analyticObstacleBody`) against the case's own obstacle SDFs, and the dam break with an obstacle: analytic walls against boundary particles."""
++import numpy as np
++import pytest
++import torch
++
++pytest.importorskip('warpSPHBoundaries')
++
++from warpSPH.caseUtils.weaklyCompressible import analyticObstacleBody, buildObstacleSDF, buildPresetObstacles  # noqa: E402
++from warpSPH.cases import importAll  # noqa: E402
++from warpSPH.runner import getCase  # noqa: E402
++
++from warpSPH.runner import run  # noqa: E402
++from test_analyticDambreak import check, final, spec_of  # noqa: E402
++
++pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
++
++PRESETS = ['circleBottom', 'circleMiddle', 'equilateralMiddle', 'triangleMiddle', 'triangleBottom', 'squareMiddle', 'wallMiddle']
++
++
++@pytest.mark.parametrize('name', PRESETS)
++@pytest.mark.parametrize('aoa', [0.0, 25.0])
++def test_analytic_obstacle_is_the_sdf_solid(name, aoa):
++    L = 2.0
++    presets = buildPresetObstacles(0.25, 0.3, L, 0.4, aoa)
++    if name not in presets:
++        pytest.skip(f'no preset {name}')
++    ob = presets[name]
++    body = analyticObstacleBody(ob)
++    sdf = buildObstacleSDF(ob['obstacleType'], ob['offsetX'], ob['offsetY'], ob['maxExtent'], ob['aspectRatio'], ob['aoa'], None, None, L)
++    rng = np.random.default_rng(1)
++    ext = 2.5 * ob['maxExtent'] * max(1.0, ob['aspectRatio'])
++    pts = torch.as_tensor(np.array([ob['offsetX'], ob['offsetY']]) + rng.uniform(-ext, ext, (4000, 2)), dtype=torch.float64)
++    inside_sdf = (sdf(pts) <= 0).numpy()
++    d, n, hit = body.signedDistance(pts.cuda()) if hasattr(body, 'signedDistance') else (None, None, None)
++    if d is None:
++        from warpSPHBoundaries.scene import Scene
++        d, n, hit = Scene([body], 'cuda:0').signed_distance(pts.cuda(), body=0)
++    inside_body = (d <= 0).cpu().numpy()
++    assert inside_sdf.sum() > 20
++    # points within a hair of the boundary may differ by round-off
++    near = np.abs(sdf(pts).numpy()) < 1e-6
++    assert (inside_sdf[~near] == inside_body[~near]).all(), int((inside_sdf != inside_body)[~near].sum())
++
++
++OBSTACLE = dict(obstacleActive=True, maxExtent=0.5, offsetX=-0.4)
++
++
++@pytest.mark.parametrize('name', ['circleBottom', 'squareBottom'])
++def test_dam_break_with_an_analytic_obstacle_reproduces_the_particle_obstacle(name):
++    """The dam break with an obstacle (radius 6 dx / half-width 12 dx on the floor in the column's way), tank and obstacle analytic against both sampled by boundary particles. Measured at 0.3 s: fastest
++    particle 11 % (circle) and 6 % (square) lower, kinetic energy 3.2 % and 3.8 % lower; the boundary-particle obstacle has the wider density spread (down to 0.948), so the density bounds are compared at 6 %.
++    The fastest particle is a single spray particle off the obstacle: 15 % stated."""
++    importAll()
++    case = getCase('dambreak')
++    par = dict(OBSTACLE, obstacleType=name)
++    check(final(case, 'analytic', 600, par), final(case, 'particles', 600, par), vtol=0.15, ketol=0.08, rtol=0.06)
++
++
++def test_mixed_scene_analytic_tank_with_a_particle_obstacle_runs():
++    """A mixed scene: the tank analytic, the obstacle boundary particles (mDBC), each with its own wall treatment in the same step. Stable, no penetration, the kinetic energy of the fully particle scene to 8 %
++    (measured 1.1 %); the fastest particle (a spray particle off the obstacle) is not compared."""
++    importAll()
++    case = getCase('dambreak')
++    par = dict(OBSTACLE, obstacleType='circleBottom')
++    mixed = final(case, 'analytic', 600, dict(par, obstacleRepresentation='particles'))
++    ref = final(case, 'particles', 600, par)
++    assert mixed['n'] == ref['n'] and np.isfinite(mixed['vmax'])
++    assert abs(mixed['ke'] / ref['ke'] - 1.0) < 0.08, (mixed['ke'], ref['ke'])
++    assert mixed['rmin'] > 0.95 and mixed['rmax'] < 1.06
++    assert mixed['row'].series('nPenetrating').max() == 0
+-- 
+2.43.0
+

@@ -1,0 +1,413 @@
+From 18ea1551ab32d87279052db649c66a8a506374e0 Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Fri, 9 Oct 2026 08:16:27 +0100
+Subject: [PATCH 07/11] analytic boundaries: Michel 2022 and implicit / dynamic
+ shifting with walls (wall share of grad C-tilde, U_char from the provider's
+ direction extreme, grad C of the implicit solve; `shiftScheme` /
+ `shiftProjection` dam-break params), tests
+
+---
+ src/warpSPH/boundary/provider.py              |   3 +-
+ src/warpSPH/cases/dambreak.py                 |   8 ++
+ .../modules/analyticBoundary/__init__.py      |   4 +-
+ .../modules/analyticBoundary/shifting.py      |  47 ++++++-
+ .../modules/shifting/implicitShifting.py      |  10 ++
+ src/warpSPH/modules/shifting/michel.py        |   9 ++
+ tests/test_analyticDambreak.py                |  28 ++++-
+ tests/test_analyticImplicitShift.py           |  51 ++++++++
+ tests/test_analyticMichel.py                  | 116 ++++++++++++++++++
+ 9 files changed, 267 insertions(+), 9 deletions(-)
+ create mode 100644 tests/test_analyticImplicitShift.py
+ create mode 100644 tests/test_analyticMichel.py
+
+diff --git a/src/warpSPH/boundary/provider.py b/src/warpSPH/boundary/provider.py
+index 632a9f5..09ebc1a 100644
+--- a/src/warpSPH/boundary/provider.py
++++ b/src/warpSPH/boundary/provider.py
+@@ -5,7 +5,8 @@ package depends on warpSPHCore only and never imports warpSPH):
+ 
+     bodies                                        the rigid bodies (pose, velocity, acceleration), bound to the integrated state
+     aggregate(ps, support, kernel, laplacian, ...)  the wall integrals at the particles `ps`: `.out` (lam, G, Cov, cover, lap, tens),
+-                                                  `.evaluate(...)` for the hydrostatic term A(a1), `.cone_area(axis, halfAngle)`
++                                                  `.evaluate(...)` for the hydrostatic term A(a1), `.cone_area(axis, halfAngle)`,
++                                                  `.dir_extreme(vecs)` ([B, N]: the largest |cos| between a vector and a direction to a wall point in support: Michel's U_char)
+     signed_distance(x, body, supportMax, want_body) (d, n, hit[, body index]) with d > 0 in the fluid
+ 
+ `buildBoundaryProvider` makes one from the analytic regions of a scene; `bindBodies` writes the integrated
+diff --git a/src/warpSPH/cases/dambreak.py b/src/warpSPH/cases/dambreak.py
+index 5ce4140..0594f75 100644
+--- a/src/warpSPH/cases/dambreak.py
++++ b/src/warpSPH/cases/dambreak.py
+@@ -192,6 +192,12 @@ def configureScheme(ctx: RunContext) -> None:
+     shiftingParam = ctx.param('shifting', None)
+     if shiftingParam is not None and hasattr(schemeConfig, 'shiftProperties'):
+         schemeConfig.shiftProperties.active = bool(shiftingParam)
++    # `shiftScheme` / `shiftProjection`: the shifting law and its free-surface projection by enum name (`michel2022` / `michel2022` is the
++    # sloshing tank's pair); None leaves the scheme's own.
++    for param, field, enum in (('shiftScheme', 'scheme', ShiftingScheme), ('shiftProjection', 'projectionScheme', ShiftingProjectionScheme)):
++        name = ctx.param(param, None)
++        if name is not None and hasattr(schemeConfig, 'shiftProperties'):
++            setattr(schemeConfig.shiftProperties, field, enum[name])
+ 
+     # Physical viscosity. `dambreak` has always run inviscid on the delta-SPH
+     # path (the `# inviscid here` note in `dambreakTimestep`) -- Marrone 2011
+@@ -1046,6 +1052,8 @@ dambreakCase = registerCase(Case(
+         # configuration and this plan's own acceptance gate; see
+         # `configureScheme` and `DELTASPH_VALIDATION_PLAN.md` Sec. 5.1.1.
+         shifting=None,
++        shiftScheme=None,
++        shiftProjection=None,
+         # Start the fluid on the weakly-compressible hydrostatic density profile
+         # rather than a uniform rho0 -- see `initialConditions`. Off by default
+         # (a collapsing dam-break column does not want it); a still-water case
+diff --git a/src/warpSPH/modules/analyticBoundary/__init__.py b/src/warpSPH/modules/analyticBoundary/__init__.py
+index 9c0364c..4b12e44 100644
+--- a/src/warpSPH/modules/analyticBoundary/__init__.py
++++ b/src/warpSPH/modules/analyticBoundary/__init__.py
+@@ -6,8 +6,8 @@ contributes to each stage (wall continuity at stage 12, wall viscosity at 11, th
+ and, in the later patches, the detector, the shifting and the no-penetration impulse).
+ """
+ from .noPenetration import analyticNoPenShift
+-from .shifting import wallShiftRaw, kernelAtSpacing
++from .shifting import wallShiftRaw, kernelAtSpacing, wallUChar, wallConcentrationGradient
+ from .detector import detectFreeSurfaceAnalytic, sym2LamPinv
+ from .wallTerms import (WallState, evaluateWall, wallContinuity, wallPressureAcceleration, wallViscousAcceleration, viscousPrefactor)
+ 
+-__all__ = ['analyticNoPenShift', 'wallShiftRaw', 'kernelAtSpacing', 'detectFreeSurfaceAnalytic', 'sym2LamPinv', 'WallState', 'evaluateWall', 'wallContinuity', 'wallPressureAcceleration', 'wallViscousAcceleration', 'viscousPrefactor']
++__all__ = ['analyticNoPenShift', 'wallShiftRaw', 'kernelAtSpacing', 'wallUChar', 'wallConcentrationGradient', 'detectFreeSurfaceAnalytic', 'sym2LamPinv', 'WallState', 'evaluateWall', 'wallContinuity', 'wallPressureAcceleration', 'wallViscousAcceleration', 'viscousPrefactor']
+diff --git a/src/warpSPH/modules/analyticBoundary/shifting.py b/src/warpSPH/modules/analyticBoundary/shifting.py
+index 70c22b1..9ca81c4 100644
+--- a/src/warpSPH/modules/analyticBoundary/shifting.py
++++ b/src/warpSPH/modules/analyticBoundary/shifting.py
+@@ -22,7 +22,7 @@ from warpSPHCore import KernelFunctions
+ 
+ from .wallTerms import FAMILY, evaluateWall
+ 
+-__all__ = ['wallShiftRaw', 'kernelAtSpacing']
++__all__ = ['wallShiftRaw', 'kernelAtSpacing', 'wallUChar', 'wallConcentrationGradient']
+ 
+ F64 = torch.float64
+ KERNEL_SCALE = {KernelFunctions.Wendland2: 1.897367, KernelFunctions.Wendland4: 2.171239}          # warpSPHCore sphKernelScale(kernel, 2D)
+@@ -36,11 +36,50 @@ def kernelAtSpacing(kernel, support, mass, rho0):
+     return 7.0 / (math.pi * float(support) ** 2) * (1.0 - q) ** 4 * (1.0 + 4.0 * q) if q < 1.0 else 0.0
+ 
+ 
+-def wallShiftRaw(wall, state, config, schemeConfig, R):
+-    """The wall part of the raw shift sum at the particles of `state` (float64 [N, 2]); `R` the tensile coefficient of the fluid sum."""
++def wallShiftRaw(wall, state, config, schemeConfig, R, volumeWeighted=False):
++    """The wall part of the raw shift sum at the particles of `state` (float64 [N, 2]); `R` the tensile coefficient of the fluid sum.
++    `volumeWeighted`: the weight of a wall particle is its apparent volume m_b / rho_b = mu dx^2 rho0 / rho_i (Michel 2022 Eq. 2-3, `computeDeltaShiftWarp(volumeWeighted=True)`)
++    instead of the mean-density weight m_b / (2 (rho_i + rho_b)) = mu dx^2 rho0 / (4 rho_i) of Sun's law: a factor 4."""
+     from warpSPHBoundaries.scene.tensile import tensile_factor
+     rho0 = schemeConfig.fluid.restDensity
+     H, wm = wall.support, wall.wm
+     w0 = kernelAtSpacing(config.kernel, H, float(state.masses.mean()), rho0)
+     tens = wm * R / w0 ** 4 * tensile_factor(H, FAMILY[config.kernel]) * wall.agg.out['tens'].sum(0) * wall.near[:, None]
+-    return (rho0 / (4.0 * state.densities.to(F64)))[:, None] * (wall.G.sum(0) + tens)
++    pref = (1.0 if volumeWeighted else 0.25) * rho0 / state.densities.to(F64)
++    return pref[:, None] * (wall.G.sum(0) + tens)
++
++
++def _ghostVelocity(pinned, noSlip, v, normal, bodyVelocity):
++    """The velocity u_g of the wall continuum seen by a fluid particle of velocity `v` (unit wall `normal`, the body's own velocity `bodyVelocity`), the BC policy of the body as a closure of the
++    fluid velocity (what `modules/mdbc/velocity.py` writes into the ghost particles): pinned (BCType.zeros) 0; no slip u_body - w_t; free slip u_body + w_t - w_n, with w = v - u_body."""
++    if pinned:
++        return torch.zeros_like(v + bodyVelocity)
++    w = v - bodyVelocity
++    wn = (w * normal).sum(-1, keepdim=True) * normal
++    wt = w - wn
++    return bodyVelocity - wt if noSlip else bodyVelocity + wt - wn
++
++
++def wallUChar(wall, state):
++    """The wall part of Michel's characteristic velocity U_char,i = max_j |(u_j - u_i) . x_hat_ij| (Eq. 20; warpSPH takes the wall particles into the maximum, `modules/shifting/michel.py`):
++    the wall continuum of body b moves with the ghost velocity u_g (the body's boundary condition as a closure of the fluid velocity, `_ghostVelocity`: no slip, free slip, pinned),
++    so the maximum over its points is |u_g - u_i| times the largest |cos| between u_g - u_i and a direction to a wall point within the support (`FusedWall.dir_extreme`: 1 where the line of the
++    relative velocity meets the wall within the support). float64 [N]; 0 away from the walls."""
++    v = state.velocities.to(F64)
++    B = wall.G.shape[0]
++    rel = []
++    for bi in range(B):
++        G = wall.G[bi]
++        nb = G / G.norm(dim=1, keepdim=True).clamp(min=1e-300)
++        rel.append(_ghostVelocity(wall.pinned[bi], wall.mirror[bi], v, nb, wall.kin.velocity[bi]) - v)
++    rel = torch.stack(rel)
++    return (rel.norm(dim=2) * wall.agg.dir_extreme(rel)).amax(0) * wall.near
++
++
++def wallConcentrationGradient(wall, state, schemeConfig):
++    """The wall's share of grad C_i = sum_j omega_j grad_i W_ij of the implicit shifting (float64 [N, 2]): the wall particles carry omega_b = m_b / rho_b (summation density: rho_b ~ rho_i, so
++    rho0 mu dx^2 / rho_i per wall particle) or m_b / rho0 (mu dx^2), the continuum of which is  (rho0 / rho_i or 1) * G  with G = mu grad lam. The wall particles are fixed, so they add nothing to the
++    solver's matrix except through `exactHessian`'s diagonal (the wall Hessian integral, not provided)."""
++    if schemeConfig.shiftProperties.summationDensity:
++        return (schemeConfig.fluid.restDensity / state.densities.to(F64))[:, None] * wall.G.sum(0)
++    return wall.G.sum(0)
+diff --git a/src/warpSPH/modules/shifting/implicitShifting.py b/src/warpSPH/modules/shifting/implicitShifting.py
+index 13e59ff..5df6234 100644
+--- a/src/warpSPH/modules/shifting/implicitShifting.py
++++ b/src/warpSPH/modules/shifting/implicitShifting.py
+@@ -288,6 +288,16 @@ def computeImplicitShift(
+         Hw_all, B, x0 = _buildSystem(
+             currentState, config, schemeConfig, domain, adjacency, i_all, j_all, J, H, rho0, dim, numParticles,
+         )
++        provider = getattr(schemeConfig, 'boundaryProvider', None)
++        if provider is not None:
++            # analytic walls: the wall continuum's share of grad C (modules/analyticBoundary/shifting.py). The wall particles are fixed, so the default legacyPairwise matrix
++            # (self-pair diagonal, off-diagonal blocks of the fluid pairs) is unchanged; exactHessian's diagonal would need the wall's Hessian integral
++            if operator == ShiftingImplicitOperator.exactHessian:
++                raise NotImplementedError('implicit shifting with analytic walls: the exactHessian operator needs the wall Hessian integral (use legacyPairwise)')
++            from ..analyticBoundary import evaluateWall, wallConcentrationGradient
++            from ..gravity import computeGravity
++            wall = evaluateWall(provider, currentState, config, schemeConfig, computeGravity(currentState, config, schemeConfig, adjacency))
++            B = B + wallConcentrationGradient(wall, currentState, schemeConfig).to(dtype).flatten()
+         diagBlock, i, j, Hw = _buildDiagBlock(operator, i_all, j_all, Hw_all, numParticles, dim, device, dtype)
+ 
+         # opt-in Tikhonov lift of the operator's near-null-space eigenvalues
+diff --git a/src/warpSPH/modules/shifting/michel.py b/src/warpSPH/modules/shifting/michel.py
+index 73a2e52..f787591 100644
+--- a/src/warpSPH/modules/shifting/michel.py
++++ b/src/warpSPH/modules/shifting/michel.py
+@@ -105,6 +105,15 @@ def computeMichelShift(currentState, config, schemeConfig, domain, adjacency, be
+             adjacency=adjacency,
+         )
+ 
++        provider = getattr(schemeConfig, 'boundaryProvider', None)
++        if provider is not None:
++            # analytic walls: the wall continuum's share of the same two ingredients (modules/analyticBoundary/shifting.py)
++            from ..analyticBoundary import evaluateWall, wallShiftRaw, wallUChar
++            from ..gravity import computeGravity
++            wall = evaluateWall(provider, currentState, config, schemeConfig, computeGravity(currentState, config, schemeConfig, adjacency))
++            gradCtilde = gradCtilde + wallShiftRaw(wall, currentState, config, schemeConfig, R=0.2, volumeWeighted=True).to(gradCtilde.dtype)
++            U_char = torch.maximum(U_char, wallUChar(wall, currentState).to(U_char.dtype))
++
+         R_i = currentState.supports
+         achievedDx_i = torch.pow(currentState.masses / rho0, 1.0 / dim)
+         capLen = 0.5 * (R_i / achievedDx_i)
+diff --git a/tests/test_analyticDambreak.py b/tests/test_analyticDambreak.py
+index 8c20b99..4fa612e 100644
+--- a/tests/test_analyticDambreak.py
++++ b/tests/test_analyticDambreak.py
+@@ -26,8 +26,8 @@ def spec_of(case, rep, **kw):
+     return CaseSpec(caseName=case.name, scheme=case.scheme, params=params).merged(**case.defaults).merged(nx=48, **kw)
+ 
+ 
+-def final(case, rep, nSteps):
+-    res = run(case, spec_of(case, rep, nSteps=nSteps, plot=False, store=False, progress=False, video=False, show=False, quiet=True))
++def final(case, rep, nSteps, params=None):
++    res = run(case, spec_of(case, rep, nSteps=nSteps, params=params or {}, plot=False, store=False, progress=False, video=False, show=False, quiet=True))
+     s = res.state.state
+     f = s.kinds == 0
+     v, rho = s.velocities[f].double(), s.densities[f].double()
+@@ -46,6 +46,30 @@ def test_analytic_tank_reproduces_the_particle_tank(nSteps):
+     assert a['row'].series('nPenetrating').max() == 0
+ 
+ 
++def check(a, p, vtol=0.05, ketol=0.08, rtol=0.01):
++    assert a['n'] == p['n']
++    assert abs(a['vmax'] / p['vmax'] - 1.0) < vtol, (a['vmax'], p['vmax'])
++    assert abs(a['ke'] / p['ke'] - 1.0) < ketol, (a['ke'], p['ke'])
++    assert abs(a['rmax'] - p['rmax']) < rtol and abs(a['rmin'] - p['rmin']) < rtol
++    assert a['row'].series('nPenetrating').max() == 0
++
++
++def test_analytic_tank_reproduces_the_particle_tank_with_michel_shifting():
++    """Michel 2022 (grad C-tilde and U_char with the wall continuum) in place of delta+ against the same case with boundary particles: measured 1.9 % in the fastest particle and 4.8 % in the kinetic energy at 0.3 s."""
++    importAll()
++    case = getCase('dambreak')
++    shift = dict(shiftScheme='michel2022', shiftProjection='michel2022')
++    check(final(case, 'analytic', 600, shift), final(case, 'particles', 600, shift))
++
++
++def test_analytic_tank_with_implicit_shifting_follows_the_analytic_delta_plus_run():
++    """Implicit shifting (grad C with the wall continuum) against the analytic delta+ run (measured 1.1 % in the fastest particle, 0.04 % in the kinetic energy at 0.3 s). Not against the boundary-particle
++    path: there `computeImplicitShift` sums the mDBC ghost nodes into grad C (they are not wall mass) and the run diverges (fastest particle ~900 at 0.3 s)."""
++    importAll()
++    case = getCase('dambreak')
++    check(final(case, 'analytic', 600, dict(shiftScheme='implicit', shiftProjection='surfaceNormal')), final(case, 'analytic', 600), vtol=0.03, ketol=0.02)
++
++
+ def test_normal_wall_pressure_leaves_free_fall_alone():
+     importAll()
+     case = getCase('dambreak')
+diff --git a/tests/test_analyticImplicitShift.py b/tests/test_analyticImplicitShift.py
+new file mode 100644
+index 0000000..809d6fa
+--- /dev/null
++++ b/tests/test_analyticImplicitShift.py
+@@ -0,0 +1,51 @@
++"""Implicit / dynamic shifting (`computeImplicitShift`, default `legacyPairwise` operator) with analytic walls against warpSPH's boundary-particle path on the dam break's initial state: the wall continuum's
++share of grad C is the only change (the wall particles are fixed, the matrix of the fluid rows does not see them), so the solved shifts agree to the lattice quadrature error of the wall sum; the
++`exactHessian` operator, whose diagonal needs the wall's Hessian integral, is refused."""
++import numpy as np
++import pytest
++import torch
++
++pytest.importorskip('warpSPHBoundaries')
++
++from warpSPHCore import SupportScheme, buildVerletList  # noqa: E402
++
++from warpSPH.configurations.moduleConfigurations.shifting import ShiftingImplicitOperator, ShiftingScheme  # noqa: E402
++from warpSPH.modules.shifting.implicitShifting import computeDynamicImplicitShift, computeImplicitShift  # noqa: E402
++from test_analyticMichel import build  # noqa: E402
++
++pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
++
++
++def shift(rep, fn=computeImplicitShift, operator=None, summation=False):
++    ctx, system = build(rep)
++    st, config, sc = system.state, ctx.config, ctx.schemeConfig
++    sc.shiftProperties.scheme = ShiftingScheme.implicit
++    ghost = st.kinds == 2                                                                           # mDBC ghost NODES (interpolation points inside the fluid, not wall mass): computeImplicitShift's
++    st.masses = torch.where(ghost, torch.zeros_like(st.masses), st.masses)                          # pair sums do not filter them (the delta / Michel sums do), so they are given no weight here
++    sc.shiftProperties.summationDensity = summation
++    if operator is not None:
++        sc.shiftProperties.implicitOperator = operator
++    adj = buildVerletList(st, config.domain, verletScale=config.verletScale, supportMode=SupportScheme.SuperSymmetric, verbose=False)
++    upd, _ = fn(st, config, sc, config.domain, adj, iters=1)
++    pos = st.positions.double().cpu().numpy()
++    m = (st.kinds == 0).cpu().numpy()
++    key = np.lexsort((pos[m][:, 1].round(9), pos[m][:, 0].round(9)))
++    return pos[m][key], upd.double().cpu().numpy()[m][key]
++
++
++@pytest.mark.parametrize('fn', [computeImplicitShift, computeDynamicImplicitShift])
++@pytest.mark.parametrize('summation', [False, True])
++def test_implicit_shift_with_analytic_walls_equals_the_wall_particle_path(fn, summation):
++    pa, ua = shift('particles', fn, summation=summation)
++    pb, ub = shift('analytic', fn, summation=summation)
++    assert np.abs(pa - pb).max() < 1e-5
++    scale = np.linalg.norm(ua, axis=1).max()
++    err = np.linalg.norm(ua - ub, axis=1) / scale
++    print(f'implicit shift scale {scale:.3e}: max error {err.max():.3e}, p90 {np.percentile(err, 90):.3e}')
++    assert scale > 0
++    assert err.max() < 0.1 and np.percentile(err, 90) < 0.05                                       # lattice quadrature of the wall sum, as for grad C-tilde (3 %)
++
++
++def test_exact_hessian_operator_is_refused_with_analytic_walls():
++    with pytest.raises(NotImplementedError):
++        shift('analytic', operator=ShiftingImplicitOperator.exactHessian)
+diff --git a/tests/test_analyticMichel.py b/tests/test_analyticMichel.py
+new file mode 100644
+index 0000000..4f68296
+--- /dev/null
++++ b/tests/test_analyticMichel.py
+@@ -0,0 +1,116 @@
++"""Michel et al. 2022 shifting with analytic walls (`computeMichelShift`): the wall continuum's share of grad C-tilde (Eq. 2-3, volume weighted) and of the characteristic velocity U_char (Eq. 20, the
++maximum over the wall) against warpSPH's own boundary-particle path on the dam break's initial state, and the closed form of the flat-wall U_char.
++
++* grad C-tilde: with the wall particles of the particle flavour (one lattice of the fluid's packing) and the analytic continuum on the same fluid particles the sums agree to the lattice quadrature error;
++* U_char: the maximum over a lattice of wall particles is a lower bound of the supremum over the continuum, so the analytic value is never below the particle one and equals it where the lattice has a point
++  on the line of the relative velocity; the pinned wall (u_g = 0) and a uniform fluid velocity make the wall the only source (fluid-only U_char = 0).
++"""
++import math
++
++import numpy as np
++import pytest
++import torch
++
++pytest.importorskip('warpSPHBoundaries')
++
++from warpSPHCore import OperationProperties, SupportScheme, WarpOperation, buildVerletList  # noqa: E402
++
++from warpSPH.cases import importAll  # noqa: E402
++from warpSPH.configurations.region import BCType  # noqa: E402
++from warpSPH.modules.analyticBoundary import evaluateWall, wallShiftRaw, wallUChar  # noqa: E402
++from warpSPH.modules.gravity import computeGravity  # noqa: E402
++from warpSPH.modules.shifting.michel import computeMichelShift  # noqa: E402
++from warpSPH.modules.shifting.wp_michelUChar import computeUCharWarp  # noqa: E402
++from warpSPH.runner import buildContext, getCase  # noqa: E402
++from warpSPH.runner.caseSpec import CaseSpec  # noqa: E402
++from warpSPH.sample.wp_deltaShift import computeDeltaShiftWarp  # noqa: E402
++
++pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
++
++
++def build(rep, nx=32):
++    importAll()
++    case = getCase('dambreak')
++    params = {**case.params}
++    if rep == 'analytic':
++        params['wallRepresentation'] = 'analytic'
++    spec = CaseSpec(caseName=case.name, scheme=case.scheme, params=params).merged(**case.defaults).merged(nx=nx)
++    ctx = buildContext(case, spec)
++    case.configureScheme(ctx)
++    return ctx, case.buildSystem(ctx)
++
++
++def pieces(rep, velocity):
++    """grad C-tilde and U_char of the fluid particles (sorted by position) with the wall of `rep`: the boundary particles (summed by warpSPH) or the analytic continuum (pinned wall velocity)."""
++    ctx, system = build(rep)
++    st, config, sc = system.state, ctx.config, ctx.schemeConfig
++    n = st.positions.shape[0]
++    fl = (st.kinds == 0)
++    st.velocities = torch.where(fl[:, None], velocity(n).to(st.positions.device, st.positions.dtype), torch.zeros_like(st.velocities))
++    sc.fluid.fixedSoundSpeed = 20.0
++    adj = buildVerletList(st, config.domain, verletScale=config.verletScale, supportMode=SupportScheme.SuperSymmetric, verbose=False)
++    op = OperationProperties(operation=WarpOperation.Density, kernel=config.kernel, supportMode=SupportScheme.Gather)
++    g = computeDeltaShiftWarp(st, operationProperties=op, referenceParticles=st, domain=config.domain, adjacency=adj, CFL=0.0, computeMach=False, c_max=0.0,
++                              rho0=sc.fluid.restDensity, dx=float(config.dx), R=0.2, n=4, volumeWeighted=True)
++    U = computeUCharWarp(st, operationProperties=op, referenceParticles=st, domain=config.domain, adjacency=adj)
++    if rep == 'analytic':
++        for rb in sc.boundaryProvider.rigidBodies:
++            rb.kind = BCType.zeros
++        wall = evaluateWall(sc.boundaryProvider, st, config, sc, computeGravity(st, config, sc, adj))
++        g = g + wallShiftRaw(wall, st, config, sc, R=0.2, volumeWeighted=True).to(g.dtype)
++        U = torch.maximum(U, wallUChar(wall, st).to(U.dtype))
++    pos = st.positions.double().cpu().numpy()
++    m = (st.kinds == 0).cpu().numpy()
++    key = np.lexsort((pos[m][:, 1].round(9), pos[m][:, 0].round(9)))
++    f = lambda a: a.double().cpu().numpy()[m][key]
++    return pos[m][key], f(g), f(U), float(config.dx), float(st.supports.max())
++
++
++def test_wall_share_of_the_michel_gradient_equals_the_wall_particle_sum():
++    rng = np.random.default_rng(5)
++    vel = lambda n: torch.as_tensor(rng.normal(scale=0.5, size=(n, 2)))
++    pa, ga, _, dx, H = pieces('particles', vel)
++    pb, gb, _, _, _ = pieces('analytic', vel)
++    assert np.abs(pa - pb).max() < 1e-5
++    scale = np.linalg.norm(ga, axis=1).max()
++    err = np.linalg.norm(ga - gb, axis=1) / scale
++    assert scale > 1.0
++    print(f'grad C-tilde scale {scale:.3f}, max error {err.max():.3e}, p90 {np.percentile(err, 90):.3e}')
++    assert err.max() < 0.05 and np.percentile(err, 90) < 0.03                                      # measured 3.0 % and 2.3 % (lattice quadrature of the wall sums, H = 4 dx)
++    assert np.percentile(err, 50) < 1e-4                                                          # the interior, where both vanish, exactly
++
++
++def test_wall_u_char_bounds_the_wall_particle_maximum_and_equals_the_closed_form_for_a_flat_wall():
++    vel = lambda n: torch.tensor([[1.0, 0.3]]).repeat(n, 1)
++    pa, _, Ua, dx, H = pieces('particles', vel)
++    pb, _, Ub, _, _ = pieces('analytic', vel)
++    w = Ua > 0
++    assert w.sum() > 50
++    assert (Ub[w] >= Ua[w] - 1e-5).all()                                                           # the lattice maximum is a lower bound
++    assert np.median(Ub[w] / Ua[w]) < 1.001                                                        # and equals it where the lattice has a point on the line of u
++    # closed form at the first layers of the floor (y = y0 + d, away from the corners): u = (1, 0.3), the floor y0 below (solid for y < y0), support H
++    u = np.array([1.0, 0.3]); nu = np.linalg.norm(u)
++    floor = pb[:, 0] > pb[:, 0].min() + 1.01 * H                                                   # clear of the left wall (the column stands in the left corner; to its right the floor is flat)
++    y0 = float(build('analytic')[0].scratch['interiorDomain'].min[1])                                # the floor (the interior domain of the tank)
++    d = pb[:, 1] - y0
++    sel = floor & (d < H) & (d > 0) & (pb[:, 1] < y0 + H)
++    assert sel.sum() >= 4
++    def f(dd):
++        if abs(u[1]) / nu >= dd / H:                                                               # the line of u meets the floor within the support
++            return 1.0
++        L = math.sqrt(H * H - dd * dd)
++        return max(abs(u @ np.array([s * L, -dd])) / (nu * H) for s in (1.0, -1.0))
++    expect = np.array([nu * f(dd) for dd in d[sel]])
++    assert np.abs(Ub[sel] - expect).max() < 2e-5 * nu, (Ub[sel], expect)
++
++
++def test_computeMichelShift_runs_with_analytic_walls():
++    ctx, system = build('analytic')
++    st, config, sc = system.state, ctx.config, ctx.schemeConfig
++    n = st.positions.shape[0]
++    st.velocities = torch.as_tensor(np.random.default_rng(5).normal(scale=0.5, size=(n, 2)), device=st.positions.device, dtype=st.positions.dtype)
++    adj = buildVerletList(st, config.domain, verletScale=config.verletScale, supportMode=SupportScheme.SuperSymmetric, verbose=False)
++    beta = (st.supports / torch.pow(st.masses / sc.fluid.restDensity, 0.5)) ** 3.0
++    d, _ = computeMichelShift(st, config, sc, config.domain, adj, beta=beta, dt=1e-3, iters=1)
++    assert torch.isfinite(d).all() and float(d.norm(dim=1).max()) > 0
++    assert float(d.norm(dim=1).max()) < 0.5 * float(config.dx)                                    # a fraction of the particle spacing
+-- 
+2.43.0
+

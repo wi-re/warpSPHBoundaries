@@ -1,33 +1,181 @@
-From 76c321483ac8efbb84d111b741fbadb8ae4ec4d2 Mon Sep 17 00:00:00 2001
+From 4fffc3e8610b4b29882e83385a14f7c0dbb92d92 Mon Sep 17 00:00:00 2001
 From: "rene@rtx" <rene.winchenbach@gmail.com>
-Date: Thu, 8 Oct 2026 17:38:27 +0100
-Subject: [PATCH 4/8] surface detection with analytic walls: split Barecasco
+Date: Fri, 9 Oct 2026 08:16:27 +0100
+Subject: [PATCH 04/11] surface detection with analytic walls: split Barecasco
  modules (cover vector, wedge count as partial sums), detector adding the wall
  continuum between the passes, normals / lMin from the fluid + wall
  renormalisation matrix, hooked into detectFreeSurface; wall aggregates cached
  per position set; equals the reference detector (masks exactly)
 
+(The comparison against the warpSPHBoundaries reference solver lives in warpSPHBoundaries, tests/warpsph.)
 ---
+ scripts/gradcheck_analyticBoundary.py         | 144 +++++++++
  .../modules/analyticBoundary/__init__.py      |   3 +-
  .../modules/analyticBoundary/detector.py      | 105 +++++++
  .../modules/analyticBoundary/wallTerms.py     |  27 +-
- src/warpSPH/modules/shifting/__init__.py      |   4 +
+ src/warpSPH/modules/shifting/__init__.py      |   2 +
  .../modules/shifting/wp_deltaShiftRaw.py      | 285 ++++++++++++++++++
- .../shifting/wp_minNeighbourNormalDot.py      | 229 ++++++++++++++
  .../modules/surfaceDetection/__init__.py      |   4 +
  .../surfaceDetection/wp_barecascoCone.py      | 265 ++++++++++++++++
  .../surfaceDetection/wp_barecascoCover.py     | 244 +++++++++++++++
  .../modules/surfaceDetection/wrapper.py       |   5 +
- tests/test_analyticDetector.py                |  64 ++++
- tests/test_analyticWallTerms.py               |  40 ++-
- 12 files changed, 1261 insertions(+), 14 deletions(-)
+ 10 files changed, 1081 insertions(+), 3 deletions(-)
+ create mode 100644 scripts/gradcheck_analyticBoundary.py
  create mode 100644 src/warpSPH/modules/analyticBoundary/detector.py
  create mode 100644 src/warpSPH/modules/shifting/wp_deltaShiftRaw.py
- create mode 100644 src/warpSPH/modules/shifting/wp_minNeighbourNormalDot.py
  create mode 100644 src/warpSPH/modules/surfaceDetection/wp_barecascoCone.py
  create mode 100644 src/warpSPH/modules/surfaceDetection/wp_barecascoCover.py
- create mode 100644 tests/test_analyticDetector.py
 
+diff --git a/scripts/gradcheck_analyticBoundary.py b/scripts/gradcheck_analyticBoundary.py
+new file mode 100644
+index 0000000..bb34645
+--- /dev/null
++++ b/scripts/gradcheck_analyticBoundary.py
+@@ -0,0 +1,144 @@
++#!/usr/bin/env python3
++"""torch.autograd.gradcheck against the four partial-sum modules the analytic-boundary detector and shifting are built from
++(`modules/surfaceDetection/wp_barecascoCover.py`, `wp_barecascoCone.py`, `modules/shifting/wp_deltaShiftRaw.py`). They are warpSPH's
++`computeBarecascoSurfaceDetectionWarp` / `computeDeltaShiftWarp` cut open so that the wall's share of a sum can be added BEFORE the decision is taken (see
++`modules/analyticBoundary/detector.py`), so each has the differentiability shape of the piece it was cut from:
++
++`computeBarecascoCoverWarp`   the cover vector `sum_j x_ij / |x_ij|` of `computeBarecascoSurfaceDetection`'s first stage, WITHOUT the
++                              `wp.normalize` that kernel applies afterwards: accumulate-only, the safe shape (`gradcheck_surfaceDetection.py`).
++                              Gradchecked against positions on an asymmetric 2D set (a symmetric one puts a cover vector at zero, where
++                              the sum of unit vectors is not differentiable) -- see `_build_case`.
++`computeDeltaShiftRawWarp`    `sum_j m_j / (2 (rho_i + rho_j)) [1 + R (W_ij / W0)^n] grad_i W_ij`, i.e. `computeDeltaShiftWarp`'s sum
++                              without the CFL / Mach scaling and the cap (`gradcheck_deltaShift.py`): accumulate-only. Against positions,
++                              supports, masses and densities.
++`computeBarecascoConeCountWarp`  the wedge count: a sum of indicator functions (angle test), derivative zero almost everywhere and undefined on
++                              the wedge boundary, so a finite-difference probe that crosses one produces a spurious mismatch -- NOT in scope for
++                              gradcheck, the same call `gradcheck_surfaceDetection.py` makes for barecasco's second output. What is checked
++                              instead is the exact value on a case with a known count (`_run_cone_count_values`).
++
++A fourth cut, `min_j n_i . n_j` for the curvature gate of the shifting, was dropped from the series: `solveShifting` keeps `_curvatureGate` (torch, over
++the Verlet list), and the kernel's `out = wp.min(out, ...)` inside the neighbour loop is the loop-carried nonlinear reduction `gradcheck_shockCapturing.py`
++documents (the adjoint differentiated against the FIRST neighbour, not the minimising one, in this script's case; the forward value was exact).
++
++    python scripts/gradcheck_analyticBoundary.py
++"""
++
++from __future__ import annotations
++
++import os
++
++os.environ.setdefault("warpSPHCore_PRECISION", "float64")
++
++import math
++import sys
++
++import torch
++import warp as wp
++
++from _gradcheck_common import DEVICE, DTYPE, KERNEL, build_adjacency, compute_densities, make_domain
++from warpSPHCore import OperationProperties, ParticleState
++from warpSPHCore.enumTypes import SupportScheme
++
++from warpSPH.modules.shifting.wp_deltaShiftRaw import computeDeltaShiftRawWarp
++from warpSPH.modules.surfaceDetection.wp_barecascoCone import computeBarecascoConeCountWarp
++from warpSPH.modules.surfaceDetection.wp_barecascoCover import computeBarecascoCoverWarp
++
++DIM = 2
++H = 1.0
++XY = [[0.0, 0.0], [0.4, 0.1], [0.9, -0.2], [0.3, 0.8], [1.25, 0.7], [-0.5, 0.5], [0.7, 1.4]]          # asymmetric, every particle has neighbours
++
++
++def _build_case():
++    domain = make_domain(dim=DIM)
++    positions = torch.tensor(XY, dtype=DTYPE, device=DEVICE, requires_grad=True)
++    n = positions.shape[0]
++    supports = torch.full((n,), H, dtype=DTYPE, device=DEVICE, requires_grad=True)
++    masses = torch.full((n,), 1.0, dtype=DTYPE, device=DEVICE, requires_grad=True)
++    adjacency, kinds = build_adjacency(positions, supports, masses, domain, mode=SupportScheme.Gather)
++    densities = compute_densities(positions, supports, masses, kinds, domain, adjacency, mode=SupportScheme.Gather)
++    r = torch.cdist(positions.detach(), positions.detach())
++    gap = float((r - H).abs()[r > 0].min())
++    assert gap > 1e-3, f"a pair sits {gap:.3g} from the support edge: the gate would be crossed by the finite-difference probe"
++    return domain, positions, supports, masses, densities, adjacency, kinds
++
++
++def _check(name, f, inputs) -> bool:
++    print(f"\n=== {name}: torch.autograd.gradcheck ===")
++    try:
++        ok = torch.autograd.gradcheck(f, inputs, eps=1e-6, atol=1e-5)
++        print("PASSED" if ok else "FAILED (gradcheck returned False)")
++        return bool(ok)
++    except Exception as exc:  # noqa: BLE001 - deliberately broad, this is a canary script
++        print(f"FAILED: {type(exc).__name__}: {exc}")
++        return False
++
++
++def _props():
++    return OperationProperties(kernel=KERNEL, supportMode=SupportScheme.Gather)
++
++
++def _run_cover() -> bool:
++    domain, positions, supports, masses, densities, adjacency, kinds = _build_case()
++
++    def f(pos, sup):
++        p = ParticleState(positions=pos, supports=sup, masses=masses.detach(), densities=densities.detach(), kinds=kinds)
++        return computeBarecascoCoverWarp(queryParticles=p, operationProperties=_props(), domain=domain, adjacency=adjacency)
++
++    return _check("computeBarecascoCoverWarp", f, (positions, supports))
++
++
++def _run_delta_shift_raw(R, label) -> bool:
++    domain, positions, supports, masses, densities, adjacency, kinds = _build_case()
++
++    def f(pos, sup, mass, dens):
++        p = ParticleState(positions=pos, supports=sup, masses=mass, densities=dens, kinds=kinds)
++        return computeDeltaShiftRawWarp(queryParticles=p, operationProperties=_props(), domain=domain, R=R, n=4, W0=2.0, adjacency=adjacency)
++
++    return _check(f"computeDeltaShiftRawWarp [{label}]", f, (positions, supports, masses, densities))
++
++
++def _run_cone_count_values() -> bool:
++    """The wedge count has no meaningful derivative (see the docstring); its value must be right: with the cover axis along +x and a half angle
++    of 45 degrees, a particle counts exactly the neighbours inside the wedge."""
++    print("\n=== computeBarecascoConeCountWarp: value check (no gradcheck: discrete count) ===")
++    domain = make_domain(dim=DIM)
++    xy = [[0.0, 0.0], [0.5, 0.1], [0.5, 0.45], [0.5, 0.6], [-0.5, 0.0]]        # from particle 0: (0.5, 0.1) in the wedge, (0.5, 0.45) in, (0.5, 0.6) out (50 deg), (-0.5, 0) out
++    positions = torch.tensor(xy, dtype=DTYPE, device=DEVICE)
++    n = positions.shape[0]
++    supports = torch.full((n,), H, dtype=DTYPE, device=DEVICE)
++    masses = torch.ones(n, dtype=DTYPE, device=DEVICE)
++    adjacency, kinds = build_adjacency(positions, supports, masses, domain, mode=SupportScheme.Gather)
++    p = ParticleState(positions=positions, supports=supports, masses=masses, densities=torch.ones(n, dtype=DTYPE, device=DEVICE), kinds=kinds)
++    axes = torch.zeros(n, DIM, dtype=DTYPE, device=DEVICE)
++    axes[:, 0] = 1.0
++    got = computeBarecascoConeCountWarp(queryParticles=p, operationProperties=_props(), domain=domain, coverAxes=axes, halfAngle=math.pi / 4, adjacency=adjacency).reshape(-1)
++    r = torch.cdist(positions, positions)
++    d = positions[None, :, :] - positions[:, None, :]                                               # d[i, j] = x_j - x_i
++    cosang = d[..., 0] / r.clamp(min=1e-30)
++    inside = (r > 0) & (r <= H) & (cosang >= math.cos(math.pi / 4))
++    ref = inside.sum(1).to(DTYPE)
++    ok = bool(torch.allclose(got.to(DTYPE), ref))                                                   # neighbours j != i within the support whose direction x_j - x_i is within the half angle of the axis
++    print(f"kernel {got.tolist()}  brute force {ref.tolist()}")
++    print("PASSED" if ok else "FAILED")
++    return ok
++
++
++def main():
++    wp.init()
++    torch.manual_seed(0)
++
++    ok = _run_cover()
++    ok &= _run_delta_shift_raw(0.0, "R = 0")
++    ok &= _run_delta_shift_raw(0.2, "R = 0.2, n = 4")
++    ok &= _run_cone_count_values()
++
++    print()
++    if ok:
++        print("ALL PASSED.")
++    else:
++        print("FAILED -- see this script's docstring.")
++    sys.exit(0 if ok else 1)
++
++
++if __name__ == "__main__":
++    main()
 diff --git a/src/warpSPH/modules/analyticBoundary/__init__.py b/src/warpSPH/modules/analyticBoundary/__init__.py
 index 5d3876b..d2e9756 100644
 --- a/src/warpSPH/modules/analyticBoundary/__init__.py
@@ -206,24 +354,22 @@ index 138fd89..224a60e 100644
  
  def _wallVelocity(wall, bi):
 diff --git a/src/warpSPH/modules/shifting/__init__.py b/src/warpSPH/modules/shifting/__init__.py
-index 1f72400..746339f 100644
+index 1f72400..d418992 100644
 --- a/src/warpSPH/modules/shifting/__init__.py
 +++ b/src/warpSPH/modules/shifting/__init__.py
-@@ -16,6 +16,8 @@ from .delta import computeDeltaShiftWarp
+@@ -16,6 +16,7 @@ from .delta import computeDeltaShiftWarp
  from .implicitShifting import computeImplicitShift, computeDynamicImplicitShift
  from .michel import computeMichelShift
  from .wp_michelUChar import computeUCharWarp
 +from .wp_deltaShiftRaw import computeDeltaShiftRawWarp
-+from .wp_minNeighbourNormalDot import computeMinNeighbourNormalDotWarp
  from .wrapper import solveShifting
  
  __all__ = [
-@@ -24,5 +26,7 @@ __all__ = [
+@@ -24,5 +25,6 @@ __all__ = [
      'computeDynamicImplicitShift',
      'computeMichelShift',
      'computeUCharWarp',
 +    'computeDeltaShiftRawWarp',
-+    'computeMinNeighbourNormalDotWarp',
      'solveShifting'
  ]
 \ No newline at end of file
@@ -518,241 +664,6 @@ index 0000000..d2459ed
 +                ),
 +            )
 +            return launchOperator(_COMPUTEDELTASHIFTRAW, ctx, R=scalar_t(R), n=n, W0=scalar_t(W0))
-diff --git a/src/warpSPH/modules/shifting/wp_minNeighbourNormalDot.py b/src/warpSPH/modules/shifting/wp_minNeighbourNormalDot.py
-new file mode 100644
-index 0000000..e981e3c
---- /dev/null
-+++ b/src/warpSPH/modules/shifting/wp_minNeighbourNormalDot.py
-@@ -0,0 +1,229 @@
-+"""Smallest dot product n_i . n_j of the unit surface normals over the neighbours j != i within the support, restricted to particles in the mask (`surfaceMask[i] != 0` and `surfaceMask[j] != 0`); a large number where
-+there is none.  The curvature test of the delta+ surface shift (Sun et al. 2019: a shift towards the surface is only tangential where a neighbour's normal differs by more than the threshold angle).
-+"""
-+
-+import warp as wp
-+from warp.types import vector, matrix
-+from typing import Any
-+import torch
-+from torch.profiler import profile, ProfilerActivity
-+from warpSPHCore.profiling import record_function
-+from typing import Optional, Union, Tuple
-+from warpSPHCore import *
-+
-+__all__ = ['computeMinNeighbourNormalDotWarp']
-+
-+
-+@wp.func
-+def computeMinNeighbourNormalDot_Func_i(
-+    # General Shape Parameters and indices
-+    i : wp.int32,  dim: wp.int32,
-+
-+    # SPH properties for the query set (indexed by i)
-+    xi: vector(dtype = scalar_t, length=Any), hi: scalar_t, mi: scalar_t, rhoi: scalar_t, # type: ignore
-+
-+    # SPH properties for the reference set (indexed by j in the neighbor loop)
-+    referenceState: Any, # particleDataSoA with the exact type based on the dimensionality, e.g., particleDataSoA_2 for 2D, particleDataSoA_3 for 3D, etc.
-+
-+    # Domain and kernel parameters
-+    domainState: domainData,
-+    kernelProperties: kernelState,
-+
-+    # Operation specific parameters
-+    beginIndex: wp.int32, # type: ignore
-+    numIndices: wp.int32, # type: ignore
-+    offsetArray: wp.array(dtype = wp.int64), # type: ignore
-+
-+    # Operation Mode for masking certain kinds of interactions, e.g. for directional operations
-+    ki : wp.int32, referenceKinds : wp.array(dtype = wp.int32), # type: ignore
-+
-+    # Optional Correction Terms:
-+    useGradientRenormalization: wp.bool, Li: matrix(shape=(Any, Any), dtype=scalar_t), # type: ignore
-+    useGradHTerms: wp.bool, omega_i: scalar_t, referenceOmegas: wp.array(dtype = scalar_t),  # type: ignore
-+    useVolume: bool, Vi: scalar_t, referenceVolumes: wp.array(dtype = scalar_t), # type: ignore
-+    useCRK: bool, Ai: scalar_t, Bi: vector(length=Any, dtype=scalar_t), gradAi: vector(length=Any, dtype=scalar_t), gradBi: matrix(shape=(Any, Any), dtype=scalar_t), # type: ignore
-+
-+    # Dummy value to allow allocation
-+    outputValue: Any, # type: ignore
-+
-+    surfaceMask: wp.array(dtype = wp.int32), # type: ignore
-+    surfaceNormals: wp.array(dtype = vector(length=Any, dtype=scalar_t)), # type: ignore
-+):
-+    # Initialize the output value
-+    out     = outputValue + scalar_t(1.0e30)
-+
-+    # Loop over neighbors
-+    for neighborIndex in range(numIndices):
-+        jj = beginIndex + neighborIndex
-+        j  = wp.int32(offsetArray[jj])
-+        if kernelProperties.operationMode != wp.static(OperationDirection.TrueAllToToAll.value):
-+            if not checkDirectionality_j(referenceKinds[j], kernelProperties.operationMode):
-+                continue
-+        ##########################################################
-+        #   The core particle-particle interaction starts here   #
-+        ##########################################################
-+
-+        xj, hj, mj, rhoj, kj = getParticle(referenceState, j)
-+        x_ij = computeDistanceVec(xi, xj, domainState)
-+        r_ij = safe_sqrt(wp.dot(x_ij, x_ij))
-+        hij = computePairwiseSupport(hi, hj, kernelProperties.supportMode)
-+        if surfaceMask[i] == 0:
-+            continue
-+        if j == i or surfaceMask[j] == 0:
-+            continue
-+        if r_ij > hij:
-+            continue
-+        out = wp.min(out, wp.dot(surfaceNormals[i], surfaceNormals[j]))
-+
-+    return out
-+
-+
-+@wp.func
-+def computeMinNeighbourNormalDot_Func_Adjacency(
-+    i : wp.int32, dim: wp.int32, lane: wp.int32, lanes: wp.int32,
-+
-+    queryState: Any, # particleDataSoA with the exact type based on the dimensionality, e.g., particleDataSoA_2 for 2D, particleDataSoA_3 for 3D, etc.
-+    referenceState: Any,
-+    correctionData: Any, # correctionData_1 or correctionData_2 or correctionData_3, containing all the optional correction terms and their usage flags
-+
-+    domainState: domainData,
-+    useAdjacency: wp.bool,
-+    adjacencyState: adjacencyData,
-+    gridState: gridData,
-+    numOffsets: wp.int32,
-+
-+    kernelProperties: kernelState,
-+
-+    outputValue : Any, # type: ignore
-+
-+    surfaceMask: wp.array(dtype = wp.int32), # type: ignore
-+    surfaceNormals: wp.array(dtype = vector(length=Any, dtype=scalar_t)), # type: ignore
-+):
-+    xi, hi, mi, rhoi, ki = getParticle(queryState, i)
-+    if kernelProperties.operationMode != wp.static(OperationDirection.TrueAllToToAll.value):
-+        if not checkDirectionality_i(ki, kernelProperties.operationMode):
-+            return zero_like_warp(outputValue)
-+
-+    useGradientRenormalization, Li = getL_i(correctionData, i)
-+    useGradHTerms, omega_i = getGradH_i(correctionData, i)
-+    useVolume, Vi = getVolume_i(correctionData, i)
-+    useCRK, Ai, Bi, gradA_i, gradB_i = getCRK_i(correctionData, i)
-+
-+    out = outputValue + scalar_t(1.0e30)
-+    for o in range(numOffsets):
-+        # grid traversal: lanes take whole cells round-robin (no-op for lanes == 1)
-+        if not useAdjacency and (o % lanes) != lane:
-+            continue
-+        beginIndex = wp.int32(0)
-+        numIndices = wp.int32(0)
-+        if useAdjacency:
-+            beginIndex = adjacencyState.neighborOffsets[i]
-+            numIndices = adjacencyState.numNeighbors[i]
-+        else:
-+            beginIndex, numIndices = checkOffset(
-+                i, queryState.positions, gridState.numCells, gridState.D,
-+                o, gridState.cellOffsets, gridState.hashTable, gridState.cellTable,
-+                domainState.periodicity, gridState.qMin, gridState.qMax, gridState.hCell
-+            )
-+            if beginIndex < 0:
-+                continue
-+
-+        beginIndex, numIndices = laneSlice(beginIndex, numIndices, lane, lanes, useAdjacency)
-+        partial = computeMinNeighbourNormalDot_Func_i(
-+            i, dim,
-+            xi, hi, mi, rhoi,
-+            referenceState, domainState,
-+            kernelProperties,
-+
-+            beginIndex, numIndices, adjacencyState.neighborList if useAdjacency else gridState.sortIndex,
-+            ki, referenceState.kinds,
-+
-+            useGradientRenormalization, Li,
-+            useGradHTerms, omega_i, correctionData.referenceOmegas,
-+            useVolume, Vi , correctionData.referenceVolumes,
-+            useCRK, Ai, Bi, gradA_i, gradB_i,
-+
-+            outputValue,
-+            surfaceMask,
-+            surfaceNormals,
-+        )
-+        out = wp.min(out, partial)
-+    return out
-+
-+
-+@wp.kernel
-+def computeMinNeighbourNormalDot_Kernel(
-+    queryState: Any,
-+    referenceState: Any,
-+    domainState: domainData,
-+
-+    useAdjacency: wp.bool, adjacencyState: adjacencyData, gridState: gridData,
-+    correctionData: Any,
-+
-+    kernelProperties: kernelState,
-+    # Do not change the parameters above
-+
-+    surfaceMask: wp.array(dtype = wp.int32), # type: ignore
-+    surfaceNormals: wp.array(dtype = vector(length=Any, dtype=scalar_t)), # type: ignore
-+    # The last parameter is always the output array and should not be changed
-+    outputValues : wp.array(dtype = scalar_t) # type: ignore
-+):
-+    i = wp.tid()
-+    numParticles = queryState.positions.shape[0]
-+    if i >= numParticles:
-+        return
-+
-+    outputValues[i] = computeMinNeighbourNormalDot_Func_Adjacency(
-+        i, domainState.dim, 0, 1,
-+        queryState, referenceState, correctionData, domainState,
-+        useAdjacency, adjacencyState, gridState, gridState.numOffsets if not useAdjacency else 1,
-+        kernelProperties,  #queryKinds, referenceKinds,
-+        # The parameters above are default parameters and shold not be changed
-+
-+        zero_like_warp(outputValues),
-+        surfaceMask,
-+        surfaceNormals,
-+    )
-+
-+# (no multi-lane variant: the reduction is a minimum, `laneSum` is a sum)
-+
-+def _computeMinNeighbourNormalDotDtype(ctx, extras):
-+    return castTorchToWarpAsBuiltins(ctx.query.densities).dtype
-+
-+
-+_COMPUTEMINNEIGHBOURNORMALDOT = OperatorSpec(
-+    kernel=computeMinNeighbourNormalDot_Kernel,
-+    outputs=(OutputSpec(dtype=_computeMinNeighbourNormalDotDtype, shape=ShapeOf.QUERY),),
-+    extras=(
-+        ExtraSpec("surfaceMask", ExtraKind.TENSOR),
-+        ExtraSpec("surfaceNormals", ExtraKind.TENSOR),
-+    ),
-+)
-+
-+
-+def computeMinNeighbourNormalDotWarp(
-+    queryParticles: ParticleState,
-+    operationProperties: OperationProperties,
-+    domain: DomainDescription,
-+
-+    surfaceMask: torch.Tensor,
-+    surfaceNormals: torch.Tensor,
-+    queryVolumes: Optional[torch.Tensor] = None, referenceVolumes: Optional[torch.Tensor] = None,
-+    adjacency: Optional[Union[AdjacencyList, CompactHashMap]] = None, # if none a datastructure is created for EVERY operation!,
-+    referenceParticles: Optional[ParticleState] = None,
-+    crkState: Optional[CRKState] = None,
-+    gradHState: Optional[Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor], GradHState]] = None,
-+    renormalizationState: Optional[Union[torch.Tensor,RenormalizationState]] = None,
-+):
-+    with record_function("warpSPH[computeMinNeighbourNormalDot]"):
-+        referenceParticles = referenceParticles if referenceParticles is not None else queryParticles
-+        with record_function("warpSPH[computeMinNeighbourNormalDot] - Kernel Execution"):
-+            ctx = SPHContext(
-+                query=queryParticles, properties=operationProperties, domain=domain,
-+                adjacency=adjacency, reference=referenceParticles,
-+                corrections=Corrections(
-+                    volumes=(queryVolumes, referenceVolumes),
-+                    crk=crkState, gradH=gradHState, renorm=renormalizationState,
-+                ),
-+            )
-+            return launchOperator(_COMPUTEMINNEIGHBOURNORMALDOT, ctx, surfaceMask=surfaceMask, surfaceNormals=surfaceNormals)
 diff --git a/src/warpSPH/modules/surfaceDetection/__init__.py b/src/warpSPH/modules/surfaceDetection/__init__.py
 index cb8f0aa..c655922 100644
 --- a/src/warpSPH/modules/surfaceDetection/__init__.py
@@ -1311,172 +1222,6 @@ index e468b3d..85071fc 100644
          normals, renormalizationState_, lambdas = computeNormals(
              currentState,
              config, schemeConfig, surfaceConfig,
-diff --git a/tests/test_analyticDetector.py b/tests/test_analyticDetector.py
-new file mode 100644
-index 0000000..2232cd1
---- /dev/null
-+++ b/tests/test_analyticDetector.py
-@@ -0,0 +1,64 @@
-+"""Free-surface detection with analytic walls (modules/analyticBoundary/detector.py) against the reference in
-+warpSPHBoundaries (`DeltaSPH2D._surface_state`): the same raw and dilated surface masks, the minimum eigenvalue of the
-+renormalisation matrix of fluid + wall, and the lambda-gradient normals, for a fluid block with a free surface and wall
-+contact on three sides (and at the corners), regular and jittered.
-+"""
-+from types import SimpleNamespace
-+
-+import numpy as np
-+import pytest
-+import torch
-+
-+pytest.importorskip('warpSPHBoundaries')
-+
-+from warpSPHCore import DomainDescription, KernelFunctions, SupportScheme, buildVerletList  # noqa: E402
-+
-+from warpSPH.configurations.moduleConfigurations.surfaceDetection import buildDefaultSurfaceDetectionConfig  # noqa: E402
-+from warpSPH.configurations.moduleConfigurations.gravity import GravityType  # noqa: E402
-+from warpSPH.configurations.region import BCType  # noqa: E402
-+from warpSPH.modules.analyticBoundary import detectFreeSurfaceAnalytic, sym2LamPinv  # noqa: E402
-+from warpSPH.modules.surfaceDetection import detectFreeSurface  # noqa: E402
-+
-+from test_analyticWallTerms import C0, DEV, F64, G, HI, LO, block, reference_state_dict, setup  # noqa: E402
-+
-+
-+def adjacency_of(st, H, tp_domain=None):
-+    tp = st.positions.dtype
-+    dom = DomainDescription(min=torch.tensor([-1.0, -1.0], device=DEV, dtype=tp), max=torch.tensor([2.0, 2.0], device=DEV, dtype=tp),
-+                            periodic=torch.tensor([False, False], device=DEV), dim=2)
-+    adj = buildVerletList(st, dom, verletScale=1.2, supportMode=SupportScheme.SuperSymmetric, verbose=False)
-+    return dom, adj
-+
-+
-+@pytest.mark.parametrize('jitter', [0.0, 0.15])
-+def test_detector_equals_the_reference_state(jitter):
-+    pos, v, rho, H, dx, st, wall = setup(BCType.freeSlip, jitter=jitter)
-+    dom, adj = adjacency_of(st, H)
-+    provider = wall.provider
-+    config = SimpleNamespace(kernel=KernelFunctions.Wendland2, domain=dom, dx=dx, verletScale=1.2)
-+    schemeConfig = SimpleNamespace(boundaryProvider=provider, analyticWallMass=1.0, fluid=SimpleNamespace(restDensity=1.0), _analyticSupport=H)
-+    surfaceConfig = buildDefaultSurfaceDetectionConfig()
-+    raw, dilated, normals, renorm, lMin = detectFreeSurfaceAnalytic(st, config, schemeConfig, surfaceConfig, adj, wall=wall)
-+    ref = reference_state_dict(pos, v, rho, H, dx)
-+    assert torch.equal(raw.cpu(), ref['surface'].cpu())
-+    assert torch.equal((dilated > 0.5).cpu(), ref['F'].cpu())
-+    assert int(raw.sum()) > 10 and int(raw.sum()) < len(pos) // 2                         # a real surface layer, not everything
-+    lamRef, L = sym2LamPinv(ref['Mt'])
-+    assert float((lMin.to(F64) - lamRef).abs().max()) < (1e-5 if st.positions.dtype == torch.float32 else 1e-9)
-+    gl = torch.einsum('nab,nb->na', L, ref['fk'].lam_gradient(lamRef))
-+    nref = -gl / gl.norm(dim=1, keepdim=True).clamp(min=1e-300)
-+    tol = 1e-3 if st.positions.dtype == torch.float32 else 1e-7                          # the gradient sum runs in warpSPHCore's precision
-+    assert float((normals.to(F64) - nref).abs().max()) < tol
-+
-+
-+def test_hook_in_detectFreeSurface_dispatches_to_the_analytic_detector():
-+    pos, v, rho, H, dx, st, wall = setup(BCType.freeSlip)
-+    dom, adj = adjacency_of(st, H)
-+    config = SimpleNamespace(kernel=KernelFunctions.Wendland2, domain=dom, dx=dx, verletScale=1.2)
-+    schemeConfig = SimpleNamespace(boundaryProvider=wall.provider, analyticWallMass=1.0, fluid=SimpleNamespace(restDensity=1.0), _analyticSupport=H)
-+    surfaceConfig = buildDefaultSurfaceDetectionConfig()
-+    surfaceConfig.active = True
-+    schemeConfig.gravityConfig = SimpleNamespace(active=True, type=GravityType.Directional, magnitude=9.81, direction=[0.0, -1.0])
-+    out = detectFreeSurface(st, config, schemeConfig, surfaceConfig, adj, returnNormals=True)
-+    direct = detectFreeSurfaceAnalytic(st, config, schemeConfig, surfaceConfig, adj, wall=wall)
-+    assert torch.equal(out[0], direct[0]) and torch.equal(out[1], direct[1]) and torch.allclose(out[2], direct[2])
-diff --git a/tests/test_analyticWallTerms.py b/tests/test_analyticWallTerms.py
-index 5838a6c..65a895b 100644
---- a/tests/test_analyticWallTerms.py
-+++ b/tests/test_analyticWallTerms.py
-@@ -17,6 +17,7 @@ import torch
- pytest.importorskip('warpSPHBoundaries')
- 
- from warpSPHCore import KernelFunctions  # noqa: E402
-+from warpSPHCore.type_config import get_torch_precision  # noqa: E402
- 
- from warpSPH.boundary import buildBoundaryProvider  # noqa: E402
- from warpSPH.configurations.region import BCType, RegionType  # noqa: E402
-@@ -31,35 +32,40 @@ from warpSPHBoundaries.scene.scene import Scene  # noqa: E402
- pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA')
- DEV = 'cuda'
- F64 = torch.float64
--LO, HI = (0.0, 0.0), (0.6, 0.5)
-+LO, HI = (0.0, 0.0), (0.625, 0.5)                    # dyadic: the lattice, the support 4 dx and the walls are exact in float32
- G = (0.0, -9.81)
- ALPHA, C0 = 0.1, 20.0
- 
- 
--def block(dx=0.025):
--    nx, ny = int(0.6 / dx), int(0.3 / dx)
-+def block(dx=1.0 / 32):
-+    nx, ny = 20, 10
-     X, Y = np.meshgrid(dx * (np.arange(nx) + 0.5), dx * (np.arange(ny) + 0.5), indexing='ij')
-     return np.stack([X.ravel(), Y.ravel()], 1), dx
- 
- 
- def state_of(pos, v, rho, H):
-+    """the particle state in warpSPHCore's precision (the Warp neighbour search follows it; float32 unless configured)."""
-     n = len(pos)
--    z = torch.zeros(n, device=DEV, dtype=F64)
--    t = lambda a: torch.as_tensor(a, device=DEV, dtype=F64)
-+    tp = get_torch_precision()
-+    z = torch.zeros(n, device=DEV, dtype=tp)
-+    t = lambda a: torch.as_tensor(a, device=DEV, dtype=tp)
-     return WeaklyCompressibleState(
--        positions=t(pos), velocities=t(v), supports=z + H, masses=z + 0.025 ** 2, densities=t(rho),
-+        positions=t(pos), velocities=t(v), supports=z + H, masses=z + (1.0 / 32) ** 2, densities=t(rho),
-         kinds=torch.zeros(n, dtype=torch.int32, device=DEV), materials=torch.zeros(n, dtype=torch.int32, device=DEV),
-         UIDs=torch.arange(n, device=DEV), UIDcounter=n, pressures=C0 ** 2 * (t(rho) - 1.0), soundspeeds=z + C0,
--        ghostIndices=-torch.ones(n, dtype=torch.int32, device=DEV), ghostOffsets=torch.zeros((n, 2), device=DEV, dtype=F64))
-+        ghostIndices=-torch.ones(n, dtype=torch.int32, device=DEV), ghostOffsets=torch.zeros((n, 2), device=DEV, dtype=tp))
- 
- 
--def setup(kind):
-+def setup(kind, jitter=0.0):
-     pos, dx = block()
-     H = 4 * dx
-     rng = np.random.default_rng(3)
-+    if jitter:
-+        pos = pos + jitter * dx * rng.uniform(-1.0, 1.0, size=pos.shape)
-     v = rng.normal(scale=0.3, size=pos.shape)
-     rho = 1.0 + 0.002 * (1.0 + 0.5 * np.sin(8 * pos[:, 0]) * np.cos(5 * pos[:, 1])) + 9.81 * np.clip(0.3 - pos[:, 1], 0, None) / C0 ** 2
-     st = state_of(pos, v, rho, H)
-+    pos, v, rho = (a.double().cpu().numpy() for a in (st.positions, st.velocities, st.densities))        # the reference sees exactly the rounded inputs
-     body = Body(bodyId=0, reps=[BoxRep(LO, HI, solid='outside')])
-     region = SimpleNamespace(type=RegionType.Boundary, representation=body, sdf=None, kind=kind)
-     rb = buildAnalyticRigidBody(region, 0, st)
-@@ -68,9 +74,19 @@ def setup(kind):
-     config = SimpleNamespace(kernel=KernelFunctions.Wendland2)
-     schemeConfig = SimpleNamespace(analyticWallMass=1.0, fluid=SimpleNamespace(restDensity=1.0))
-     wall = evaluateWall(provider, st, config, schemeConfig, torch.tensor(G, device=DEV, dtype=F64))
-+    wall.provider = provider                               # for the tests that need to run the provider again
-     return pos, v, rho, H, dx, st, wall
- 
- 
-+def reference_state_dict(pos, v, rho, H, dx):
-+    """`DeltaSPH2D._surface_state` (surface, dilated set F, fluid and fluid + wall renormalisation matrices, the fluid kernels) of the tank at this state."""
-+    kw = dict(gravity=G, c0=C0, alpha=ALPHA, noPen='impulse', shifting=True, graphStep=False, fluidWarp=True, fusedWall=True)
-+    tank = Scene([Body(bodyId=0, reps=[BoxRep(LO, HI, solid='outside')])], DEV)
-+    sim = DeltaSPH2D(pos, v, np.ones(len(pos)), dx, tank, DeltaSPHConfig(**kw), DEV, support=H)
-+    xt, rt = torch.as_tensor(pos, device=DEV, dtype=F64), torch.as_tensor(rho, device=DEV, dtype=F64)
-+    return sim._surface_state(xt, rt)
-+
-+
- def reference(pos, v, rho, H, dx, form):
-     kw = dict(gravity=G, c0=C0, alpha=ALPHA, wallViscosityForm=form, noPen='impulse', shifting=False, graphStep=False, fluidWarp=False, fusedWall=True)
-     tank = Scene([Body(bodyId=0, reps=[BoxRep(LO, HI, solid='outside')])], DEV)
-@@ -88,9 +104,11 @@ def test_wall_terms_equal_the_reference_wall_contribution(kind, form):
-     dacc, ddrho = reference(pos, v, rho, H, dx, form)
-     ours_drho = wallContinuity(wall, st.densities, st.velocities)
-     s = torch.ones_like(st.densities)
--    ours_acc = (wallPressureAcceleration(wall, st.pressures, s, st.densities, wallMass=1.0, h=H)
-+    P64 = C0 ** 2 * (st.densities.to(F64) - 1.0)                                         # the pressure of the rounded density, in double (the state's own is rounded again)
-+    ours_acc = (wallPressureAcceleration(wall, P64, s, st.densities, wallMass=1.0, h=H)
-                 + wallViscousAcceleration(wall, st.densities, st.velocities, ALPHA * C0 * H / 2.8213846683502197, H, wallMass=1.0))
-     scale = float(dacc.abs().max())
-     assert scale > 1.0                                                                     # the walls act: hydrostatic support and viscous drag
--    assert float((ours_drho - ddrho).abs().max()) <= 1e-9 * max(1.0, float(ddrho.abs().max()))
--    assert float((ours_acc - dacc).abs().max()) <= 1e-9 * scale
-+    tol = 5e-7 if st.positions.dtype == torch.float32 else 1e-9                           # the terms are returned in the state's precision
-+    assert float((ours_drho - ddrho).abs().max()) <= tol * max(1.0, float(ddrho.abs().max()))
-+    assert float((ours_acc - dacc).abs().max()) <= tol * scale
 -- 
 2.43.0
 

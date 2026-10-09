@@ -1,0 +1,240 @@
+From e93ec882719eb37232e705c83d8841aa3ded3f03 Mon Sep 17 00:00:00 2001
+From: "rene@rtx" <rene.winchenbach@gmail.com>
+Date: Fri, 9 Oct 2026 08:35:23 +0100
+Subject: [PATCH 11/11] ANALYTIC_BOUNDARIES_PLAN.md and PLANS.md row,
+ OPEN_PROBLEMS 24-29 (findings from the analytic-boundary work), optional
+ `boundaries` extra, check_imports treats warpSPHBoundaries as optional,
+ README / CONTRIBUTING lines
+
+---
+ ANALYTIC_BOUNDARIES_PLAN.md | 64 +++++++++++++++++++++++++++++++++++++
+ CONTRIBUTING.md             |  3 ++
+ OPEN_PROBLEMS.md            | 35 ++++++++++++++++++++
+ PLANS.md                    |  2 ++
+ README.md                   |  3 ++
+ pyproject.toml              |  3 ++
+ scripts/check_imports.py    |  8 +++++
+ 7 files changed, 118 insertions(+)
+ create mode 100644 ANALYTIC_BOUNDARIES_PLAN.md
+
+diff --git a/ANALYTIC_BOUNDARIES_PLAN.md b/ANALYTIC_BOUNDARIES_PLAN.md
+new file mode 100644
+index 0000000..6014206
+--- /dev/null
++++ b/ANALYTIC_BOUNDARIES_PLAN.md
+@@ -0,0 +1,64 @@
++# Analytic boundaries — exact kernel integrals over the solid instead of boundary particles
++
++> **Progress marker:** this plan's row in [PLANS.md](PLANS.md). Update its *Last worked* date and *Where it stands* whenever you work on this plan.
++
++Opt-in alternative to boundary particles for the weakly compressible δ⁺-SPH scheme (`deltaSPH`): a wall or obstacle is a `RigidBody` whose
++`representation` is an analytic body of the optional package **warpSPHBoundaries** (surface loops, boxes, implicit / SDF solids; the SPH kernel integrals
++over the solid are evaluated exactly by edge line integrals, with no wall particles, no ghost layer and no packing error). Without a representation
++nothing changes: every hook is guarded by `schemeConfig.boundaryProvider is not None`. Derivations, the reference solver `DeltaSPH2D` and the oracle tests live in
++warpSPHBoundaries (repository `wi-re/warpSPHBoundaries`; `docs/plan-upstreaming.md` there has the history of this change set, `docs/audit-warpsph-boundary-hooks.md` the hook audit).
++
++## Using it
++
++```
++pip install -e warpSPHBoundaries/        # or: pip install -e "warpSPH/[boundaries]"
++warpsph-run dambreak --wallRepresentation analytic                       # tank walls analytic
++warpsph-run dambreak --wallRepresentation analytic --obstacleActive --obstacleType circleBottom --maxExtent 0.5 --offsetX -0.4
++```
++`--obstacleRepresentation particles` keeps the obstacle as boundary particles next to the analytic tank (a mixed scene); `--obstacleDynamic` makes an analytic
++obstacle a free body (density `obstacleDensity`); `--shiftScheme` / `--shiftProjection` select Michel 2022 or the implicit / dynamic shifting; `--analyticWallPressure normal` replaces
++the hydrostatic wall-pressure term by its normal part only (as the boundary particles' ghost extrapolation does); `--cudaGraph` captures the whole step for static walls.
++
++## What was added (stage numbers of `_deltaSPH_rhs`)
++
++| piece | where |
++|---|---|
++| `RigidBody.representation`, `buildAnalyticRigidBody` (mass / inertia from the representation), `ParticleRegion.representation` (not sampled, no ghost layer) | `rigidBody/build.py`, `regions/region.py`, `initializers/weaklyCompressible.py` |
++| provider protocol + adapter (`bindBodies` writes the integrated pose into the provider's bodies every right-hand side) | `boundary/provider.py` |
++| wall continuity (05b), wall pressure force (12), wall viscosity (11, inside the frozen-diffusion tuple), wall loads (13b) | `modules/analyticBoundary/wallTerms.py`, `schemes/deltaSPH.py` |
++| free-surface detection: Barecasco as separate partial-sum passes, the wall continuum added between them, normals / lMin from fluid + wall matrix | `modules/analyticBoundary/detector.py`, `modules/surfaceDetection/wp_barecasco{Cover,Cone}.py` |
++| shifting: the wall's share of the raw δ⁺ sum (`wp_deltaShiftRaw`, warpSPH's `W0` convention), of grad C-tilde and `U_char` (Michel), of grad C (implicit) | `modules/analyticBoundary/shifting.py`, `modules/shifting/` |
++| no-penetration impulse from the provider's signed distance | `modules/analyticBoundary/noPenetration.py`, `systems/weaklyCompressible.py` |
++| **the wall flux in `WeaklyCompressibleSystem.drift_rates`** (time-centred continuity): without it the wall's compression is missing from the density update and the dam break diverges within 0.06 s | `systems/weaklyCompressible.py` |
++| free analytic bodies through the exact integrator (`RigidBody.dynamic`, `load`) | `systems/weaklyCompressible.py` |
++| whole-step CUDA graph with analytic walls (host constants `_analyticSupport` / `_analyticMass` / `_analyticDx` fixed at initialisation) | `schemes/deltaSPH.py` (`_rhsIsGraphable`), `initializers/weaklyCompressible.py` |
++
++## Refused (loudly), by design of this change set
++
++3D; `BCType.extended`; the `exactHessian` implicit operator with walls (needs the wall Hessian integral); obstacle presets other than circle, box and equilateral triangle
++(an ellipse, `aspectRatio != 1`); the right-hand-side graph and the whole-step graph for moving or dynamic bodies, implicit / dynamic shifting and mixed scenes; the incompressible
++and ACSPH consumers (not hooked). Each is a separate next step, not a precondition.
++
++## Verified (A/B against the boundary-particle path, `dambreak`)
++
++| comparison | result |
++|---|---|
++| dam break 0.5 s, nx 64, delta+, analytic vs particle walls | fastest particle 5.340 / 5.345, kinetic energy 3.567 / 3.712 (4 %), density bounds equal, no penetration |
++| Michel 2022, 0.3 s | 1.9 % (fastest particle), 4.8 % (kinetic energy) |
++| implicit shifting vs the analytic δ⁺ run (the particle path diverges there, OPEN_PROBLEMS §26) | 1.1 % / 0.04 % |
++| circular / box / triangular obstacle | kinetic energy within 3-4 %, fastest particle 6-11 % lower (a spray particle); mixed scene stable, kinetic energy within 1.1 % |
++| free cylinder, density 0.5 / 2.0 | accelerates at 3.0 (float64) / 2.5 (float32) m/s² against the ideal 3.27 (added-mass limit); the float32 load of a buoyant body is 3 % low (small difference of large numbers) |
++| whole-step graph | bitwise the eager step (tank, tank + obstacle, Michel), about 3x faster |
++
++The term-by-term equalities with the reference solver (wall continuity / pressure / viscosity 1e-13 in float64, detector masks exactly, shifting 1.4e-4 relative in float32, wall loads) are
++tests of warpSPHBoundaries (`tests/warpsph/`, run with this tree on `PYTHONPATH`, in both precisions): warpSPH does not import that package's solver layer.
++
++## Tests and gates
++
++`tests/test_analytic*.py` (skip without warpSPHBoundaries), `scripts/gradcheck_analyticBoundary.py` (cover vector and raw shift sum gradchecked; the wedge count is discrete and checked by value),
++`scripts/check_imports.py` (`warpSPHBoundaries` is an optional package: its imports are only verified when it is installed).
++
++## Next
++
++Incompressible / ACSPH consumers (hook table in warpSPHBoundaries' audit); moving bodies in a graph; 3D; the wall Hessian integral for `exactHessian`; wall particles of the `ParticleBoundary` provider as a
++cross-representation convergence test inside warpSPH.
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index f1d2f36..271b9a4 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -21,6 +21,9 @@ pip install -e "warpSPH/[dev]"
+ 
+ A CUDA device is required for anything beyond imports.
+ 
++Optionally, for the analytic boundary tests and `--wallRepresentation analytic`, install `warpSPHBoundaries` as well (`git clone https://github.com/wi-re/warpSPHBoundaries`,
++`pip install -e warpSPHBoundaries/`). The `tests/test_analytic*.py` files skip without it, and `check_imports.py` only verifies its imports when it is installed.
++
+ ## Notebooks: set up nbstripout first
+ 
+ **Do this before committing any notebook.** `.gitattributes` declares a
+diff --git a/OPEN_PROBLEMS.md b/OPEN_PROBLEMS.md
+index f9144c9..0dbffc9 100644
+--- a/OPEN_PROBLEMS.md
++++ b/OPEN_PROBLEMS.md
+@@ -480,6 +480,41 @@ cold-gas branch (a zero-sound-speed ambient medium in the trigger; compare the S
+ viscosity form, or the point-source initial condition. Not investigated; the bake-off needs no fix for it (a
+ cross-check row). Evidence: `docs/av/bakeoff_2026-10-09/report.md` (CompSPH section, `compRosswog` sedov `nan`).
+ 
++## 24. Shifting curvature gate (`_curvatureGate`) takes the minimum over the raw Verlet list (found 2026-10-09)
++
++Sun et al. 2019 Eq. (21) gates a surface particle by the minimum of `n_i . n_j` over its neighbours *within the support*. `modules/shifting/wrapper.py::_curvatureGate` reduces over
++`adjacency.i / .j`, the raw Verlet list (pairs up to `verletScale` x support), so it gates more than the equation says. Measured in the analytic-boundary comparison (curvature gate on:
++a few free-surface particles differ from a reference that gates inside the support; the difference is bounded by the largest shift of the gated particles). Fix: restrict the pairs to
++`r <= support` before the reduction (a distance mask on `i, j`). Not changed: it alters the default shifting of every case.
++
++## 25. `computeDeltaShiftWarp`: the tensile reference value is W(dx / kernelScale), not W(dx) (found 2026-10-09)
++
++`modules/shifting/delta.py` evaluates `W_0` at `q = dx_ / hij` with `dx_ = (m / rho0)^(1/dim) / kernelScale`: the kernel at dx / kernelScale rather than at the particle spacing dx of Sun's law
++(`[1 + R (W_ij / W(dx))^n]`). For Wendland C2 at h = 4 dx this is 3.7 % of the tensile term (the factor enters as `W_0^-4`). The analytic-wall shifting follows warpSPH's convention so the fluid and wall parts of the sum
++are consistent. Decide whether this is intended.
++
++## 26. Implicit shifting with boundary particles diverges: `computeImplicitShift` sums the mDBC ghost nodes into grad C (found 2026-10-09)
++
++Dam break, `shiftScheme='implicit'`, boundary particles: the fastest particle reaches ~900 at 0.3 s; the same case with analytic walls is stable (it follows the analytic δ⁺ run to 1.1 %). The Michel and δ⁺ sums exclude the
++ghost nodes (kind 2) through the operation mode; the implicit solve's grad C sum is the suspect (traced during the analytic-boundary work, mechanism not re-verified when this entry was written). Next step: run the
++particle-wall implicit case with the ghost kind excluded from the grad C sum and compare.
++
++## 27. Particle rigid bodies are not CUDA-graph capturable (found 2026-10-09)
++
++`getTransformationMatrix` builds tensors from device scalars (`torch.tensor([[tensor, ...]])`) and `updateBodyParticlesWCSPH` indexes with boolean masks: both read the host, so a whole-step graph with particle
++rigid bodies (moving walls, obstacles) cannot be captured. Analytic bodies are graphable (static ones; see ANALYTIC_BOUNDARIES_PLAN). Fix: device-side transformation matrix, index_select instead of boolean masks.
++
++## 28. A failed CUDA-graph capture of the implicit shifting poisons the CUDA context (found 2026-10-09)
++
++The implicit shifting solves with host-synchronising Krylov solvers; a capture of the step fails and leaves the context in an error state ("operation not supported on global/shared address space"); the eager fallback then
++crashes. `_rhsIsGraphable` now refuses implicit / dynamic shifting up front (analytic-boundary change set), but any other host-synchronising module reached under capture has the same failure mode. A
++capture-failure path that resets or avoids the poisoned context is open.
++
++## 29. The graph's validation / re-capture executes the step more than once on a cloned state, but rigid-body tensors are shared (found 2026-10-09)
++
++A moving rigid body is advanced extra times by the graph's validation and re-capture runs (the state is cloned, the body tensors are not). Only static bodies are graphed for that reason
++(`schemes/deltaSPH.py::_rhsIsGraphable`). Fix: clone the rigid-body tensors with the state during validation.
++
+ ## Resolved (details in [RESOLVED_PROBLEMS.md](docs/historic_plans/RESOLVED_PROBLEMS.md); numbers kept so references stay valid)
+ 
+ - **§5** englishWedge concave-corner residual -- sign bug in the `fourtakas2019` hydrostatic correction, fixed `68a9a6d`; 2026-09-29 re-validation: keep the default combo.
+diff --git a/PLANS.md b/PLANS.md
+index b314b54..2ad059a 100644
+--- a/PLANS.md
++++ b/PLANS.md
+@@ -46,6 +46,7 @@ Kind: **practical** = a current limitation of something people run today;
+ | [CEILING_STICKING_PLAN.md](CEILING_STICKING_PLAN.md) | **parked 2026-09-30** (kicks fixed + default; sticking open, cosmetic) | practical | **Done:** the ceiling *kicks* were the time integrator (explicit-midpoint growth on the stiff wall-contact mode); `timeCentredContinuity` (ρ as a drift field) + noPen `impulse` fixed them and are defaults (dev c55a209; §3-§7). **Parked (user):** the *sticking* (bilateral wall: english2025 hydrostatic tension + continuity-booked tension). Unilateral wall contact and its gates (§8), and density re-init (§9, experiment) were tried, do not generalise, and their code lives on branch `parked/ceiling-uniwall`. **Finding (§8.4):** a released row is a sub-support fragment, which this model treats as an elastic compressible ball (impact KE ratio 0.68, single-particle P 150-760); that is a model question (cohesion out of scope, isolated-particle mass/volume with the δ-ALE derivation), not a contact switch. | 2026-09-30 | — |
+ | [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) | open | practical | Eleven open items: §1 flyers / free-surface pinning (next: freeze the Antuono mask across RK sub-stages), §2 `'mls'` wall pressure, §3 `'band'` mDBC, §4 LDC density ramp (expected behaviour, nothing queued), §8 contact-line suction (own plan), §9 ACSPH closed-box level growth, §13 `iisph` free-slip column (re-checked 2026-10-01: still blows up at step 433, deterministic), §14 DFSPH viscous free-slip alternation (re-checked 2026-10-01: projected term still flips every step, Morris term ~50x smaller), §15 CRKSPH residual + `C_l`/`C_q`/dt follow-ups, §19 compressible lattice walls give way at a curved wall's stagnation point (new 2026-10-06, COMPRESSIBLE_WALLS_PLAN), Resolved: §5, §6, §7, §10–§12, §16–§18, §20 (2026-10-06: support clamp now wall-only by default), §21 (2026-10-06: Owen table fixed, SUPPORT_SOLVER_PLAN closed) (RESOLVED_PROBLEMS.md). **Your decisions pending:** keep the `fourtakas2019` default (recommendation: keep); Morris viscosity default-on; merge `dev`→`main` | 2026-10-06 | 2026-10-01 |
+ | [COMPRESSIBLE_WALLS_PLAN.md](COMPRESSIBLE_WALLS_PLAN.md) | active | ambitious | Solid walls for Monaghan/CompSPH/CRKSPH. **1D done for all three schemes** (2026-10-06): closedBox, piston (moving wall, push/withdraw), shockReflection, Woodward-Colella between walls (CRKSPH within 1% of its exact mirror reference, energy exact), near-wall deficit cause found (Monaghan -9% -> -1%). Sedov 2D in a walled box vs its mirror twin: Monaghan 4-6% L1. Geometric wall normals (fixed a piston-seam leak). 2D: flat walls hold; forward step (gas frame) and bow shock run; **open: a curved wall's stagnation point gives way under ~10x compression (OPEN_PROBLEMS §19)**. Next: §19's route (mirror ghosts or a per-pair wall kernel), PLANS decision on it. 2026-10-06: the near-wall h clamp is now `supportVolumeClamp='walls'` (applies only with wall rows; shockReflection unchanged, -0.9 %); its root cause is OPEN_PROBLEMS §21 | 2026-10-06 | 2026-10-05 |
++| [ANALYTIC_BOUNDARIES_PLAN.md](ANALYTIC_BOUNDARIES_PLAN.md) | landed on `dev`, opt-in | ambitious | δ⁺-SPH with analytic walls / obstacles (optional package `warpSPHBoundaries`): tank, obstacles, mixed scenes, Michel + implicit shifting, loads and free bodies, whole-step graph; refusals listed in the plan. Open: incompressible / ACSPH consumers, 3D, moving bodies in a graph. Findings §24-29 in OPEN_PROBLEMS | 2026-10-09 | 2026-10-09 |
+ | [PST_ALE_PLAN.md](PST_ALE_PLAN.md) | parked (user) | ambitious | Stage A (Michel PST) done and validated. Stages B′ δ-ALE-SPH → B Riemann/MUSCL → C Parshikov → D Vila on hold until the ACSPH validation is done | 2026-09-06 | 2026-09-28 |
+ | [AV_PLAN.md](AV_PLAN.md) | Phases 0-6 done, **bake-off ran 2026-10-09**; waits only on the user's M8 tag (then 7b addendum rows, stage 2) | ambitious | Phase 1 done 2026-10-07 (tag `milestone/dissipation-abstraction`): pair-velocity argument, `pi` is a package (one function per formulation), Pi audited against the papers (5 dead-branch formulations fixed), CRKSPH `Q` goes through it (`Frontiere2017`); the CRK viscosity switch was a no-op (ignored by `Q`, `alpha0s` never advanced) -- fixed, CRK reference now `results/av_crk3_*`. Phase 2: Rosswog KH failure traced to the sharp-IC contact transient + resolution; nx 256 A(1.5) 0.131 vs C&D 0.137 (gate missed by 4.6 %, smooth IC), default CRK best (0.131-0.145) (`docs/av/kh256_2026-10-07/`). Reference for Monaghan/CompSPH is M0g. **2026-10-07 (user: build first, sweep once): Phases 3-6 built** (reconstruction module + policies, García-Senz Table 1 configs, shear box + Chen & Nixon ratio, Sphenix, Wadsley with h re-derived), unit tests + gradchecks green; OPEN_PROBLEMS §22 (C&D corrected-gradient path, opt-in) found and fixed, §18 (video memory) mitigated. **Sweep done 2026-10-08** (41 pass / 21 fail, classified in AV_PLAN's status board; evidence `docs/av/sweep_2026-10-08/`): Wadsley's uniform-compression claim reproduced, Rosswog + limited reconstruction best on KH (A(1.5) 0.151 > CRK), García-Senz SLR helps but AV-energy cut only 2.1x, Sphenix / Wadsley under-dissipate at Sod shocks (suspect the step-boundary alpha lag). **2026-10-08 decided (user):** committed per phase (6f26f3e..25e7d32); Monaghan default = Rosswog 2020 + limited reconstruction + coupled beta (README states it). Under-dissipation explained (AV_PLAN status board): Sphenix's published decay (ell_V 0.05) is too fast here -- ell_V 5 better on every case; Wadsley's derived prefactor 0.5 trades Sod ringing for better Gresho / Noh; no porting bugs; the new default does not ring. Decided: Sphenix ell_V 5, Wadsley 0.5. Phase 7 bake-off built (`av_sweep_overnight.py --bakeoff` -> `results/av_foundation/report.md`, smoke pre-flight clean); Markers reconciled with the sweep 2026-10-08 and the small follow-ups R2-R8 done the same day (M3, M4, M5, M7 done; failures marked ✗ as findings; Wadsley fires in uniform-pressure shear, recorded, Phase 6 note). Phase 2 accepted as is (M2 done). **next:** only the bake-off: the user runs it (~6 h), Sphenix's ell_V 5 numbers are read off it (R1), then per-row prose + tag `vX.Y-av-foundation` close the plan; PESPH tracked in PESPH_PLAN.md. **2026-10-08 (user): Phase 7b opened, built and validated to its first stage** (Riemann dissipation as an alternative AV: `modules/riemann`, `LimiterType`, first-order Riemann Pi term; on par with the Phase 4 rows on Sod / Noh / Gresho / Sedov, evidence `docs/av/riemann_7b_2026-10-08/`), now on `dev` uncommitted (user: tree must be whole before the bake-off; smoke bit-identical on every bake-off row, full suite green). Next: addendum bake-off rows after the main run; MUSCL scalar states re-scoped (user decides) **Bake-off 2026-10-09** (13 rows x 12 cases + CompSPH + KH 256, 4.5 h, no divergence): verdict and per-row notes `docs/av/bakeoff_2026-10-09/`; default (row 12) stands; Sphenix ell_V 5 R1 read off (Gresho passes, Sod 1D +7 %); gate misses: Sedov / RT energy drift all rows, Noh 2D all but Wadsley; CompSPH Rosswog Sedov blow-up filed as OPEN_PROBLEMS §23. | 2026-10-09 | 2026-10-09 |
+ | [GODUNOV_SPH_PLAN.md](GODUNOV_SPH_PLAN.md) | open | ambitious | Opened 2026-10-08 (user): Riemann `p*` replaces the whole SPH pressure term. Layers: (1) reconstruction of `rho`, `P` to the pair midpoint (the old Phase 7b stage 2), (2) first-order GPH (Cha & Whitworth), (3) Inutsuka 2002 proper. Papers for all equations on disk; four implementation-choice papers to acquire (TO_ACQUIRE). Layer 1 done and committed 2026-10-08 (reconstruction of `rho`, `P`; A/B: null result for the dissipation term). Papers synced and read the same evening; plan rewritten: the simplified Cha & Whitworth form keeps SPH's density-gradient inconsistency (Cha 2010) and is only a baseline (L2); the real scheme is Inutsuka's Gaussian-kernel convolution form (L3); Puri: GSPH dissipation = signal-velocity AV, no approach switch. **L2 (simplified GSPH scheme) built and validated 2026-10-08, uncommitted** (`docs/av/godunov_l2_2026-10-08/`): no AV, contact pressure blip 6x smaller than the AV rows, second order essential, weaker on Gresho / Sedov radius. **L1b limiters, density-jump baseline, KH, time-centred energy (negative) and L3 Inutsuka (`InutsukaGSPH`) built and validated 2026-10-08, uncommitted** (`docs/av/godunov_l3_2026-10-08/`, `godunov_densityJump/`, `godunov_l1b_*`): stable at Gaussian width eta <= 1, Gresho 0.076-0.091 / Sod velocity 0.0030 with no AV, but the Fig. 1 force is not removed at that width and strong-shock energy needs the first-order shock switch. Defaults decided (user, 2026-10-08): shock switch on for `InutsukaGSPH`, `VanLeerHarmonic` for `GSPHConfig`. Next: blob / Wengen KH, solver ablation, bake-off rows | 2026-10-08 | 2026-10-08 |
+@@ -170,6 +171,7 @@ isolation of the contact-line failure. Feeds the contact-line plan.
+ 
+ ## Decisions log
+ 
++- 2026-10-09 — ANALYTIC_BOUNDARIES_PLAN (user): analytic boundaries land as one guarded, opt-in series on `dev`; the integral machinery stays in its own repo `warpSPHBoundaries` as an optional extra (the repo is renamed and made public before the push); the upstream findings found on the way go to OPEN_PROBLEMS as entries, not as fixes in the series.
+ - 2026-10-08 — GODUNOV_SPH_PLAN (user): build the old Phase 7b stage 2 (reconstruction of rho, P to the pair midpoint) as the lead-up to Godunov SPH; 7b committed as one commit (e094a75).
+ - 2026-10-08 — GODUNOV_SPH_PLAN (user): `InutsukaGSPH` defaults to the first-order shock switch (C = 3); `GSPHConfig` state limiter default `VanLeerHarmonic` instead of `PairRatio`; commit the Godunov work as one commit.
+ - 2026-10-08 — AV_PLAN (user): **Phase 7b** — Riemann dissipation as an alternative AV: new `modules/riemann` (warp solvers, like `modules/reconstruction`), then a `LimiterType` enum in the reconstruction limiters (CRK + Monaghan paths), then a Riemann `ViscosityTerms` entry, reported as an addendum to the bake-off. The bake-off itself runs tonight unchanged. 7b was first built on branch `av-7b` in a worktree (the bake-off's subprocesses run against `src/`), then moved onto `dev` at the user's request ("the bake-off won't run on a half-working tree") after the full suite and the bake-off smoke pre-flight (bit-identical on every row) passed; evidence `docs/av/riemann_7b_2026-10-08/`.
+diff --git a/README.md b/README.md
+index e76fa06..50aa486 100644
+--- a/README.md
++++ b/README.md
+@@ -380,6 +380,9 @@ notebooks stay for exploration; the scripts are what you run unattended.
+ | `dambreak` | [12-dambreak.py](examples/weaklyCompressible/12-dambreak.py) | dam break with optional obstacle |
+ | `openFlow` | [13-open-flow.py](examples/weaklyCompressible/13-open-flow.py) | open channel flow past an obstacle |
+ 
++**Analytic walls (optional).** With the optional package `warpSPHBoundaries` installed (`pip install -e "warpSPH/[boundaries]"`), `dambreak --wallRepresentation analytic` replaces the tank's wall particles by exact
++kernel integrals over the solid (obstacles, mixed scenes, Michel / implicit shifting, free bodies and the whole-step graph included); see [ANALYTIC_BOUNDARIES_PLAN.md](ANALYTIC_BOUNDARIES_PLAN.md).
++
+ ### Incompressible (DFSPH)
+ 
+ | case | script | notes |
+diff --git a/pyproject.toml b/pyproject.toml
+index 5364603..1312983 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -48,6 +48,9 @@ notebooks = [
+     "ipympl",
+     "ipywidgets",
+ ]
++boundaries = [
++    "warpSPHBoundaries>=0.1",
++]
+ dev = [
+     "pytest",
+     "build",
+diff --git a/scripts/check_imports.py b/scripts/check_imports.py
+index 7fa76b4..0c5c1c1 100755
+--- a/scripts/check_imports.py
++++ b/scripts/check_imports.py
+@@ -43,6 +43,8 @@ SRC = REPO / "src"
+ # the warpSPHCore_config shim the notebooks import. Anything else is
+ # third-party and not this script's problem.
+ FIRST_PARTY_PREFIX = "warpSPH"
++# optional first-party packages: their imports are verified only when the package is installed (`pip install -e "warpSPH/[boundaries]"`)
++OPTIONAL_PACKAGES = {"warpSPHBoundaries"}
+ 
+ SKIP_DIRS = {"__pycache__", ".git", ".ipynb_checkpoints", "build", "dist", ".venv", "venv"}
+ 
+@@ -188,6 +190,7 @@ def static_pass(verbose: bool) -> list[Failure]:
+         return module_cache[module]
+ 
+     checked = 0
++    skippedOptional = 0
+     for path in files:
+         rel = path.relative_to(REPO)
+         source = notebook_source(path) if path.suffix == ".ipynb" else path.read_text(
+@@ -213,6 +216,9 @@ def static_pass(verbose: bool) -> list[Failure]:
+                 spec = None
+                 if verbose:
+                     print(f"            find_spec raised: {exc}")
++            if spec is None and module.split(".")[0] in OPTIONAL_PACKAGES:
++                skippedOptional += 1
++                continue
+             if spec is None:
+                 failures.append(
+                     Failure(f"{rel}:{lineno}", f"no module named {module!r}", "module not found")
+@@ -236,6 +242,8 @@ def static_pass(verbose: bool) -> list[Failure]:
+                     Failure(f"{rel}:{lineno}", f"cannot import {symbol!r} from {module}", "symbol missing")
+                 )
+     print(f"[static]  checked {checked} first-party imports")
++    if skippedOptional:
++        print(f"[static]  skipped {skippedOptional} imports of optional packages that are not installed ({', '.join(sorted(OPTIONAL_PACKAGES))})")
+     return failures
+ 
+ 
+-- 
+2.43.0
+
