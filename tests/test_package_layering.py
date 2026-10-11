@@ -1,4 +1,4 @@
-"""The package layering of the boundary library (the future `warpSPHBoundaries`): `edge` <- `scene` <- `sim`.  `edge` and `scene` may import `warpSPHCore` (particle state, operation vocabulary, precision) but never
+"""The package layering of the boundary library (`warpSPHBoundaries`): `edge` <- `scene`.  `edge` and `scene` may import `warpSPHCore` (particle state, operation vocabulary, precision) but never
 `warpSPH` and never a higher layer, so that the scene layer installs and runs without the scheme library; the public scene surface exists and the analytic provider satisfies the `BoundaryProvider` protocol.
 """
 import ast
@@ -29,7 +29,7 @@ def imports(path):
     return out
 
 
-@pytest.mark.parametrize("layer,forbidden", [("edge", ("warpSPHBoundaries.scene", "warpSPHBoundaries.sim", "warpSPH.", "warpSPH")), ("scene", ("warpSPHBoundaries.sim", "warpSPH.", "warpSPH"))])
+@pytest.mark.parametrize("layer,forbidden", [("edge", ("warpSPHBoundaries.scene", "warpSPH.", "warpSPH")), ("scene", ("warpSPH.", "warpSPH"))])
 def test_no_upward_imports(layer, forbidden):
     bad = []
     for f in sorted((SRC / layer).glob("*.py")):

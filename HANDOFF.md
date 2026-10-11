@@ -1,5 +1,7 @@
 # Handoff: exact SPH boundary integrals (edge reductions → scene layer → δ⁺-SPH on analytic walls → port to warpSPH)
 
+> **2026-10-11:** Part A (the solver plan, the regression baselines, the phase list) is historical: `DeltaSPH2D` / `DFSPH2D` (`sim/`) were retired into warpSPH; their code, tests and the baselines it names are at the git tag `oracle-solvers-2026-10-11`. Part B (the edge-reduction theory) is current.
+
 **Last updated 2026-10-03.** Two parts:
 
 * **Part A (this top part): where the project stands and the work plan from here** — written to start the next phase cold: remove the quadrature paths, optimise the scene path, refactor towards warpSPH's operation style, adopt the warpSPH integrator style, port across repos.

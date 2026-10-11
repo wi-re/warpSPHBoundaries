@@ -772,7 +772,7 @@ class Body:
     angularAcceleration: float = 0.0
     periodic: Optional[Periodic] = None          # set by `Scene.setPeriodic`: this body sees the particles at their nearest periodic image (below)
     periodicSupport: float = 0.0                 # the largest kernel support of the particles (the reach of the images)
-    bc: str = "noSlip"                           # boundary-condition policy of the wall for the solver (sim/bcclosures.py): 'noSlip' | 'freeSlip' | 'zeros' (wall velocity pinned to 0) | 'constant' (pinned to `bcValue`)
+    bc: str = "noSlip"                           # boundary-condition policy of the wall for the solver (the warpSPH wall closures): 'noSlip' | 'freeSlip' | 'zeros' (wall velocity pinned to 0) | 'constant' (pinned to `bcValue`)
     bcValue: tuple = (0.0, 0.0)                  # the pinned wall velocity of the 'constant' policy
 
     def __post_init__(self):

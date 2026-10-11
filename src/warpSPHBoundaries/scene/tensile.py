@@ -1,6 +1,6 @@
 """Exact wall part of the delta+ shifting tensile control (Q2).
 
-The wall part of the shifting tensile term (Sun 2017 Eq. 7, in `DeltaSPH2D.shift`) is
+The wall part of the shifting tensile term (Sun 2017 Eq. 7, in the retired `DeltaSPH2D.shift`; now warpSPH `modules/analyticBoundary/shifting.py`) is
 
     T_i = int_solid W^4 grad_x W dA'
 

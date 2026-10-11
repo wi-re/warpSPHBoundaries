@@ -1,3 +1,5 @@
+> **2026-10-11:** the work packages describe the development of the retired `sim/` solvers (WORK-001 ... 008). The probe scripts under `refs/` that imported the solver layer were removed; they and the solver code are at the git tag `oracle-solvers-2026-10-11`.
+
 # docs/work — local-model work packages
 
 | file | purpose |

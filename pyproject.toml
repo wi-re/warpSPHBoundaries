@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "warpSPHBoundaries"
 version = "0.1.0"
-description = "Exact SPH boundary integrals via divergence-theorem edge reductions (2D), scene layer and delta+-SPH / DFSPH solvers on analytic boundaries"
+description = "Exact SPH boundary integrals via divergence-theorem edge reductions (2D) and a scene layer of analytic boundaries (consumed by warpSPH)"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -23,8 +23,6 @@ classifiers = [
 dependencies = ["numpy", "scipy", "mpmath", "torch", "warp-lang", "warpSPHCore>=0.6.0"]
 
 [project.optional-dependencies]
-# the solvers (`sim/`: delta+-SPH and DFSPH on analytic boundaries) run on warpSPH; warpSPH in turn uses this package for `--wallRepresentation analytic` (its `boundaries` extra)
-solvers = ["warpSPH>=0.6.0", "warpSPHCore>=0.6.0"]
 scripts = ["matplotlib"]
 test = ["pytest"]
 

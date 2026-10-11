@@ -102,21 +102,26 @@ def test_pruned_adjacency_guard_and_equality(device):
     use of a pruned adjacency: a Density, a Covariance, a Gradient of a perQuery field with a1, a Gradient with
     returnReaction, and a Gradient through an adjacency pruned to a set that does not contain {3,4} (channels=(0,))."""
     from warpSPHCore import GradientScheme, OperationDirection, OperationProperties, ParticleState, WarpOperation
-    from warpSPHBoundaries.sim.cases import hydrostatic_tank
+    from warpSPHBoundaries.scene.domains import domain_scene
     from warpSPHBoundaries.scene.scene import BodyField, sceneOperation
     dev = str(device)
-    sim, _ = hydrostatic_tank(dp=0.04, domain="surface", device=device)
-    ps = ParticleState(positions=sim.x, supports=sim.Hvec, masses=torch.full_like(sim.rho, sim.m),
-                       kinds=sim.kinds, densities=sim.rho)
+    # a still-water lattice (dp = 0.04, support 4 dp) in a 2.4 x 1.2 tank whose walls are the surface loop
+    dp, L, Ht, Hw = 0.04, 2.4, 1.2, 0.5
+    nx, ny = int(round(L / dp)), int(round(Hw / dp))
+    X, Y = np.meshgrid(-L / 2 + dp * (np.arange(nx) + 0.5), -Ht / 2 + dp * (np.arange(ny) + 0.5), indexing="ij")
+    x = torch.as_tensor(np.stack([X.ravel(), Y.ravel()], 1), dtype=TD, device=dev)
+    scene = domain_scene("surface", (-L / 2, -Ht / 2), (L / 2, Ht / 2), 4 * dp, device)
+    ps = ParticleState(positions=x, supports=torch.full((len(x),), 4 * dp, dtype=TD, device=dev), masses=torch.full((len(x),), dp * dp, dtype=TD, device=dev),
+                       kinds=torch.zeros(len(x), dtype=torch.int32, device=dev), densities=torch.ones(len(x), dtype=TD, device=dev))
     pr = OperationProperties(kernel="cone", operation=WarpOperation.Gradient, gradientMode=GradientScheme.Naive,
                              operationMode=OperationDirection.BoundaryToFluid)
     one = BodyField(torch.tensor(1.0, dtype=TD, device=dev))
-    adj = sim.scene.pairMoments(ps, pr, channels=(3, 4))
-    full = sim.scene.pairMoments(ps, pr)
+    adj = scene.pairMoments(ps, pr, channels=(3, 4))
+    full = scene.pairMoments(ps, pr)
     assert adj.channels == frozenset({3, 4}), adj.channels
     assert full.channels is None, full.channels
-    got = sceneOperation(ps, pr, sim.scene, adj, None, [one], perBody=True)
-    ref = sceneOperation(ps, pr, sim.scene, full, None, [one], perBody=True)
+    got = sceneOperation(ps, pr, scene, adj, None, [one], perBody=True)
+    ref = sceneOperation(ps, pr, scene, full, None, [one], perBody=True)
     assert torch.equal(got, ref)
     print(f"(c) pruned adjacency channels = {sorted(adj.channels)} (full is None); Naive Gradient of a constant torch.equal")
     density = OperationProperties(kernel="cone", operation=WarpOperation.Density, gradientMode=GradientScheme.Naive,
@@ -124,19 +129,19 @@ def test_pruned_adjacency_guard_and_equality(device):
     covariance = OperationProperties(kernel="cone", operation=WarpOperation.Covariance, gradientMode=GradientScheme.Naive,
                                      operationMode=OperationDirection.BoundaryToFluid)
     with pytest.raises(ValueError, match="built with the channels"):
-        sceneOperation(ps, density, sim.scene, adj, None, [BodyField(rho=1.0)], perBody=True)
+        sceneOperation(ps, density, scene, adj, None, [BodyField(rho=1.0)], perBody=True)
     with pytest.raises(ValueError, match="built with the channels"):
-        sceneOperation(ps, covariance, sim.scene, adj, None, [one], perBody=True)
+        sceneOperation(ps, covariance, scene, adj, None, [one], perBody=True)
     nq = len(ps.positions)
     pq = BodyField(torch.zeros(nq, dtype=TD, device=dev), torch.zeros(nq, 2, dtype=TD, device=dev), rho=1.0, perQuery=True)
     with pytest.raises(ValueError, match="built with the channels"):
-        sceneOperation(ps, pr, sim.scene, adj, None, [pq], perBody=True)
+        sceneOperation(ps, pr, scene, adj, None, [pq], perBody=True)
     with pytest.raises(ValueError, match="built with the channels"):
-        sceneOperation(ps, pr, sim.scene, adj, None, [one], returnReaction=True, perBody=True)
-    adj0 = sim.scene.pairMoments(ps, pr, channels=(0,))
+        sceneOperation(ps, pr, scene, adj, None, [one], returnReaction=True, perBody=True)
+    adj0 = scene.pairMoments(ps, pr, channels=(0,))
     assert adj0.channels == frozenset({0})
     with pytest.raises(ValueError, match="built with the channels"):
-        sceneOperation(ps, pr, sim.scene, adj0, None, [one], perBody=True)
+        sceneOperation(ps, pr, scene, adj0, None, [one], perBody=True)
     print("(c) guard: Density, Covariance, perQuery+a1 Gradient, returnReaction Gradient, channels=(0,) all raise ValueError")
 
 

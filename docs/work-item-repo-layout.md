@@ -1,3 +1,5 @@
+> **Historical (2026-10-11):** this document describes the work on the `sim/` solvers (`DeltaSPH2D`, `DFSPH2D`, `graphstep`, ...), retired into warpSPH; paths under `src/warpSPHBoundaries/sim/` and `tests/sim/` exist only at the git tag `oracle-solvers-2026-10-11`. The scene / edge parts remain current.
+
 # Intermediate work item: repository layout and cleanup pass (before `plan-wall-evaluation.md` step 1)
 
 Status: **done 2026-10-05** on branch `repo-layout` (steps 0–5 below; the gate numbers and the deviations are in §9). Original note follows, it describes the layout as it was before. Do this **before** the steps of `docs/plan-wall-evaluation.md`: step 2 renames `SceneAdjacency` / `MomentPairs` / `buildAdjacency` everywhere, and doing the file moves first keeps the moves and the renames in separate commits.

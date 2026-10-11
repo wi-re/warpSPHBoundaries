@@ -32,11 +32,9 @@ src/warpSPHBoundaries/curvbound/              PLAN track: kernel table, closed-f
 src/warpSPHBoundaries/edge/         HANDOFF track: exact 2D edge-reduction integrals (mpmath -> numpy -> torch -> Warp), FEM weights, tiers 3 / 4
 src/warpSPHBoundaries/scene/        bodies and representations, boundary operations, wall operators of the delta+-SPH solver, the boundary provider (`AnalyticBoundary`, `scene/provider.py`)
 src/warpSPHBoundaries/data/tables/  pre-tabulated tier-3 kernel tables (package data)
-src/warpSPHBoundaries/sim/          DFSPH2D and DeltaSPH2D solvers, cases, validation runners
-scripts/                    command-line runners (regression harness, profiler, validation, videos), scripts/studies, scripts/bench
-tests/                      pytest suite: tests/{edge,scene,sim,curvbound} (940 tests)
+scripts/                    derivation checks, studies of the integrals (scripts/studies), benchmarks (scripts/bench)
+tests/                      pytest suite: tests/{edge,scene,curvbound}
 notebooks/demo.ipynb        executed demo: geometry, curves, validation
-notebooks/examples/         nine example flows (Taylor-Green ... flow past a cylinder) on the delta+ and the DFSPH solver, against reference solutions
 docs/derivation.md          full mathematical write-up
 PLAN.md                     project status & roadmap
 src/warpSPHBoundaries/data/symbolic/  Maple exports (committed, shipped with the package; consumed by warpSPHBoundaries.curvbound)
@@ -45,9 +43,12 @@ results/figures/            notebook figures (generated, git-ignored)
 
 ## Package layering
 
-`edge` <- `scene` <- `sim`: the edge machinery and the scene layer (`pip install .`, needs `warpSPHCore` only) are the boundary library `warpSPHBoundaries` (renamed from `edgebound` on 2026-10-06); `sim` (the reference
-solvers) additionally needs `warpSPH`.  A scheme consumes the analytic bodies through `warpSPHBoundaries.scene.AnalyticBoundary` (the `BoundaryProvider` protocol: integrals at the fluid particles, signed distance,
-body kinematics); see docs/audit-warpsph-boundary-hooks.md.  The layering is enforced by `tests/test_package_layering.py`.
+`edge` <- `scene`: the edge machinery and the scene layer (`pip install .`, needs `warpSPHCore` only) are the boundary library `warpSPHBoundaries` (renamed from `edgebound` on 2026-10-06).  A scheme consumes the analytic bodies
+through `warpSPHBoundaries.scene.AnalyticBoundary` (the `BoundaryProvider` protocol: integrals at the fluid particles, signed distance, body kinematics); warpSPH (`warpSPH.boundary`, `warpSPH.modules.analyticBoundary`) is the
+consumer and hosts every solver.  The layering is enforced by `tests/test_package_layering.py`.
+
+**Retired solvers.** The reference solvers `DeltaSPH2D` / `DFSPH2D` (the former `sim/` sub-package), their cases, validation runners, tests and example notebooks were removed on 2026-10-11 once warpSPH hosted the
+same schemes on analytic walls (ANALYTIC_BOUNDARIES_PLAN in the warpSPH repository, stage 2 / 3).  They are kept at the git tag `oracle-solvers-2026-10-11`; warpSPH's `scripts/probe_*Oracle*.py` need them.
 
 ## Quick start
 
@@ -55,7 +56,7 @@ body kinematics); see docs/audit-warpsph-boundary-hooks.md.  The layering is enf
 # 1. (re)generate the symbolic results — needs Maple 2026
 maple/run_all.sh                       # MAPLE=/path/to/maple to override
 
-# 2. install (editable) and run the validation suite; the solvers need warpSPH / warpSPHCore in the same env
+# 2. install (editable) and run the validation suite; 
 pip install -e . --no-deps          # or: pip install -e .[test]
 python -m pytest tests/ -q -n 4     # ~3 min with pytest-xdist; GPU tests use cuda:0
 

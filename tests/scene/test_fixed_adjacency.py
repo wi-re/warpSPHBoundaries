@@ -76,20 +76,3 @@ def test_build_does_not_synchronise(scene):
     finally:
         torch.cuda.set_sync_debug_mode("default")
     assert adj.numQueries == len(pos)
-
-
-@pytest.mark.parametrize("device", DEVICES)
-@pytest.mark.parametrize("case", ["tank", "dambreak"])
-def test_solver_state_does_not_depend_on_the_adjacency_kind(device, case):
-    from warpSPHBoundaries.sim import cases
-    res = {}
-    for fixed in (False, True):
-        if case == "tank":
-            sim = cases.hydrostatic_tank(dp=0.04, domain="surface", device=device, cfg=cases.DeltaSPHConfig(noPen="impulse", shifting=True, fixedAdjacency=fixed))[0]
-        else:
-            sim = cases.marrone_dambreak(nx=30, shifting=True, noPen="impulse", device=device, fixedAdjacency=fixed)[0]
-        for _ in range(60):
-            sim.step()
-        res[fixed] = (sim.x.clone(), sim.v.clone(), sim.rho.clone())
-    for a, b in zip(res[False], res[True]):
-        assert float((a - b).abs().max()) <= 1e-12, float((a - b).abs().max())      # the fluid pair sums (index_add) are not deterministic: same-code run-to-run spread ~1e-15

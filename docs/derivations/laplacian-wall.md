@@ -3,8 +3,8 @@
 **Status:** [V] (identity, conversion, limits, guards, solver switch — the tests below; the physics gates in `docs/deltasph-validation.md`, WORK-005 section)
 **Tier(s):** n/a (solver wall term, not an obstacle tier) · **Dimension:** 2D
 **Depends on:** the kernel table (`curvbound.kernels`), the scene operations of `src/warpSPHBoundaries/scene/scene.py` (Density, Covariance of a registered ordinary kernel)
-**Implemented in:** `src/warpSPHBoundaries/scene/viscosity.py::lap_lambda_scene` / `::lap_factor`; `src/warpSPHBoundaries/sim/deltasph2d.py` (`cfg.viscosityExact`, the wall-viscosity block of `rhs`)
-**Verified by:** `tests/scene/test_viscosity_scene.py` (T5.1), `tests/sim/test_deltasph_viscosity.py` (T5.2)
+**Implemented in:** `src/warpSPHBoundaries/scene/viscosity.py::lap_lambda_scene` / `::lap_factor`; `DeltaSPH2D` (`cfg.viscosityExact`, retired 2026-10-11, git tag oracle-solvers-2026-10-11; the wall term now lives in warpSPH `modules/analyticBoundary/wallTerms.py`) (`cfg.viscosityExact`, the wall-viscosity block of `rhs`)
+**Verified by:** `tests/scene/test_viscosity_scene.py` (T5.1), `tests/sim/test_deltasph_viscosity.py` (T5.2, retired with `sim/`; at the tag)
 
 Exact wall part of the naive-Laplacian artificial viscosity (Q1, the fourth and last wall quadrature of the program; the first three — λ, G, the cover — are in `deltasph2d.py`, and this is the fourth).  Default off (`cfg.viscosityExact`).
 

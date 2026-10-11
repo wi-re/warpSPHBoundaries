@@ -1,5 +1,7 @@
 # Documentation index
 
+> **2026-10-11:** the solver docs (`deltasph-*`, `dfsph-validation`, `plan-upstreaming`, `plan-next-steps`, `audit-warpsph-boundary-hooks`) were removed with the retired `sim/` solvers; they are at the git tag `oracle-solvers-2026-10-11` and the validation records are archived in warpSPH `docs/analytic_boundaries/oracle_docs/`. Docs that mention `sim/`, `DeltaSPH2D` or `DFSPH2D` describe the retired solvers.
+
 Status tags: **[V]** verified numerically · **[D]** derived, not verified · **[P]** plan.
 
 | file | content | status |
@@ -8,12 +10,6 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `derivation.md` | exact closed forms: 2D/3D planar, 3D sphere (the `PLAN.md` track; Maple + mpmath validated) | [V] |
 | `boundary-operations.md` | warpSPH-style boundary operations (Interpolate/Gradient/Divergence/Curl/Density), Warp P1 pair engine, kernels, throughput, tier 3/4 implicit bodies (disk, half-plane) with hard tier switches | [V] tiers 1–4 |
 | `scene-architecture.md` | scene layer: bodies with pose + OBB, surface / volume / implicit / SDF representations, per-type adjacency and operations, reactions, DFSPH mapping | [V] 2D |
-| `dfsph-validation.md` | omniSPH-style DFSPH on the scene layer, validation against the compiled omniSPH (tank, dam break), domain body as tier 1 / 2 / 3, findings | [V] 2D |
-| `deltasph-porting-notes.md` | living notes for porting the analytic boundaries into warpSPH: where each δ⁺ term lives there, what replaces it, what changed | notes |
-| `deltasph-validation.md` | δ⁺-SPH on analytic walls vs warpSPH + mDBC: flat tank (10× better profile), English wedge (passes, rings), Marrone 3.1 dam break (matches P1 / KE), SPHERIC sloshing (flow and impact times match warpSPH), pair-list bug | [V] 2D |
-| `deltasph-resume.md` | resume note: state, how to reproduce, artefacts, ranked open items, openMaelstrom investigation | notes |
-| `deltasph-plan.md` | plan: δ⁺-SPH (Marrone 3.1) on the scene boundary layer — term inventory, new scene operations, phases, open decisions | plan |
-| `deltasph-profile.md` | measured profile of one Δ⁺-SPH step (WORK-001 T0.2): per-call inclusive/self times, buildAdjacency (4/step) and Scene.inside (24×96 polar) cost, fluid-pair share, torch.profiler top entries | [V] 2D |
 | `q2-conditioning.md` | Q2 (WORK-002 T2.4): the shifting tensile term T = (1/5)∇∫W⁵ as the W⁵ g(0,0) gradient channel — Warp plan vs np2d (plain/stable) vs mpmath reference, classification at k = 5, flat-floor sign, stable-route vertex finding | [V] |
 | `work/` | local-model work packages: `KICKOFF.md` (protocol), `WORK-NNN.md`, `REVIEW.md`, logs and reports | process |
 | `tier-selection-2d.md` | which tier for which obstacle size (2D disk), jumps at switches | [V] |
@@ -36,7 +32,6 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `plan-wall-evaluation.md` | **the working plan for the speed work**: adjacency / precompute / evaluation terminology, steps 0–6 with their results (idle-GPU measurements, float32 kernels, term-parallel and fused wall evaluation, `BoxRep`), the "Resume here" block, open decisions | plan, steps 0–3 done |
 | `box-domain-primitive.md` | direct treatment of axis-aligned boxes (tanks, channels, baffles): all nine moment channels from four corner lookups of two 2D tables per kernel, no edge loop / pair list; accuracy table, 3D, scene-path and fused-evaluation fit | [V] 2D table accuracy, [P] BoxRep |
 | `plan-exact-wall-laplacian.md` | exact wall Laplacian from a reconstructed ghost field: closed-form moments of ∇²W (Green's identity), free-slip mirror hierarchy [V], no-slip as BC-constrained polynomial continuation [V noise-free], experiments E1–E7 (E4 pairwise-operator moments and E5 corner / circular wall done [V]; noise vs order, constrained MLS still to run) | [V] identity, E4, E5, [P] experiments |
-| `plan-upstreaming.md` | getting `patches/warpsph/` into warpSPH `dev`: drift check (clean rebase), upstream's process gates, the packaging decision (separate `warpSPHBoundaries` repo + optional extra recommended; `sim.*` imports to remove), the U1–U11 commit restructure, work order, open questions | plan, step 0 (decision pending) |
 
 Two tracks meet here: `PLAN.md` (curvature-aware exact/series results; tier 3 and
 the oracles for the others) and `HANDOFF.md` (Part A: state and the work plan towards the warpSPH port; Part B: edge reductions, tiers 1/2/4, FEM
