@@ -8,7 +8,9 @@ int_T A W = sum A_i w_i, int_T A grad_x W = sum A_i G_i, G ~ 1/h).
 Work is done in units of h (rel = (v - x)/h): B' = B h^|alpha| and m' = m / h^|alpha| so the products are unchanged and
 no powers of h appear.  The expansion coefficients B are generated from the EXACT barycentric basis (`fem.basis`) by
 batched polynomial composition of lambda_j(x + y) = lambda_j(x) + grad(lambda_j).y, with lambda_j(x) and grad(lambda_j)
-computed from the x-relative vertex coordinates (well conditioned for tiny elements).
+computed from the x-relative vertex coordinates. This expansion can still lose
+accuracy on tiny/sliver elements; weights_hybrid dispatches those to conditioned
+area quadrature, while weights retains the analytic edge expression.
 """
 import numpy as np
 
@@ -202,24 +204,40 @@ def far_mask(verts, x, ratio=1.0, kernel=None, tiny=0.05, h=1.0, allow_straddle=
     return far & (allow_straddle | ~straddle | (e <= tiny))
 
 
-def weights_hybrid(verts, x, kernel, p, h=1, dtype=np.float64, stable=None, grad=False, far_ratio=1.0, nodes=8):
-    """Edge reduction near x (exact), Gauss on the element where it is far."""
-    verts_ = np.asarray(verts, dtype=dtype)
-    x_ = np.asarray(x, dtype=dtype)
+def weights_hybrid(verts, x, kernel, p, h=1, dtype=np.float64, stable=None, grad=False, far_ratio=1.0, nodes=8, adaptive=True):
+    """Exact edge identity, far-field Gauss, conditioned adaptive area fallback.
+
+    Small triangles (longest edge <= .02 h) and slivers (2 area / longest
+    edge squared <= 1e-3) use the CPU adaptive rule. This is a conservative
+    conditioning trigger, not a certified error bound. ``adaptive=False``
+    retains the original edge/far-field hybrid for reproducible comparisons.
+    """
+    dt = np.dtype(dtype).type
+    verts_ = np.asarray(verts, dtype=dt)
+    x_ = np.asarray(x, dtype=dt)
     if verts_.ndim == 2:
         verts_, x_ = verts_[None], x_[None]
-    # float32: Gauss on rim/knot-straddling far elements (error ~1e-8) is below float32 epsilon, while the edge route amplifies float32 noise ~ (d/L)^(p+1)
-    far = far_mask(verts_, x_, far_ratio, kernel, h=h, allow_straddle=np.dtype(dtype) == np.dtype(np.float32))
-    near = weights(verts_, x_, kernel, p, h, dtype, stable, grad)
-    if not far.any():
-        return near
-    hfar = np.asarray(h)[far] if np.ndim(h) else h
-    farv = gauss_weights(verts_[far], x_[far], kernel, p, hfar, nodes, dtype, grad)
-    if grad:
-        w, G = near
-        w = w.copy(); G = G.copy()
-        w[far], G[far] = farv
-        return w, G
-    out = near.copy()
-    out[far] = farv
-    return out
+    from .triangle import difficult_mask, integrate
+    difficult = difficult_mask(verts_, x_, h) if adaptive else np.zeros(len(verts_), dtype=bool)
+    far = far_mask(verts_, x_, far_ratio, kernel, h=h, allow_straddle=dt == np.float32) & ~difficult
+    near = ~(far | difficult)
+    w = np.empty((len(verts_), len(fem.basis(p)[1])), dtype=dt)
+    G = np.empty(w.shape+(2,), dtype=dt) if grad else None
+    for mask, fn, kwargs in ((near, weights, dict(stable=stable)), (far, gauss_weights, dict(nodes=nodes))):
+        if not mask.any():
+            continue
+        hh = np.asarray(h)[mask] if np.ndim(h) else h
+        value = fn(verts_[mask], x_[mask], kernel, p, h=hh, dtype=dt, grad=grad, **kwargs)
+        if grad:
+            w[mask], G[mask] = value
+        else:
+            w[mask] = value
+    for i in np.flatnonzero(difficult):
+        hh = np.asarray(h)[i] if np.ndim(h) else h
+        result = integrate(verts_[i], x_[i], kernel, p=p, h=hh)
+        if not result.converged:
+            raise ArithmeticError('Adaptive triangle quadrature did not converge')
+        w[i] = result.weights
+        if grad:
+            G[i] = result.gradients
+    return (w, G) if grad else w

@@ -38,7 +38,7 @@ notebooks/demo.ipynb        executed demo: geometry, curves, validation
 docs/derivation.md          full mathematical write-up
 PLAN.md                     project status & roadmap
 src/warpSPHBoundaries/data/symbolic/  Maple exports (committed, shipped with the package; consumed by warpSPHBoundaries.curvbound)
-results/figures/            notebook figures (generated, git-ignored)
+../warpSPHDevelopment/curvatureBoundaries/   development progress and generated evidence (outside this repo)
 ```
 
 ## Package layering
@@ -51,6 +51,11 @@ consumer and hosts every solver.  The layering is enforced by `tests/test_packag
 same schemes on analytic walls (ANALYTIC_BOUNDARIES_PLAN in the warpSPH repository, stage 2 / 3).  They are kept at the git tag `oracle-solvers-2026-10-11`; warpSPH's `scripts/probe_*Oracle*.py` need them.
 
 ## Quick start
+
+Development progress and generated evidence live in the sibling
+`warpSPHDevelopment/curvatureBoundaries/` directory. See the
+[validation and reproduction guide](docs/validation.md) for output configuration,
+documented limitations and the external acceptance matrix.
 
 ```bash
 # 1. (re)generate the symbolic results — needs Maple 2026
@@ -78,16 +83,44 @@ sphere("w4", Fraction(4, 10), Fraction(1, 5))   # solid ball R=0.4, d=0.2
 
 ## Validation
 
-Every closed form is validated three ways (details in `docs/derivation.md`
-§5): exact symbolic identities in Maple, 50-digit Maple quadrature, and
-independent 40-digit mpmath oracles in `src/warpSPHBoundaries/curvbound/oracle.py`
-(including a true 2-D Cartesian quadrature and the h-scaling identity).
-Worst observed error: ~1e-39.
+The [validation guide](docs/validation.md) describes the accuracy contracts,
+independent references and commands to regenerate the evidence. Study commands
+write reports, figures and raw arrays outside the checkout by default. Set
+`WARPSPH_DEVELOPMENT_ROOT` or an explicit `--output` to select another location.
+The development archive is backed up manually, separately from the source repo.
+
+```bash
+python scripts/studies/boundary_atlas.py
+python scripts/studies/curvature_corrections.py --device cpu
+python -m warpSPHBoundaries.validation.robustness --device cuda:0
+```
+
+Every tier uses the same twelve-moment order and distinguishes numerical,
+SDF reconstruction and geometry/model errors. Missing channels remain explicit;
+quadrature refinements are empirical estimates rather than certified bounds.
+See the [surface moment contract](docs/surface-moments.md),
+[SDF domain guard](docs/sdf-guard.md),
+[distance-only reference](docs/sdf-distance-only.md), and
+[accepted smooth-SDF limitations](docs/sdf-accepted-accuracy.md).
+
+The 2D surface implementation exposes all twelve moments in Scene and
+FusedWall, with conditioned integration for small/sliver triangles. The SDF
+guard validates differential-field conditioning; it does not certify an integral
+tolerance. Scene SDFs expose all twelve moments through a shared order-two
+curvature/variation expansion, including tangential gradient terms. Requested
+moment families determine the work performed; the default guarded SDF
+backend fuses sampling, support checks and moment evaluation into one float64
+Warp kernel. A Torch backend remains available for diagnostics. FusedWall
+continues to lower SDF representations to polygons. Higher geometric orders
+and sampled differentials still limit the local model's accuracy. Shipped
+disk/box tables also have restricted accuracy regimes.
+These limitations and their reproducible checks are documented in the guide.
 
 ## Status
 
-3-D planar (cubic + Wendland) and 3-D spherical (Wendland) were completed in
-the original plan; the 2-D derivations, the promotion of the toy harnesses
-to this repository layout, and the demo notebook are done (see `PLAN.md`
-§18–§18c). Next: cylinder boundary, 2-D circle boundary, inside-solid
-(`d < 0`) cases, gradient terms.
+The 2D implementation includes polygon moments, triangular FEM weights,
+disk/box tables, sampled SDF models with polygon fallbacks, and scene operations.
+The adversarial audit documents unresolved numerical and model-validity failures;
+uniform few-eps accuracy is not established. Current priorities are remaining representation/moment coverage,
+higher-order model errors, and per-moment accuracy/fallback decisions. 3D planar and spherical formulas exist; general 3D mesh
+and tetrahedral boundary tiers and general curved-tube solutions remain deferred.

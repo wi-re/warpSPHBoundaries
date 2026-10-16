@@ -22,6 +22,9 @@ from . import warpbc as W
 from .precision import sync as _sync
 from .precision import IS_F32, IS_F64, np_real, real, torch_real, vec2_t
 from .warp2d import _dangle, _edge_integral, _isqrt, _sdiff
+from .predicates import cross2_f64, cross2_f32
+
+_cross2 = cross2_f64 if IS_F64 else cross2_f32
 
 wp.config.quiet = True
 
@@ -138,7 +141,7 @@ def _fused_terms_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int)
     t1 = d[1] / ell
     n0 = t1
     n1 = -t0
-    z = (p[0] * q[1] - p[1] * q[0]) / ell
+    z = _cross2(p[0], p[1], q[0], q[1]) / ell
     s0 = (d[0] * p[0] + d[1] * p[1]) / ell
     s1 = (d[0] * q[0] + d[1] * q[1]) / ell
     az = wp.abs(z)

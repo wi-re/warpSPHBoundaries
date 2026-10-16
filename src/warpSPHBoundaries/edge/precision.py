@@ -64,5 +64,5 @@ def sync(device):
     """`wp.synchronize_device` unless a CUDA graph is being captured (a synchronisation is illegal inside a capture; the warp launches then run on the captured torch stream)."""
     import torch
     import warp as wp
-    if not torch.cuda.is_current_stream_capturing():
+    if wp.get_device(device).is_cpu or not torch.cuda.is_current_stream_capturing():
         wp.synchronize_device(device)

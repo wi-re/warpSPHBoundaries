@@ -14,11 +14,18 @@
    (`np2d.compile_moment`) and rounded to float exactly once. Rounding can therefore enter *only* through the
    geometry (positions, chord clipping, 1D primitives) — never through the kernel polynomial algebra, the weights, or
    the recursion bookkeeping.
-3. **Degenerate placements need no exact predicate.** The orientation signs, the indicator and the atan jumps are all
+3. **Degenerate placements require shared computed predicates.** In the numpy reduction, the orientation signs, the indicator and the atan jumps are all
    derived from the *same computed* `z_e`; whatever rounding does, the result is the exact value for a slightly
    perturbed configuration, so it is continuous (checked across an edge from 1e-15 to 1e-3, at vertices, for
    `z → 1e-40`). Only quantities that are individually ill-conditioned near a vertex needed care:
    `z = cross(p,q)/ℓ` (not `cross(p,q−p)/ℓ`) and the angle as `atan2(z(hi−lo), z²+hi·lo)`.
+   This is a requirement on each backend, not a blanket guarantee for scene integration.
+   The original adversarial audit exposed half-unit/full-unit sloped-edge jumps
+   when CUDA FMA and the indicator made different rounded orientation decisions.
+   Shared rounded cross products and per-query support normalization now pass
+   CPU/CUDA boundary regressions; the refreshed fused-mono path improves from
+   2/21 to 16/21 fixtures within ε32. Tiny/sliver relative accuracy remains open.
+   Current gates and evidence: [2D accuracy plan](../../warpSPHDevelopment/curvatureBoundaries/progress/plan-2d-accuracy.md).
 4. **Because the exact object is a 1D integral of a smooth function, cheap approximations stay accurate.**
    Errors of any approximation are *1D-quadrature* or *low-precision-arithmetic* errors on edge integrals, not 2D
    integration errors over a region clipped by a circle. Measured below.
@@ -143,8 +150,103 @@ Caveats, measured:
 
 ## What is still open (stage 3 and later)
 
+The reproducible cross-method audit is now
+`python -m warpSPHBoundaries.validation.robustness --device cuda:0`.
+Its registry covers numerical arithmetic, edge quadrature, FEM hybrid rules,
+local SDF models, sampled contours, particle lattices, specialized tables,
+curvature/width expansions and implicit tier switches. It sweeps tiny triangles,
+acute and nearly flat corners, slivers, notches, boxes and ellipses. Outputs retain
+the common twelve-channel ordering, signed numerical/model/total errors where
+separable, independent reference checks, refinement/truncation estimates and
+machine-readable coverage limits. Unknown same-model errors remain unavailable;
+they are not relabelled as quadrature errors.
+
+`$EVIDENCE/robustness/findings.json` lists exact numerical failure probes.
+The original sloped-edge and circle-boundary expected failures are now ordinary
+accuracy gates in `tests/validation/test_robustness.py` and
+`tests/scene/test_boundary_predicates.py`. The circle evaluator now uses the
+regular full-circle potential y M(r)/(pi r²), avoiding numerical cancellation
+between a singular flux and the indicator, including at `D=R` and adjacent
+floating values. `M(r)/r²` is evaluated directly to preserve its finite origin
+limit. Half-angle geometry is checked in `maple/16_disk_boundary.mpl`.
+Kernel profiles, compact primitives and regular M/r² are compiled exactly into
+the existing Chebyshev basis, avoiding expanded high-degree cancellation.
+The new circle tests also check 384/768-node polar-reference agreement: the
+96-node reference was insufficient immediately inside some large disks.
+The separate [C1/C2 checkpoint](../../warpSPHDevelopment/curvatureBoundaries/results/figures/accuracy-progress/report.md)
+preserves the original audit while re-evaluating the changed paths. Both arc
+rules now meet ε32 on all 21 tested radii across nine kernels and the nine
+implemented channels. This is a finite measured scope, not few-eps certification
+or a result for the missing moments. Polygon tiny/sliver failures remain.
+Small features lost by SDF
+sampling or particle lattices are geometric/quadrature failures, while accepted
+but inaccurate ellipse predictions expose local-model/validity-policy failures.
+Absolute accuracy alone is insufficient for tiny elements: the audit also
+reports error divided by each case's maximum channel signal. The thinnest
+sliver references themselves need higher precision for a few-eps relative
+claim; the independent oracle spot checks quantify that limitation.
+
+### Generated survey and geometry error
+
+`python -m warpSPHBoundaries.validation.audit_report` builds
+[`results/figures/robustness/report.md`](../../warpSPHDevelopment/curvatureBoundaries/results/figures/robustness/report.md)
+from cached measurements. Absolute and signal-relative overviews are separate,
+and every scheme has separate moment heatmaps and available contribution/estimate
+graphs. Labels describe a priori expected regimes independently of measured
+success. The report discovers new cases/studies and paginates wide sweeps.
+
+An SDF can represent a triangle exactly. The approximation at issue is replacing
+its nonlocal support intersection by one local smooth/flat boundary description;
+this fails when a corner, medial axis or another boundary sheet matters.
+Sampling the SDF introduces an additional, distinct representation error.
+
+The [corner mechanism report](../../warpSPHDevelopment/curvatureBoundaries/results/figures/sdf-corner-mechanism/report.md)
+separates the distance-only half-plane ablation from the forced curvature
+series. Outside a convex vertex, the exact distance has unit gradient and
+Delta d=1/d, but recovering closest-surface curvature divides by
+1-d Delta d=0. A valid distance field therefore does not imply a finite
+smooth-boundary curvature. The previous [0,1] field colour scale hid raw
+curvature-series predictions far above 1. The half-plane ablation is continuous;
+its geometric bias depends on both distance and angle around the corner.
+The focused report isolates that bias from distance-sampling/table errors,
+with constant-distance, face/vertex-seam and grid-refinement checks.
+
+The new [sampled-cell guard](sdf-guard.md) rejects the curvature pole and checks
+every blended-jet cell in the support bounding square. It replaces the finite
+probe policy and catches the known strip/gap misses. Fresh
+[CPU](../../warpSPHDevelopment/curvatureBoundaries/results/figures/sdf-guard-cpu/report.md) and
+[CUDA](../../warpSPHDevelopment/curvatureBoundaries/results/figures/sdf-guard-cuda/report.md) checkpoints validate its
+original-polygon fallback. Passing this domain guard does not certify a
+requested integral tolerance on accepted smooth models.
+
+For original geometry G, its sampled contour Gh, and the forced SDF result A:
+
+```text
+E_geometry = I(Gh) - I(G)
+E_residual = A - I(Gh)
+E_total    = E_geometry + E_residual
+```
+
+The cached oriented marching-squares contour supplies I(Gh). This quantifies
+**geometry-induced integral error per moment/query/kernel**, rather than a
+Hausdorff or area-only shape metric. Lost contours have I(Gh)=0 and therefore
+explicitly lose the original signal. The residual contains the local
+curvature/planar approximation, reconstructed distance/normal/curvature errors,
+and table/arithmetic errors. The interpolated SDF jets are not necessarily
+the exact differential geometry of its extracted contour, so this split does
+not isolate all sampling effects. A further separation requires independent
+same-model integrals and differential-geometry references.
+
+Contour integrals have finite reference uncertainty; these are measured
+contributions, not certified bounds. Signed contributions add pointwise, while
+their separately maximized magnitudes need not add. For curved geometries
+approximated by polygons, the cached same-polygon integral similarly separates
+geometry-surrogate error from numerical evaluation. Guarded SDF/polygon mixed
+paths retain TOTAL where an executed-branch reference is unavailable.
+The generated report states these limits alongside the plots.
+
 * float32 panel-count rule from `z/h` and a fused kernel for warp (stage 5); the Chebyshev coefficients are already exact constants.
-* Non-convex polygons in numpy (indicator from sign tests is for convex polygons; decompose or use winding).
+* Non-convex polygon stress coverage is present for the winding/crossing implementation; general holes and overlapping-body unions still need explicit coverage.
 * Cheaper transcendental functions: replace `asinh`/`atan2` by bounded-error approximations and measure (error budget is
   now known: the angle term is multiplied by an exact weight `M_R ≤ 4/7/π`).
 * Autodiff/torch/warp: the gradient identity is the analytic derivative; the consistency of sign/indicator/atan is what

@@ -18,7 +18,7 @@ Structure (docs/scene-architecture.md):
 * adjacency (topology) / precompute (`PairMoments`) / evaluation (`sceneOperation`), see docs/plan-wall-evaluation.md §1; one operation kernel per type (no branch divergence on the type); all boundary terms are linear in the boundary data, so the types
   just accumulate into the same output.  Vectors are rotated back to the world frame after the local-frame evaluation.
 * boundary data of a body: `BodyField(a0, a1, rho)`, the field A(x') = a0 + a1 (x' - center) in world components (a constant wall, a rigidly moving wall
-  `BodyField.rigid(body)`, any field linear in position); a1 needs the first moments (surface and volume representations), implicit/SDF are constant-only.
+  `BodyField.rigid(body)`, any field linear in position); a1 needs first moments. SDF and half-plane models expose these; some other implicit primitives remain constant-only.
 """
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -39,6 +39,7 @@ F64 = torch.float64
 
 
 # ----------------------------------------------------------------------------------------------------------------------- frames
+_KIN_SCALARS = {}
 _R_CACHE = {}                                                      # (angle, device) -> rotation matrix
 
 
@@ -147,10 +148,11 @@ class SurfaceTopology:
     supMax: float                    # largest support of the rows when the pairs were found (sizes the cell list of the indicator)
     _ind: Optional[torch.Tensor] = None        # [rows] winding number + background, computed on first use
     _csr: Optional[tuple] = None               # (pair order sorted by row, row offsets [rows + 1]): the fused contraction sums the pairs of a row in a fixed order
+    _supports: Optional[torch.Tensor] = None   # preserve the edge normalization even for a lazy indicator call
 
-    def indicator(self, rep, lpos):
+    def indicator(self, rep, lpos, lsup=None):
         if self._ind is None:
-            self._ind = rep.indicatorFast(lpos, self.supMax)
+            self._ind = rep.indicatorFast(lpos, self.supMax, self._supports if lsup is None else lsup)
         return self._ind
 
     def csr(self, rows):
@@ -168,6 +170,8 @@ class SurfaceTopology:
         new = rowmap[self.qi.long()]
         sel = new >= 0
         out = SurfaceTopology(new[sel].to(torch.int32), self.e[sel], self.supMax)
+        if self._supports is not None:
+            out._supports = self._supports[rows]
         if self._ind is not None:
             out._ind = self._ind[rows]
         return out
@@ -175,18 +179,34 @@ class SurfaceTopology:
 
 @dataclass
 class RepMoments:
-    """per-pair moments of the body kernel integral, LOCAL frame -> (after `toWorld`) world frame, physical units:
-        lam = int W,  m1 = int y W,  g0 = int grad_x W,  g1[d, j] = int y_d d_j W   (y = x' - x_i);  m1 / g1 are None for models without first moments."""
+    """Per-query/representation moments, LOCAL -> world via toWorld, physical units:
+        lam = int W,  m1 = int y W,  g0 = int grad_x W,  g1[d, j] = int y_d d_j W   (y = x' - x_i);  m2[d,e] = int y_d y_e W. Missing model moments are None."""
     q: torch.Tensor                  # [P] global query index
     lam: torch.Tensor                # [P]
     g0: torch.Tensor                 # [P,2]
     m1: Optional[torch.Tensor] = None   # [P,2]
     g1: Optional[torch.Tensor] = None   # [P,2,2]
 
+    m2: Optional[torch.Tensor] = None   # [P,2,2], integral y_d y_e W
+    quadrature_estimate: Optional[torch.Tensor] = None  # [P,12], legacy nine + m20,m11,m02, physical units in the current frame
+    quadrature_status: Optional[torch.Tensor] = None    # 0 analytic/unassessed, 1 refined area, -1 failed
+
     def toWorld(self, pose: Pose):
         R = pose.R
+        estimate = self.quadrature_estimate
+        if estimate is not None:
+            A = R.abs()
+            estimate = estimate.clone()
+            estimate[:,1:3] = estimate[:,1:3] @ A.T
+            estimate[:,3:5] = estimate[:,3:5] @ A.T
+            E = A @ estimate[:,5:9].reshape(-1,2,2) @ A.T
+            estimate[:,5:9] = E.flatten(1)
+            E = torch.stack([estimate[:,9],estimate[:,10],estimate[:,10],estimate[:,11]],1).reshape(-1,2,2)
+            E = A @ E @ A.T
+            estimate[:,9],estimate[:,10],estimate[:,11] = E[:,0,0],E[:,0,1],E[:,1,1]
         return RepMoments(self.q, self.lam, self.g0 @ R.T, None if self.m1 is None else self.m1 @ R.T,
-                           None if self.g1 is None else R @ self.g1 @ R.T)
+                           None if self.g1 is None else R @ self.g1 @ R.T,
+                           None if self.m2 is None else R @ self.m2 @ R.T, estimate, self.quadrature_status)
 
 
 # ----------------------------------------------------------------------------------------------------------------------- representations
@@ -196,7 +216,7 @@ class SurfaceRep:
     needs no triangulation.  The indicator is the winding number (+ background), computed with the same orientation predicate as the edge terms."""
     kind = "surface"
 
-    def __init__(self, vertices, edges, background: int = 0):
+    def __init__(self, vertices, edges, background: int = 0, conditioned: bool = True):
         self.vertices = torch.as_tensor(vertices, dtype=F64)
         self.edges = torch.as_tensor(edges, dtype=torch.int32)
         self.background = int(background)
@@ -204,18 +224,31 @@ class SurfaceRep:
         self._clSupport = -1.0
         self._cellInd = None
         self._bins = None
+        from ..edge.warptriangle import prepare
+        self._triangle = prepare(self.vertices, self.edges) if conditioned else None
 
     @staticmethod
-    def polygon(points, solid: str = "inside"):
+    def polygon(points, solid: str = "inside", conditioned: bool = True):
         """one closed loop through `points` ([n,2]); `solid='inside'`: the polygon is the body (reordered counter-clockwise), 'outside': the polygon is a hole
         in an infinite solid (clockwise orientation, background 1)."""
         P = np.asarray(points, dtype=float)
-        a = 0.5 * np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
+        # Anchor before forming the area: absolute-coordinate shoelaces can
+        # reverse tiny/translated triangles by cancellation.
+        local = P.astype(np.longdouble)-P[0].astype(np.longdouble)
+        terms = local[:,0]*np.roll(local[:,1],-1)-np.roll(local[:,0],-1)*local[:,1]
+        a = np.sum(terms)
+        if len(P) == 3 or abs(a) <= 64*np.finfo(np.longdouble).eps*np.sum(abs(terms)):
+            # Static construction only: exact signs for almost-collinear float
+            # inputs whose determinant is smaller than longdouble resolution.
+            from fractions import Fraction
+            v = [[Fraction(float(co)) for co in point] for point in P]
+            a = sum((v[i][0]-v[0][0])*(v[(i+1)%len(v)][1]-v[0][1])
+                    -(v[(i+1)%len(v)][0]-v[0][0])*(v[i][1]-v[0][1]) for i in range(len(v)))
         if (a > 0) != (solid == "inside"):
             P = P[::-1].copy()
         n = len(P)
         E = np.stack([np.arange(n), (np.arange(n) + 1) % n], 1)
-        return SurfaceRep(P, E, background=0 if solid == "inside" else 1)
+        return SurfaceRep(np.ascontiguousarray(P), E, background=0 if solid == "inside" else 1, conditioned=conditioned)
 
     @staticmethod
     def box(lo, hi, solid: str = "inside"):
@@ -260,7 +293,7 @@ class SurfaceRep:
             self._cellInd = (ind, (cl.start[1:] - cl.start[:-1]) == 0)
         return self._cellInd
 
-    def indicatorFast(self, p, supportMax):
+    def indicatorFast(self, p, supportMax, supports=None):
         """`indicator`, with the cell cache for points in edge-free cells (exact: no edge within one support of such a point, so nothing can cross)."""
         cl = self._celllist(supportMax)
         ind, empty = self._cell_indicator()
@@ -275,7 +308,7 @@ class SurfaceRep:
         out = torch.where(outside, torch.full_like(out, float(self.background)), out)
         slow = torch.nonzero(~(fast | outside)).flatten()
         if len(slow):
-            out[slow] = self.indicator(p[slow])
+            out[slow] = self.indicator(p[slow], None if supports is None else supports[slow])
         return out
 
     def _ybins(self, nbins=None):
@@ -297,24 +330,44 @@ class SurfaceRep:
             self._bins = (y0, dy, nb, start, item[order])
         return self._bins
 
-    def indicator(self, p):
+    def indicator(self, p, supports=None):
         """winding number of the closed loops around each point (+ background): 1 inside the solid, 0 outside (loops must be simple and consistently oriented).
-        Half-open crossing rule, predicate cross(q - p, x - p) = the sign of the edge term z."""
+        On an edge / vertex use the solid angle fraction, as required by the
+        edge integrals (1/2 on edge interiors). Half-open crossings elsewhere.
+        Use the same per-query support normalization as the edge terms."""
         y0, dy, nb, start, items = self._ybins()
         iy = torch.floor((p[:, 1] - y0) / dy).long()
-        ok = (iy >= 0) & (iy < nb)
-        b = torch.where(ok, iy, torch.zeros_like(iy))
+        # Include the topmost horizontal edges, whose bin index can equal nb.
+        ok = (iy >= 0) & (iy <= nb)
+        b = torch.where(ok, iy.clamp(max=nb - 1), torch.zeros_like(iy))
         cnt = torch.where(ok, start[b + 1] - start[b], torch.zeros_like(b))
         q = torch.repeat_interleave(torch.arange(len(p), device=p.device), cnt)
         off = torch.arange(int(cnt.sum()), device=p.device) - torch.repeat_interleave(torch.cumsum(cnt, 0) - cnt, cnt)
         e = items[start[b[q]] + off]
         a, c = self.vertices[self.edges[e, 0].long()], self.vertices[self.edges[e, 1].long()]
         x = p[q]
-        isLeft = (c[:, 0] - a[:, 0]) * (x[:, 1] - a[:, 1]) - (c[:, 1] - a[:, 1]) * (x[:, 0] - a[:, 0])
-        up = (a[:, 1] <= x[:, 1]) & (x[:, 1] < c[:, 1]) & (isLeft > 0)
-        down = (c[:, 1] <= x[:, 1]) & (x[:, 1] < a[:, 1]) & (isLeft < 0)
+        ar, cr = a - x, c - x
+        if supports is not None:
+            ar, cr = ar / supports[q, None], cr / supports[q, None]
+        cross = ar[:, 0] * cr[:, 1] - ar[:, 1] * cr[:, 0]
+        up = (a[:, 1] <= x[:, 1]) & (x[:, 1] < c[:, 1]) & (cross > 0)
+        down = (c[:, 1] <= x[:, 1]) & (x[:, 1] < a[:, 1]) & (cross < 0)
         w = up.to(F64) - down.to(F64)
         wn = torch.zeros(len(p), dtype=F64, device=p.device).index_add_(0, q, w)
+        on = (cross == 0) & ((ar * cr).sum(1) <= 0)
+        boundary = torch.zeros(len(p), dtype=torch.int32, device=p.device).index_add_(0, q, on.to(torch.int32)) > 0
+        rows = torch.nonzero(boundary).flatten()
+        # The principal-value angle sum omits collinear / incident edges. It
+        # gives the correct fraction at convex and reflex vertices, holes and
+        # disconnected loops without needing an ordered vertex neighbourhood.
+        for batch in rows.split(128):
+            ar = self.vertices[self.edges[:, 0].long()][None] - p[batch, None]
+            cr = self.vertices[self.edges[:, 1].long()][None] - p[batch, None]
+            if supports is not None:
+                ar, cr = ar / supports[batch, None, None], cr / supports[batch, None, None]
+            cross = ar[..., 0] * cr[..., 1] - ar[..., 1] * cr[..., 0]
+            angle = torch.where(cross == 0, torch.zeros_like(cross), torch.atan2(cross, (ar * cr).sum(-1)))
+            wn[batch] = angle.sum(1) / (2 * np.pi)
         return wn + self.background
 
     # ---- adjacency (topology) and precompute (moments), local frame
@@ -326,27 +379,41 @@ class SurfaceRep:
         qi, e = queryCellList(cl, lpos)
         a, b = self.vertices[self.edges[e, 0].long()], self.vertices[self.edges[e, 1].long()]
         keep = _segment_distance(lpos[qi], a, b) < lsup[qi]
-        return SurfaceTopology(qi[keep].to(torch.int32), e[keep].to(torch.int32), float(lsup.max()))
+        return SurfaceTopology(qi[keep].to(torch.int32), e[keep].to(torch.int32), float(lsup.max()), _supports=lsup)
 
     def moments(self, topo, lpos, lsup, qglobal, kernel, device, channels=None):
-        """RepMoments (local frame) of the topology `topo` (exact: edge terms + indicator pseudo-pairs).  `channels` (default all nine of warpbc.edge_channels):
-        only these are evaluated, the others are 0; the indicator pseudo-pairs (lam, g1) are skipped when no channel of lam / g1 is asked for."""
+        """Complete polygon moments, with conditioned triangle device fallback.
+
+        Legacy channels 0..8 are unchanged; 9,10,11 select m20,m11,m02.
+        None requests all twelve. Explicit subsets zero unrequested values.
+        Estimates are empirical; status 0 has no quadrature accuracy claim.
+        """
+        from ..edge import warptriangle
         qi, e = topo.qi, topo.e
-        c = warpbc.edge_channels(qi, e, lpos, lsup, self.vertices, self.edges, kernel, device=str(device), channels=channels)        # [P,9] units of h
-        h = lsup[qi.long()]
-        lam = c[:, 0]
-        m1 = h[:, None] * c[:, 1:3]
-        g0 = c[:, 3:5] / h[:, None]
-        g1 = torch.stack([c[:, 5:7], c[:, 7:9]], 1)
-        if channels is not None and not (set(int(k) for k in channels) & {0, 5, 6, 7, 8}):
-            return RepMoments(qglobal[qi.long()], lam, g0, m1, g1)                                  # gradient-only: the indicator adds lam and g1 only
-        ind = topo.indicator(self, lpos)
-        nz = torch.nonzero(ind != 0).flatten()
-        eye = torch.eye(2, dtype=F64, device=device)
-        qs = torch.cat([qi.long(), nz])
-        return RepMoments(qglobal[qs], torch.cat([lam, ind[nz]]), torch.cat([g0, torch.zeros((len(nz), 2), dtype=F64, device=device)]),
-                          torch.cat([m1, torch.zeros((len(nz), 2), dtype=F64, device=device)]),
-                          torch.cat([g1, ind[nz][:, None, None] * eye]))
+        requested = set(range(12)) if channels is None else set(int(k) for k in channels)
+        if not requested <= set(range(12)):
+            raise ValueError('Surface moment channels must be in 0..11')
+        c = warpbc.edge_channels(qi,e,lpos,lsup,self.vertices,self.edges,kernel,device=str(device),
+                                 channels=tuple(requested & set(range(9))))
+        out = torch.zeros((len(lpos),12),dtype=F64,device=device)
+        out[:,:9].index_add_(0,qi.long(),c)
+        want_second = bool(requested & {9,10,11})
+        if want_second:
+            second = warpbc.second_channels(qi,e,lpos,lsup,self.vertices,self.edges,kernel,device=str(device))
+            out[:,9:].index_add_(0,qi.long(),second)
+        ind = topo.indicator(self,lpos,lsup)
+        plane = torch.as_tensor(warptriangle.plane_channels(kernel),dtype=F64,device=device)
+        out += ind[:,None]*plane
+        values,estimate,status = warptriangle.channels(self.vertices,lpos,lsup,self._triangle,kernel,self.background)
+        out = torch.where((status != 0)[:,None],values,out)
+        mask = torch.as_tensor([float(k in requested) for k in range(12)],dtype=F64,device=device)
+        physical = torch.stack([torch.ones_like(lsup),lsup,lsup,1/lsup,1/lsup,
+                                torch.ones_like(lsup),torch.ones_like(lsup),torch.ones_like(lsup),torch.ones_like(lsup),
+                                lsup*lsup,lsup*lsup,lsup*lsup],1)
+        out = out*mask*physical
+        estimate = estimate*mask*physical
+        m2 = torch.stack([out[:,9],out[:,10],out[:,10],out[:,11]],1).reshape(-1,2,2) if want_second else None
+        return RepMoments(qglobal,out[:,0],out[:,3:5],out[:,1:3],out[:,5:9].reshape(-1,2,2),m2,estimate,status)
 
     def pairs(self, lpos, lsup, qglobal, kernel, device, channels=None):
         """topology + moments in one call (the fallback surfaces of implicit representations, which have no shared adjacency)."""
@@ -531,18 +598,39 @@ class ImplicitRep:
 
 class SdfRep:
     """sampled signed distance in the body frame (positive in the fluid), bilinear d with node-blended gradient and Laplacian; surface curvature
-    kappa = lap d / (1 - d lap d).  Tier 3 where |kappa h| <= `maxKappaH` and |grad d| ~ 1, else (hard switch per particle) the `fallback` SurfaceRep
-    (e.g. an extracted contour); particles outside the sampled box see the extrapolated distance.  Constant boundary fields only."""
+    kappa = lap d / (1 - d lap d). Tier 3 requires interval bounds on every cell
+    covered by the support bounding square: finite jets, positive conditioned
+    curvature denominator, unit gradient, |kappa h| <= `maxKappaH`,
+    a bound on |kappa_s|h² and complete two-node derivative stencils. Otherwise
+    use the `fallback` SurfaceRep. All twelve moments share geometric order two.
+    `backend='warp'` fuses guarded evaluation and requested moments in one
+    float64 kernel; `backend='torch'` retains the diagnostic implementation.
+    This is a sampled-field domain guard, not a
+    model-error bound. signed() retains raw extrapolated jets for diagnostics;
+    the production local model rejects incomplete grid coverage."""
     kind = "sdf"
 
-    def __init__(self, values, origin, spacing, fallback: Optional[SurfaceRep] = None, maxKappaH: float = 0.5, gradTol: float = 0.1):
+    def __init__(self, values, origin, spacing, fallback: Optional[SurfaceRep] = None, maxKappaH: float = 0.5, gradTol: float = 0.1,
+                 minCurvatureDenominator: float = 0.25, maxCurvatureVariationH2: float = 0.5, backend: str = 'warp'):
+        if backend not in ('warp', 'torch'):
+            raise ValueError('SDF backend must be warp or torch')
+        self.backend = backend
         self.d = torch.as_tensor(values, dtype=F64)
         self.origin = torch.as_tensor(origin, dtype=F64)
         self.spacing = float(spacing)
         self.fallback = fallback
         self.maxKappaH = maxKappaH
         self.gradTol = gradTol
+        if not 0 < minCurvatureDenominator <= 1:
+            raise ValueError('minCurvatureDenominator must be in (0, 1]')
+        self.minCurvatureDenominator = float(minCurvatureDenominator)
+        if not np.isfinite(maxCurvatureVariationH2) or maxCurvatureVariationH2 <= 0:
+            raise ValueError('maxCurvatureVariationH2 must be finite and positive')
+        self.maxCurvatureVariationH2 = float(maxCurvatureVariationH2)
         self._nodes = None
+        self._validity = None
+        self._lapGradient = None
+        self._warpSdf = None
 
     @staticmethod
     def fromFunction(fn, lo, hi, spacing, **kw):
@@ -558,6 +646,9 @@ class SdfRep:
         if self.fallback is not None:
             self.fallback.to(device)
         self._nodes = None
+        self._validity = None
+        self._lapGradient = None
+        self._warpSdf = None
         self._contour = None
         return self
 
@@ -590,6 +681,10 @@ class SdfRep:
 
     def signed(self, pos):
         """(d, n, kappa, gradNorm) at local points."""
+        return self._signed(pos)[:4]
+
+    def _signed(self, pos):
+        """Raw jets plus curvature denominator and central-stencil coverage."""
         nodes = self._node_fields()
         nx, ny = self.d.shape
         u = (pos - self.origin) / self.spacing
@@ -605,8 +700,63 @@ class SdfRep:
         outside = ((u - uc) * self.spacing).norm(dim=1)             # distance beyond the sampled box: the distance keeps growing
         d = d + outside
         gn = torch.sqrt(gx * gx + gy * gy).clamp(min=1e-300)
-        kappa = lap / (1.0 - d * lap)
-        return d, torch.stack([gx, gy], 1) / gn[:, None], kappa, gn
+        denominator = 1.0-d*lap
+        kappa = lap/denominator
+        covered = ((u >= 1).all(1) & (u[:, 0] <= nx-2) & (u[:, 1] <= ny-2))
+        return d, torch.stack([gx, gy], 1)/gn[:, None], kappa, gn, denominator, covered
+
+    def supportValidity(self, pos, supports):
+        """Conservative local-model domain check over the entire support square.
+
+        False excludes the local model; a known full/empty support can still
+        bypass it. True bounds interpolated jets, but does not certify
+        truncation accuracy or the original subgrid geometry.
+        Cached data assumes the sampled field is static, like _node_fields().
+        """
+        from .sdf_guard import support_validity
+        return support_validity(self._validityLevels(), self.origin, self.spacing, pos, supports)
+
+    def _validityLevels(self):
+        """Static sparse minima, shared by Torch and fused Warp queries."""
+        from .sdf_guard import cell_support_limits, square_minima
+        key = (self.maxKappaH, self.gradTol, self.minCurvatureDenominator, self.maxCurvatureVariationH2)
+        if self._validity is None or self._validity[0] != key:
+            limits = cell_support_limits(self._node_fields(), self.spacing, *key,
+                                         lap_gradient=self._laplacianGradient())
+            self._validity = (key, square_minima(limits))
+        return self._validity[1]
+
+    def curvatureVariation(self, pos):
+        """(kappa_s, covered), tangent=(-n_y,n_x), in physical units 1/L².
+
+        For exact SDF jets L=Delta d and D=1-dL, kappa_s=t.grad(L)/D³.
+        Central differences of L require a two-node distance stencil. This
+        reconstruction is empirical and does not bound variation/subgrid error.
+        """
+        gradient_nodes = self._laplacianGradient()
+        _, n, _, _, denominator, _ = self._signed(pos)
+        nx, ny = self.d.shape
+        u = (pos-self.origin)/self.spacing
+        uc = torch.stack([u[:, 0].clamp(0, nx-1), u[:, 1].clamp(0, ny-1)], 1)
+        index = torch.stack([uc[:, 0].floor().clamp(0, nx-2), uc[:, 1].floor().clamp(0, ny-2)], 1).long()
+        t = uc-index
+        gradient = torch.zeros_like(pos)
+        for a in (0, 1):
+            for b in (0, 1):
+                weight = (t[:, 0] if a else 1-t[:, 0])*(t[:, 1] if b else 1-t[:, 1])
+                gradient = gradient+weight[:, None]*gradient_nodes[:, index[:, 0]+a, index[:, 1]+b].T
+        tangent = torch.stack([-n[:, 1], n[:, 0]], 1)
+        variation = (gradient*tangent).sum(1)/denominator**3
+        covered = ((u >= 2).all(1) & (u[:, 0] <= nx-3) & (u[:, 1] <= ny-3))
+        return variation, covered
+
+    def _laplacianGradient(self):
+        if self._lapGradient is None:
+            lap = self._node_fields()[3]
+            p = torch.nn.functional.pad(lap[None, None], (1, 1, 1, 1), mode='replicate')[0, 0]
+            self._lapGradient = torch.stack([(p[2:, 1:-1]-p[:-2, 1:-1])/(2*self.spacing),
+                                             (p[1:-1, 2:]-p[1:-1, :-2])/(2*self.spacing)])
+        return self._lapGradient
 
 
 def _marching_squares(d, origin, spacing):
@@ -883,6 +1033,19 @@ class Body:
         """True when `fusedReps` exists (whatever the support: the tier-2 polygon of a disk needs a size only for its resolution)."""
         return all(isinstance(r, (SurfaceRep, BoxRep, SdfRep, DiskArrayRep)) or (isinstance(r, ImplicitRep) and isinstance(r.shape, DiskBody)) for r in self.reps)
 
+    def unbounded(self):
+        """Static exterior-solid/half-plane broadphase convention."""
+        for rep in self.reps:
+            if isinstance(rep,SurfaceRep) and rep.background:
+                return True
+            if isinstance(rep,BoxRep) and rep.solid == 'outside':
+                return True
+            if isinstance(rep,ImplicitRep) and (isinstance(rep.shape,HalfPlaneBody) or getattr(rep.shape,'solid',None) == 'outside'):
+                return True
+            if isinstance(rep,SdfRep) and isinstance(rep.fallback,SurfaceRep) and rep.fallback.background:
+                return True
+        return False
+
     def obb(self):
         """the bounding box of the representations in the body frame; the representations are static, so it is computed once per device (reading it may synchronise)."""
         dev = self.center.device
@@ -947,12 +1110,12 @@ class SceneAdjacency:
 @dataclass
 class PairMoments:
     """PRECOMPUTE = the per-pair integral values of ONE kernel (and channel set) over an adjacency: what `Scene.precompute` returns and `sceneOperation`
-    evaluates.  Floats (up to 72 B per pair): explicit, opt-in; the default consumers build one, use it once or a few times and drop it."""
+    evaluates.  Floats (up to twelve surface moment components, plus optional diagnostics): explicit, opt-in; the default consumers build one, use it once or a few times and drop it."""
     numQueries: int
     kernel: str
     entries: list                   # per body: dict(body, cand, surface=[RepMoments world], implicit=[RepMoments], volume=[(rep, BoundaryAdjacency, cand)])
     stats: dict
-    channels: Optional[frozenset] = None   # None: all nine moment channels; else the SurfaceRep channels that were evaluated (the others are 0): see sceneOperation
+    channels: Optional[frozenset] = None   # None: all twelve surface moment channels; else the SurfaceRep channels that were evaluated (the others are 0): see sceneOperation
 
 
 @dataclass
@@ -1010,7 +1173,17 @@ class BodyKinematics:
         if all(isinstance(v, torch.Tensor) for v in vals):
             return torch.stack([v.to(dev, F64) for v in vals])
         if not any(isinstance(v, torch.Tensor) for v in vals):
-            return torch.tensor([float(v) for v in vals], dtype=F64).to(dev)
+            key = (tuple(float(v) for v in vals),str(dev))
+            cached = _KIN_SCALARS.get(key)
+            if cached is not None:
+                return cached
+            if torch.device(dev).type == 'cuda' and torch.cuda.is_current_stream_capturing():
+                raise RuntimeError('Warm kinematics scalar constants before CUDA graph capture, or use device scalar tensors')
+            # One transfer independent of body count, then a read-only device
+            # constant for subsequent eager evaluations and graph capture.
+            value = torch.tensor([float(v) for v in vals],dtype=F64).to(dev)
+            _KIN_SCALARS[key] = value
+            return value
         return torch.stack([v.to(dev, F64) if isinstance(v, torch.Tensor) else torch.full((), float(v), dtype=F64, device=dev) for v in vals])
 
     @staticmethod
@@ -1091,11 +1264,16 @@ class Scene:
 
         sig = (x.data_ptr(), x._version, tuple(x.shape),
                tuple((tok(b.center), tok(b.linearVelocity), tok(b.linearAcceleration), tok(b.angularVelocity), tok(b.angularAcceleration), tok(b.angle), tok(getattr(b, "_cs", None))) for b in bs))
+        capturing = x.is_cuda and torch.cuda.is_current_stream_capturing()
         hit = self.__dict__.get("_kinCache")
-        if hit is not None and hit[0] == sig:
+        # A warm eager tensor would bake the old local positions into the
+        # graph. Capture the transforms afresh, and never cache graph-owned
+        # derived tensors for later eager calls.
+        if not capturing and hit is not None and hit[0] == sig:
             return hit[1]
         kin = BodyKinematics(bs, x)
-        self._kinCache = (sig, kin)
+        if not capturing:
+            self._kinCache = (sig, kin)
         return kin
 
     def inside(self, points, body=None):
@@ -1197,6 +1375,11 @@ class Scene:
         """broadphase: support sphere vs the body OBB in the body frame (exact); with `cells` only the particles under the inflated world box of the OBB are tested."""
         lo, hi = body.obb()
         pose = body.pose
+        if body.unbounded():
+            # An exterior solid is unbounded; its finite loop box cannot reject
+            # a query whose whole support lies in the background solid.
+            idx = torch.nonzero(allowed).flatten()
+            return idx,body.toLocal(pos[idx])
         if cells is not None:
             corners = torch.stack([lo, torch.stack([hi[0], lo[1]]), hi, torch.stack([lo[0], hi[1]])])
             wc = pose.toWorld(corners)
@@ -1233,7 +1416,10 @@ class Scene:
         return SceneAdjacency(len(pos), bodies, stats, queryParticles)
 
     def precompute(self, adjacency: SceneAdjacency, operationProperties: OperationProperties, channels=None) -> PairMoments:
-        """the per-pair integrals of `operationProperties.kernel` over `adjacency` (`PairMoments`); `channels`: evaluate only these SurfaceRep moment channels."""
+        """Per-representation integrals; surface channels 0..8 retain the legacy
+        layout, 9..11 are m20,m11,m02. None requests all twelve surface moments.
+        Other representations retain their existing coverage (m2 may be None).
+        """
         name = kernelName(operationProperties.kernel)
         entries, stats = [], {"candidates": list(adjacency.stats["candidates"]), "pairs": 0, "tier": {}}
         for ba in adjacency.bodies:
@@ -1287,28 +1473,49 @@ class Scene:
                 low = tier == 2
                 fb = rep.fallbackSurface(float(lsup[low].min()), dev) if bool(low.any()) else None
             else:
-                lam, g, low = _sdfTier3(rep, lpos, lsup, name, dev)
+                sdf_values, low = _sdfCurvature(rep, lpos, lsup, name, dev, channels=channels)
+                lam, g = sdf_values[:, 0], sdf_values[:, 6:8]
                 fb = rep.fallback
                 if bool(low.any()) and fb is None:
-                    raise ValueError("SdfRep: the SDF is not smooth at the scale of h for some particles and no fallback SurfaceRep was given")
+                    raise ValueError("SdfRep: the local model is not validated over some supports (curvature, gradient or sampled-grid coverage); no fallback SurfaceRep was given")
             sel = (~low) & (lam != 0)
+            if isinstance(rep, SdfRep):
+                # A first/gradient-only request can have a zero masked mass.
+                sel = (~low) & (sdf_values != 0).any(1)
             idx = torch.nonzero(sel).flatten()
             pairs = None
             if len(idx):
-                mom = _planar_moments(rep, lpos[idx], lsup[idx], name, dev)
-                pairs = (RepMoments(cand[idx], lam[idx], g[idx], *mom) if mom is not None else RepMoments(cand[idx], lam[idx], g[idx])).toWorld(pose)
+                if isinstance(rep, SdfRep):
+                    values, h = sdf_values[idx], lsup[idx]
+                    second = None
+                    if channels is None or set(channels) & {9, 10, 11}:
+                        second = torch.stack([values[:, 3], values[:, 4], values[:, 4], values[:, 5]], 1).reshape(-1, 2, 2)*h[:, None, None]**2
+                    pairs = RepMoments(cand[idx], lam[idx], g[idx], values[:, 1:3]*h[:, None],
+                                       values[:, 8:].reshape(-1, 2, 2), second).toWorld(pose)
+                elif isinstance(rep.shape, HalfPlaneBody):
+                    d, normal, _ = rep.shape.signed(lpos[idx])
+                    h = lsup[idx]
+                    values = tier3Table(name, str(dev)).curvature_moments(d/h, normal, torch.zeros_like(d))
+                    second = torch.stack([values[:, 3], values[:, 4], values[:, 4], values[:, 5]], 1).reshape(-1, 2, 2)*h[:, None, None]**2
+                    pairs = RepMoments(cand[idx], lam[idx], g[idx], values[:, 1:3]*h[:, None],
+                                       values[:, 8:].reshape(-1, 2, 2), second).toWorld(pose)
+                else:
+                    pairs = RepMoments(cand[idx], lam[idx], g[idx]).toWorld(pose)
             if pairs is not None:
                 ent["implicit"].append(pairs)
             if bool(low.any()):
                 li = torch.nonzero(low).flatten()
-                ent["surface"].append(fb.pairs(lpos[li], lsup[li], cand[li], name, dev).toWorld(pose))
+                ent["surface"].append(fb.pairs(lpos[li], lsup[li], cand[li], name, dev, channels).toWorld(pose))
         else:                                                                                    # e.g. DiskArrayRep (the disk element exists on the fused path only): never silently zero
             raise NotImplementedError("the scene-operation (oracle) path does not evaluate %s; use the boundary provider (AnalyticBoundary / FusedWall)" % type(rep).__name__)
 
 
 def _planar_moments(rep, lpos, lsup, name, dev):
-    """(m1 [P,2], g1 [P,2,2]) of the half-plane model of the surface at the particle (exact for planes; O(kappa h) error for curved SDF surfaces, where the
-    lambda itself keeps its tier-3 curvature terms); None for primitives without first moments (disks)."""
+    """Legacy planar diagnostic for archived mixed-model evidence.
+
+    Current Scene SDF rows use the shared curvature_moments family instead.
+    Returns None for non-planar implicit primitives.
+    """
     if isinstance(rep, ImplicitRep):
         if not isinstance(rep.shape, HalfPlaneBody):
             return None
@@ -1321,30 +1528,88 @@ def _planar_moments(rep, lpos, lsup, name, dev):
     m1 = -(m1n * lsup)[:, None] * n
     tt = torch.stack([-n[:, 1], n[:, 0]], 1)
     g1 = g1nn[:, None, None] * n[:, :, None] * n[:, None, :] + g1tt[:, None, None] * tt[:, :, None] * tt[:, None, :]
+    # Fully empty/solid support does not need a normal. In particular, the
+    # gradient vanishes at a disk centre or medial axis; n=0 must not turn
+    # the whole-plane identity tensor into zero after the distance bypass.
+    outside_band = q.abs() >= 1
+    m1 = torch.where(outside_band[:, None], torch.zeros_like(m1), m1)
+    whole = (q <= -1)[:, None, None]*torch.eye(2, dtype=F64, device=dev)
+    g1 = torch.where(outside_band[:, None, None], whole, g1)
     return m1, g1
 
 
-def _sdfTier3(rep: SdfRep, lpos, lsup, name, dev):
-    d, n, kappa, gn = rep.signed(lpos)
+_SDF_CHANNEL_MASKS = {}
+
+
+def _sdfCurvature(rep: SdfRep, lpos, lsup, name, dev, channels=None, *, backend=None):
+    """Guarded canonical SDF family; channel selection uses Scene IDs 0..11.
+
+    The default executes one specialized Warp kernel, on CPU or CUDA. Torch is
+    retained explicitly for independent parity/guard diagnostics.
+    """
+    backend = rep.backend if backend is None else backend
+    if backend == 'warp':
+        from .sdf_warp import evaluate
+        return evaluate(rep, lpos, lsup, tier3Table(name, str(dev)), channels)
+    if backend != 'torch':
+        raise ValueError('SDF backend must be warp or torch')
+    values, low = _sdfCurvatureTorch(rep, lpos, lsup, name, dev)
+    if channels is not None:
+        from .sdf_warp import channel_mask
+        mask = channel_mask(channels)
+        key = (mask, str(values.device))
+        tensor = _SDF_CHANNEL_MASKS.get(key)
+        if tensor is None:
+            tensor = torch.tensor([float(bool(mask & (1 << i))) for i in range(12)], dtype=F64, device=values.device)
+            _SDF_CHANNEL_MASKS[key] = tensor
+        values = values*tensor
+    return values, low
+
+
+def _sdfCurvatureTorch(rep: SdfRep, lpos, lsup, name, dev):
+    """Guarded canonical SDF family: m1/m2 in support units, g0 physical."""
+    finite_pos = torch.isfinite(lpos).all(1)
+    safe_pos = torch.where(finite_pos[:, None], lpos, rep.origin+2*rep.spacing)
+    d, n, kappa, gn, denominator, covered = rep._signed(safe_pos)
+    variation, variation_covered = rep.curvatureVariation(safe_pos)
     t3 = tier3Table(name, str(dev))
     q = d / lsup
-    lam, dl = t3.lam(q, kappa * lsup)
-    valid = ((kappa * lsup).abs() <= rep.maxKappaH) & ((gn - 1).abs() <= rep.gradTol)
-    # smoothness over the whole support ball: probes at 0.5 h and h in 8 directions must show a unit gradient and a small curvature too
-    # (rules out ridges / medial axes and convex corners, where the local curvature expansion has nothing to say)
-    ang = torch.arange(8, dtype=F64, device=dev) * (np.pi / 4)
-    dirs = torch.stack([ang.cos(), ang.sin()], 1)
-    for rho in (0.5, 1.0):
-        probe = lpos[:, None, :] + rho * lsup[:, None, None] * dirs[None]
-        pd, _, pk, pg = rep.signed(probe.reshape(-1, 2))
-        ok = ((pk * lsup.repeat_interleave(8)).abs() <= rep.maxKappaH) & ((pg - 1).abs() <= rep.gradTol)
-        valid &= ok.reshape(-1, 8).all(1)
-    far = q >= 1.0
-    low = (~valid) & (~far)
-    lam = torch.where(valid, lam, torch.zeros_like(lam))
-    g = (dl / lsup)[:, None] * n
-    g = torch.where(valid[:, None], g, torch.zeros_like(g))
-    return lam, g, low
+    finite = (finite_pos & torch.isfinite(d) & torch.isfinite(n).all(1) & torch.isfinite(kappa) &
+              torch.isfinite(gn) & torch.isfinite(variation) & torch.isfinite(lsup) & (lsup > 0))
+    valid = (finite & covered & variation_covered & (denominator >= rep.minCurvatureDenominator) &
+             ((kappa*lsup).abs() <= rep.maxKappaH) & ((gn-1).abs() <= rep.gradTol) &
+             ((variation*lsup*lsup).abs() <= rep.maxCurvatureVariationH2) &
+             rep.supportValidity(lpos, lsup))
+    safe_q = torch.where(valid, q, torch.zeros_like(q))
+    safe_kappa = torch.where(valid, kappa*lsup, torch.zeros_like(q))
+    safe_variation = torch.where(valid, variation*lsup*lsup, torch.zeros_like(q))
+    safe_normal = torch.where(valid[:, None], n, torch.zeros_like(n))
+    values = t3.curvature_moments(safe_q, safe_normal, safe_kappa, safe_variation)
+    eps = 64*torch.finfo(values.dtype).eps
+    valid &= torch.isfinite(values).all(1) & (values[:, 0] >= -eps) & (values[:, 0] <= 1+eps)
+    # The prior normal-free empty/full support bypass remains independent of
+    # differential reconstruction (including at centres/medial axes).
+    known_distance = finite_pos & covered & torch.isfinite(d) & torch.isfinite(lsup) & (lsup > 0)
+    margin = np.sqrt(2.)*rep.spacing
+    empty = known_distance & (d >= lsup+margin)
+    full = known_distance & (d <= -lsup-margin)
+    low = (~valid) & (~empty) & (~full)
+    values = torch.where((valid & ~empty & ~full)[:, None], values, torch.zeros_like(values))
+    whole = torch.zeros_like(values)
+    whole[:, 0] = 1
+    whole[:, 3] = whole[:, 5] = t3.variance
+    whole[:, 8] = whole[:, 11] = 1
+    values = torch.where(full[:, None], whole, values)
+    safe_support = torch.where(torch.isfinite(lsup) & (lsup > 0), lsup, torch.ones_like(lsup))
+    values = values.clone()
+    values[:, 6:8] /= safe_support[:, None]
+    return values, low
+
+
+def _sdfTier3(rep: SdfRep, lpos, lsup, name, dev, *, backend=None):
+    """Compatibility view of the guarded all-moment SDF family."""
+    values, low = _sdfCurvature(rep, lpos, lsup, name, dev, backend=backend)
+    return values[:, 0], values[:, 6:8], low
 
 
 def _subState(ps, cand, lpos, lsup, dev):

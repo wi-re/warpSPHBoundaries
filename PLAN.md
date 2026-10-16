@@ -2,6 +2,11 @@
 
 ## Project status
 
+The current 2D accuracy improvement plan and component acceptance matrix are in
+[external 2D acceptance matrix](../warpSPHDevelopment/curvatureBoundaries/progress/plan-2d-accuracy.md). Historical status entries below
+describe their original validation scope; use that matrix and its fresh
+checkpoint for the current production accuracy gaps.
+
 - [x] Repository created
 - [x] Maple symbolic environment working (Maple 2026, batch harness verified 2026-10-01)
 - [x] Python numerical validation environment working (`warp` conda env, verified 2026-10-01)

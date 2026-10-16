@@ -15,6 +15,7 @@ import warp as wp
 
 from .boundaryOps import queryAllowed
 from .scene import BodyAdjacency, DiskArrayRep, SceneAdjacency, SurfaceRep
+from ..edge.predicates import cross2_f64
 
 F64 = torch.float64
 wf = wp.float64
@@ -30,7 +31,7 @@ def _cached(key, make):
     t = _INDEX_CACHE.get(key)
     if t is None:
         t = make()
-        if not torch.cuda.is_current_stream_capturing():
+        if not torch.cuda.is_available() or not torch.cuda.is_current_stream_capturing():
             _INDEX_CACHE[key] = t
     return t
 
@@ -54,7 +55,7 @@ class FixedTopology:
     ind: torch.Tensor
     _csr: tuple = None
 
-    def indicator(self, rep, lpos):
+    def indicator(self, rep, lpos, lsup=None):
         return self.ind
 
     def csr(self, rows):
@@ -102,8 +103,10 @@ def _fixed_topology_kernel(lpos: wp.array(dtype=wf), lsup: wp.array(dtype=wf), v
             fast = 1
     if inside and fast == 0:                                                       # not in an edge-free cell: ray casting along the y bin (the outside of the grid is the background)
         iy = int(wp.floor((py - y0) / dy))
-        if iy >= 0 and iy < nb:
+        if iy >= 0 and iy <= nb:
+            iy = wp.min(iy, nb - 1)
             w = wf(0.0)
+            boundary = int(0)
             for i in range(bstart[iy], bstart[iy + 1]):
                 e = bitems[i]
                 v0 = edges[2 * e]
@@ -112,11 +115,34 @@ def _fixed_topology_kernel(lpos: wp.array(dtype=wf), lsup: wp.array(dtype=wf), v
                 ay = verts[2 * v0 + 1]
                 cxx = verts[2 * v1]
                 cyy = verts[2 * v1 + 1]
-                isLeft = (cxx - ax) * (py - ay) - (cyy - ay) * (px - ax)
-                if ay <= py and py < cyy and isLeft > wf(0.0):
+                # Same relative, support-normalized coordinates and separately
+                # rounded cross product as the edge kernels.
+                arx = (ax - px) / h
+                ary = (ay - py) / h
+                crx = (cxx - px) / h
+                cry = (cyy - py) / h
+                cross = cross2_f64(arx, ary, crx, cry)
+                if ay <= py and py < cyy and cross > wf(0.0):
                     w += wf(1.0)
-                if cyy <= py and py < ay and isLeft < wf(0.0):
+                if cyy <= py and py < ay and cross < wf(0.0):
                     w -= wf(1.0)
+                if cross == wf(0.0) and arx * crx + ary * cry <= wf(0.0):
+                    boundary = 1
+            if boundary != 0:
+                # Boundary-angle convention shared with SurfaceRep.indicator:
+                # skip collinear / incident edges in the principal-value sum.
+                angle = wf(0.0)
+                for e in range(edges.shape[0] // 2):
+                    v0 = edges[2 * e]
+                    v1 = edges[2 * e + 1]
+                    arx = (verts[2 * v0] - px) / h
+                    ary = (verts[2 * v0 + 1] - py) / h
+                    crx = (verts[2 * v1] - px) / h
+                    cry = (verts[2 * v1 + 1] - py) / h
+                    cross = cross2_f64(arx, ary, crx, cry)
+                    if cross != wf(0.0):
+                        angle += wp.atan2(cross, arx * crx + ary * cry)
+                w = angle / wf(6.283185307179586)
             ind = w + bg
     ind_out[r] = ind
 
@@ -235,7 +261,7 @@ def fixed_adjacency(scene, queryParticles, operationProperties, supportMax):
         lo, hi = body.obb()
         lpos = body.toLocal(pos) if kin is None else kin.local[bi]
         d = (lo - lpos).clamp(min=0) + (lpos - hi).clamp(min=0)
-        valid = (d.norm(dim=1) < sup) & allowed
+        valid = allowed if body.unbounded() else (d.norm(dim=1) < sup) & allowed
         replist = body.fusedReps(supportMax, dev) or body.reps                  # implicit / SDF bodies as their exact polygon
         reps = [fixed_topology(rep, lpos, sup, valid, supportMax) if isinstance(rep, SurfaceRep) else (fixed_disk_topology(rep, lpos, sup, valid, supportMax) if isinstance(rep, DiskArrayRep) else None) for rep in replist]
         bodies.append(BodyAdjacency(body, cand, lpos, sup, reps, valid, replist))

@@ -78,8 +78,9 @@ reactions and an approximate nodal torque.
   Constant fields only for disks (no first moments for tiers 3/4 of curved bodies yet); **half planes carry first moments exactly** (below).
 * `SdfRep(values, origin, spacing, fallback=SurfaceRep)`: the only *generic* implicit type (sampled, so it works for any Warp kernel). Bilinear `d` with node-blended
   gradient and Laplacian; surface curvature `κ = Δd / (1 − dΔd)` (2D), `λ = F0 + κF1 + κ²F2` via the tier-3 tables. **Validity is a hard per-particle switch**:
-  `|κh| ≤ 0.5` and `| |∇d| − 1 | ≤ 0.1` at the particle and at 16 probes on the circles of radius h/2 and h around it. This rules out ridges / medial axes (the unit-gradient test)
-  and convex corners (κ → ∞); invalid particles use the fallback surface (error if none was given). Tested: a sampled disk (R = 3h, spacing h/16) is within 5e-4 of the exact
+  interval bounds over **all cells in the support bounding square** require finite jets, `1-dΔd ≥ 0.25`, `|κh| ≤ 0.5`, and gradient norm inside `[0.9,1.1]`.
+  Incomplete grid/stencil coverage is rejected. This replaces the sixteen probes that could miss features between locations; see [the guard contract and limits](sdf-guard.md).
+  Rejected particles use the fallback surface (error if none was given). Tested: a sampled disk (R = 3h, spacing h/16) is within 5e-4 of the exact
   disk; a box SDF with a fallback box is within 2e-3 everywhere, 1e-4 on average. The approximation error of the model is the tier-3 error (`κ³` terms) plus the sampling error
   of the SDF (here h/16); both are reported by the tests, not hidden.
 * **Planar first moments (tier 3 with linear fields).** For a half plane at distance `q = d/h` with the fluid-side normal `n`, `λ(q)` is the tabulated `F0`, and the first moments follow from

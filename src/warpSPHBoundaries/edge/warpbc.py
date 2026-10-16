@@ -23,6 +23,9 @@ from .np2d import _compile_profile_moment, _inner_profile, compile_moment, kerne
 from .precision import sync as _sync
 from .precision import IS_F32, IS_F64, np_real, require_f64, torch_real, vec2_t, vec3_t
 from .warp2d import _dangle, _edge_integral, _isqrt, _sdiff, real
+from .predicates import cross2_f64, cross2_f32
+
+_cross2 = cross2_f64 if IS_F64 else cross2_f32
 
 wp.config.quiet = True
 
@@ -167,8 +170,8 @@ def _device_plan(kernel, device, channels=None):
 class DevicePlan:
     """the plan arrays resident on one device."""
 
-    def __init__(self, kernel, device, channels=None):
-        pb, rin_idx = build_plan(kernel)
+    def __init__(self, kernel, device, channels=None, _builder=None):
+        pb, rin_idx = build_plan(kernel) if _builder is None else _builder
         self.rin_idx = rin_idx
         E, V = _channel_rows(pb, channels)
         self.nE, self.nV = len(E), len(V)
@@ -200,8 +203,8 @@ class ChebPlan:
     arrays as DevicePlan (Chebyshev coefficient ranges, no cn) plus the Gauss-Legendre nodes/weights on [-1, 1]; `panels` is a
     launch argument of the kernel, not part of the arrays."""
 
-    def __init__(self, kernel, device, nodes=16, panels=8, channels=None):
-        pb, rin_idx = build_cheb_plan(kernel)
+    def __init__(self, kernel, device, nodes=16, panels=8, channels=None, _builder=None):
+        pb, rin_idx = build_cheb_plan(kernel) if _builder is None else _builder
         self.rin_idx = rin_idx
         self.nodes = nodes
         self.panels = panels
@@ -585,6 +588,8 @@ def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=in
                           cn: wp.array(dtype=int), cc: wp.array(dtype=real),
                           cout: wp.array2d(dtype=real)):
     tid = wp.tid()
+    if pair_e[tid] < 0:
+        return
     qi = pair_q[tid]
     ed = edges[pair_e[tid]]
     h = sup[qi]
@@ -599,7 +604,7 @@ def _edge_channels_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=in
     t1 = d[1] / ell
     n0 = t1                                   # outward (fluid-side) normal of a counter-clockwise boundary
     n1 = -t0
-    z = (p[0] * q[1] - p[1] * q[0]) / ell     # positive when x lies on the solid side
+    z = _cross2(p[0], p[1], q[0], q[1]) / ell     # same rounded predicate as the indicator
     s0 = (d[0] * p[0] + d[1] * p[1]) / ell
     s1 = (d[0] * q[0] + d[1] * q[1]) / ell
     ch = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))
@@ -648,6 +653,8 @@ def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dty
     """a copy of _edge_channels_kernel with the monomial `_edge_integral` replaced by the Chebyshev-quadrature `_cheb_integral`
     (the value term is `z * _cheb_integral(0, 0, ...) - mR * _dangle`); the chord clip, the gates, the n_i factor and the 1/pi are unchanged."""
     tid = wp.tid()
+    if pair_e[tid] < 0:
+        return
     qi = pair_q[tid]
     ed = edges[pair_e[tid]]
     h = sup[qi]
@@ -662,7 +669,7 @@ def _edge_channels_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dty
     t1 = d[1] / ell
     n0 = t1                                   # outward (fluid-side) normal of a counter-clockwise boundary
     n1 = -t0
-    z = (p[0] * q[1] - p[1] * q[0]) / ell     # positive when x lies on the solid side
+    z = _cross2(p[0], p[1], q[0], q[1]) / ell
     s0 = (d[0] * p[0] + d[1] * p[1]) / ell
     s1 = (d[0] * q[0] + d[1] * q[1]) / ell
     ch = wp.vector(real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0), real(0.0))
@@ -713,6 +720,8 @@ def _edge_terms_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=
     nT = n_e + n_v
     pr = tid / nT
     t = tid - pr * nT
+    if pair_e[pr] < 0:
+        return
     qi = pair_q[pr]
     ed = edges[pair_e[pr]]
     h = sup[qi]
@@ -727,7 +736,7 @@ def _edge_terms_cheb_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=
     t1 = d[1] / ell
     n0 = t1
     n1 = -t0
-    z = (p[0] * q[1] - p[1] * q[0]) / ell
+    z = _cross2(p[0], p[1], q[0], q[1]) / ell
     s0 = (d[0] * p[0] + d[1] * p[1]) / ell
     s1 = (d[0] * q[0] + d[1] * q[1]) / ell
     az = wp.abs(z)
@@ -774,6 +783,8 @@ def _edge_terms_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
     nT = n_e + n_v
     pr = tid / nT
     t = tid - pr * nT
+    if pair_e[pr] < 0:
+        return
     qi = pair_q[pr]
     ed = edges[pair_e[pr]]
     h = sup[qi]
@@ -788,7 +799,7 @@ def _edge_terms_kernel(pair_q: wp.array(dtype=int), pair_e: wp.array(dtype=int),
     t1 = d[1] / ell
     n0 = t1
     n1 = -t0
-    z = (p[0] * q[1] - p[1] * q[0]) / ell
+    z = _cross2(p[0], p[1], q[0], q[1]) / ell
     s0 = (d[0] * p[0] + d[1] * p[1]) / ell
     s1 = (d[0] * q[0] + d[1] * q[1]) / ell
     az = wp.abs(z)
@@ -951,3 +962,30 @@ def edge_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, 
         _sync(device)
     c = cout[:P].to(torch.float64)                                   # the kernel computed in `real`; the tensors handed on are float64
     return c if as_torch else c.cpu().numpy()
+
+
+_SECOND_PLANS = {}
+
+
+def second_channels(pair_q, pair_e, positions, supports, vertices, edges, kernel, device="cuda:0", stable=None):
+    """Edge-local m20,m11,m02 in units of h; add indicator * plane moment.
+
+    Reuses the exact polynomial moment compiler and the existing device term
+    evaluator. This leaves the legacy nine-channel layout unchanged.
+    """
+    route = stable
+    if route is None:
+        route = STABLE_KERNELS.get(kernel)
+    if route is None and IS_F32:
+        route = (16, 8)
+    key = (kernel,str(device),route)
+    if key not in _SECOND_PLANS:
+        pb = _ChebBuilder(kernel) if isinstance(route,tuple) else _PlanBuilder(kernel)
+        for ch, alpha in enumerate([(2,0),(1,1),(0,2)]):
+            pb.moment_plan(ch, alpha, 1., 0)
+        _, rin = _inner_profile(kernel)
+        builder = (pb,pb.R(rin))
+        _SECOND_PLANS[key] = (ChebPlan(kernel,device,*route,_builder=builder) if isinstance(route,tuple)
+                              else DevicePlan(kernel,device,_builder=builder))
+    return edge_channels(pair_q,pair_e,positions,supports,vertices,edges,kernel,device=device,
+                         plan=_SECOND_PLANS[key],stable=None)[:, :3]

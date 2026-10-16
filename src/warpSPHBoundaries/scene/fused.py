@@ -10,6 +10,12 @@
     "a1g1"  sum_d a1_d g1_dj for a per-query world vector a1 (the hydrostatic field term A)    [B, N, 2]
     "lap"   sum of (2 lam - tr g1) (the wall Laplacian of the registered `lw2`; the indicator cancels)   [B, N]
     "m1"    sum of m1 = int y W, world frame (no indicator: the full-plane integral vanishes)    [B, N, 2]
+    "m2"    sum of int y tensor y W, world frame (explicit SurfaceRep only)                    [B, N, 2, 2]
+
+Small/sliver triangles use a conditioned device area rule. The nine-channel edge
+layout is retained; scalar second moments are compiled alongside it on demand.
+Per-item `qstatus` and `estimates` expose the empirical quadrature diagnostics.
+Set SurfaceRep.polygon(..., conditioned=False) to retain closed edge evaluation.
 exactly the arithmetic of `sceneOperation` (Density, Gradient of a constant, Covariance, Gradient with a per-query a1) on the moments of the same kernel, without the per-pair torch
 operations: the pairs of a row are summed by one thread in a fixed order (deterministic), rotated to the world frame once per query.  Surface representations only; other
 representations raise (callers keep the `sceneOperation` path for them).  `evaluate` can be called repeatedly on one `FusedWall` (new a1, other outputs): stage 1 is not repeated.
@@ -21,13 +27,23 @@ import numpy as np
 import torch
 import warp as wp
 
-from ..edge import warpdisk, warpfused
+from ..edge import warpdisk, warpfused, warptriangle, warpbc
 from ..edge.precision import real, sync as _sync, torch_real
 from .fixedadj import fixed_topology
 from .scene import BOX_EXACT_KERNELS, BoxRep, DiskArrayRep, SurfaceRep, boxTables
 
 F64 = torch.float64
-KINDS = {"lam": (0, 1), "g0": (1, 2), "cov": (2, 4), "a1g1": (3, 2), "lap": (4, 1), "m1": (5, 2)}
+KINDS = {"lam": (0, 1), "g0": (1, 2), "cov": (2, 4), "a1g1": (3, 2), "lap": (4, 1), "m1": (5, 2), "m2": (6, 4)}
+
+
+_CONSTANTS = {}
+
+
+def _constant(values, device):
+    key = (tuple(values),str(device),torch_real)
+    if key not in _CONSTANTS:
+        _CONSTANTS[key] = torch.tensor(values,dtype=torch_real,device=device)
+    return _CONSTANTS[key]
 
 
 @dataclass(frozen=True)
@@ -37,90 +53,105 @@ class WallOutput:
     kind: str
 
 
+@wp.func
+def _row_channel(c: wp.array2d(dtype=real), perm: wp.array(dtype=int), i0: int, i1: int,
+                 group: int, channel: int, ind: real, qc: wp.array2d(dtype=real), qs: wp.array2d(dtype=int), row: int):
+    if qs[row,group] != 0:
+        return qc[row,group*12+channel]
+    out = real(0.)
+    for i in range(i0,i1):
+        out += c[perm[i],group*9+channel]
+    if channel == 0 or channel == 5 or channel == 8:
+        out += ind
+    return out
+
+
 @wp.kernel
 def _wall_contract_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int), c: wp.array2d(dtype=real),
                           cand: wp.array(dtype=int), lsup: wp.array(dtype=real), ind: wp.array(dtype=real),
-                          Rm: wp.array(dtype=real),
+                          Rm: wp.array(dtype=real), qc: wp.array2d(dtype=real), qs: wp.array2d(dtype=int),
                           n_out: int, o_group: wp.array(dtype=int), o_kind: wp.array(dtype=int), o_base: wp.array(dtype=int), o_dim: wp.array(dtype=int), o_ind: wp.array(dtype=int),
                           a1: wp.array(dtype=real), a1_base: int, bidx: int, N: int, pool: wp.array(dtype=real)):
     row = wp.tid()
-    q = cand[row]
-    h = lsup[row]
-    i0 = row_start[row]
-    i1 = row_start[row + 1]
-    idv = ind[row]
-    R00 = Rm[0]                                                           # the pose rotation (c, -s, s, c) read from device memory: a graph replay sees the pose of its stage
-    R01 = Rm[1]
-    R10 = Rm[2]
-    R11 = Rm[3]
+    q,h = cand[row],lsup[row]
+    i0,i1 = row_start[row],row_start[row+1]
+    R00,R01,R10,R11 = Rm[0],Rm[1],Rm[2],Rm[3]
     for k in range(n_out):
-        g = o_group[k] * 9
-        kind = o_kind[k]
-        base = o_base[k] + (bidx * N + q) * o_dim[k]
-        use_ind = o_ind[k]
+        g,kind = o_group[k],o_kind[k]
+        base = o_base[k]+(bidx*N+q)*o_dim[k]
+        idv = real(0.)
+        if o_ind[k] != 0:
+            idv = ind[row]
         if kind == 0:
-            s = real(0.0)
-            for i in range(i0, i1):
-                s += c[perm[i], g]
-            if use_ind != 0:
-                s += idv
-            pool[base] = pool[base] + s
+            pool[base] += _row_channel(c,perm,i0,i1,g,0,idv,qc,qs,row)
         elif kind == 4:
-            s = real(0.0)
-            for i in range(i0, i1):
+            s = real(0.)
+            for i in range(i0,i1):
                 p = perm[i]
-                s += real(2.0) * c[p, g] - c[p, g + 5] - c[p, g + 8]
-            pool[base] = pool[base] + s
-        elif kind == 1:
-            vx = real(0.0)
-            vy = real(0.0)
-            for i in range(i0, i1):
-                p = perm[i]
-                vx += c[p, g + 3]
-                vy += c[p, g + 4]
-            vx = vx / h
-            vy = vy / h
-            pool[base] = pool[base] + R00 * vx + R01 * vy
-            pool[base + 1] = pool[base + 1] + R10 * vx + R11 * vy
-        elif kind == 5:
-            ux = real(0.0)
-            uy = real(0.0)
-            for i in range(i0, i1):
-                p = perm[i]
-                ux += c[p, g + 1]
-                uy += c[p, g + 2]
-            ux = ux * h
-            uy = uy * h
-            pool[base] = pool[base] + R00 * ux + R01 * uy
-            pool[base + 1] = pool[base + 1] + R10 * ux + R11 * uy
-        else:
-            m00 = real(0.0)
-            m01 = real(0.0)
-            m10 = real(0.0)
-            m11 = real(0.0)
-            for i in range(i0, i1):
-                p = perm[i]
-                m00 += c[p, g + 5]
-                m01 += c[p, g + 6]
-                m10 += c[p, g + 7]
-                m11 += c[p, g + 8]
-            if use_ind != 0:
-                m00 += idv
-                m11 += idv
+                s += real(2.)*c[p,g*9]-c[p,g*9+5]-c[p,g*9+8]
+            if qs[row,g] != 0:
+                s = real(2.)*qc[row,g*12]-qc[row,g*12+5]-qc[row,g*12+8]
+            pool[base] += s
+        elif kind == 1 or kind == 5:
+            ch = int(3)
+            scale = real(1.)/h
+            if kind == 5:
+                ch = 1
+                scale = real(h)
+            vx = scale*_row_channel(c,perm,i0,i1,g,ch,real(0.),qc,qs,row)
+            vy = scale*_row_channel(c,perm,i0,i1,g,ch+1,real(0.),qc,qs,row)
+            pool[base] += R00*vx+R01*vy
+            pool[base+1] += R10*vx+R11*vy
+        elif kind == 2 or kind == 3:
+            m00 = _row_channel(c,perm,i0,i1,g,5,idv,qc,qs,row)
+            m01 = _row_channel(c,perm,i0,i1,g,6,idv,qc,qs,row)
+            m10 = _row_channel(c,perm,i0,i1,g,7,idv,qc,qs,row)
+            m11 = _row_channel(c,perm,i0,i1,g,8,idv,qc,qs,row)
             if kind == 2:
-                pool[base] = pool[base] + R00 * (m00 * R00 + m01 * R01) + R01 * (m10 * R00 + m11 * R01)
-                pool[base + 1] = pool[base + 1] + R00 * (m00 * R10 + m01 * R11) + R01 * (m10 * R10 + m11 * R11)
-                pool[base + 2] = pool[base + 2] + R10 * (m00 * R00 + m01 * R01) + R11 * (m10 * R00 + m11 * R01)
-                pool[base + 3] = pool[base + 3] + R10 * (m00 * R10 + m01 * R11) + R11 * (m10 * R10 + m11 * R11)
+                pool[base] += R00*(m00*R00+m01*R01)+R01*(m10*R00+m11*R01)
+                pool[base+1] += R00*(m00*R10+m01*R11)+R01*(m10*R10+m11*R11)
+                pool[base+2] += R10*(m00*R00+m01*R01)+R11*(m10*R00+m11*R01)
+                pool[base+3] += R10*(m00*R10+m01*R11)+R11*(m10*R10+m11*R11)
             else:
-                aw0 = a1[a1_base + 2 * q]
-                aw1 = a1[a1_base + 2 * q + 1]
-                al0 = R00 * aw0 + R10 * aw1
-                al1 = R01 * aw0 + R11 * aw1
-                v0 = al0 * m00 + al1 * m10
-                v1 = al0 * m01 + al1 * m11
-                pool[base] = pool[base] + R00 * v0 + R01 * v1
-                pool[base + 1] = pool[base + 1] + R10 * v0 + R11 * v1
+                aw0,aw1 = a1[a1_base+2*q],a1[a1_base+2*q+1]
+                al0,al1 = R00*aw0+R10*aw1,R01*aw0+R11*aw1
+                v0,v1 = al0*m00+al1*m10,al0*m01+al1*m11
+                pool[base] += R00*v0+R01*v1
+                pool[base+1] += R10*v0+R11*v1
+
+
+@wp.kernel
+def _second_contract_kernel(row_start: wp.array(dtype=int), perm: wp.array(dtype=int), c: wp.array2d(dtype=real),
+                            cand: wp.array(dtype=int), sup: wp.array(dtype=real), ind: wp.array(dtype=real), R: wp.array(dtype=real),
+                            qc: wp.array2d(dtype=real), qs: wp.array2d(dtype=int), plane: wp.array(dtype=real),
+                            n_out: int, og: wp.array(dtype=int), ok: wp.array(dtype=int), ob: wp.array(dtype=int),
+                            bidx: int, N: int, pool: wp.array(dtype=real)):
+    row = wp.tid()
+    for k in range(n_out):
+        if ok[k] == 6:
+            g = og[k]
+            xx,xy,yy = real(0.),real(0.),real(0.)
+            for i in range(row_start[row],row_start[row+1]):
+                p = perm[i]
+                xx += c[p,g*3]
+                xy += c[p,g*3+1]
+                yy += c[p,g*3+2]
+            xx += ind[row]*plane[g*3]
+            xy += ind[row]*plane[g*3+1]
+            yy += ind[row]*plane[g*3+2]
+            if qs[row,g] != 0:
+                xx = real(qc[row,g*12+9])
+                xy = real(qc[row,g*12+10])
+                yy = real(qc[row,g*12+11])
+            hh = sup[row]*sup[row]
+            xx,xy,yy = xx*hh,xy*hh,yy*hh
+            r0,r1,r2,r3 = R[0],R[1],R[2],R[3]
+            base = ob[k]+(bidx*N+cand[row])*4
+            pool[base] += r0*r0*xx+real(2.)*r0*r1*xy+r1*r1*yy
+            off = r0*r2*xx+(r0*r3+r1*r2)*xy+r1*r3*yy
+            pool[base+1] += off
+            pool[base+2] += off
+            pool[base+3] += r2*r2*xx+real(2.)*r2*r3*xy+r3*r3*yy
 
 
 @wp.func
@@ -504,7 +535,9 @@ class FusedWall(WallAggregate):
         if ind0:                                                         # the indicator is part of the channels (box tables) or belongs to another item: add nothing in the contraction
             z = torch.zeros(rows, dtype=torch_real, device=self.dev)
             ind = (z, wp.from_torch(z, dtype=real))
-        self.items.append(dict(bi=bi, rep=rep, topo=topo, ba=ba, rows=rows, keep=(c, perm, start, cand32, lsup), ind=ind, fixed_ind=bool(ind0), w=w, R=(Rt, Rf, wp.from_torch(Rt, dtype=real), wp.from_torch(Rf.contiguous(), dtype=wp.float64))))
+        qc = torch.zeros((rows,12*len(self.groups)),dtype=torch_real,device=self.dev)
+        qs = torch.zeros((rows,len(self.groups)),dtype=torch.int32,device=self.dev)
+        self.items.append(dict(bi=bi, rep=rep, topo=topo, ba=ba, rows=rows, keep=(c, perm, start, cand32, lsup), ind=ind, fixed_ind=bool(ind0), w=w, R=(Rt, Rf, wp.from_torch(Rt, dtype=real), wp.from_torch(Rf.contiguous(), dtype=wp.float64)), quad=qc, qstatus=qs, estimates={}, second=None))
 
     def _add_item(self, bi, ba, rep, topo, gidx, ind0=False):
         """a polygon item: the pair channels of the groups `gidx` (zero-padded to the full layout), pairs of a row summed in a fixed order."""
@@ -518,6 +551,18 @@ class FusedWall(WallAggregate):
         rows = len(ba.cand)
         perm, start = topo.csr(rows)
         self._item(bi, ba, rep, topo, c, perm, start, ind0)
+        it = self.items[-1]
+        it['gidx'] = gidx
+        if rep._triangle is not None and c is not None:
+            for g in gidx:
+                values,estimate,status = warptriangle.channels(rep.vertices,ba.lpos,ba.lsup,rep._triangle,
+                    self.groups[g].kernel,rep.background,valid=ba.valid)
+                ch = self.groups[g].channels
+                mask = _constant([float(ch is None or k in ch) for k in range(12)],self.dev)
+                it['quad'][:,g*12:(g+1)*12] = values.to(torch_real)*mask
+                it['qstatus'][:,g] = status
+                it['estimates'][g] = estimate
+
 
     def _add_disks(self, bi, ba, rep, topo):
         """a bundle of disks: the channels of every (query, disk) slot of every group from the tables in one launch (`warpdisk`), complete (the indicator is inside lam / g1: `ind0`), summed per row in slot order."""
@@ -567,6 +612,8 @@ class FusedWall(WallAggregate):
     def evaluate(self, outputs, a1=None):
         """{name: tensor [B, N, ...]} float64, world frame.  `a1`: [B, N, 2] world vectors for the "a1g1" outputs."""
         outputs = tuple(outputs)
+        if any(o.kind == 'm2' for o in outputs) and any(not isinstance(rep,SurfaceRep) for body in self.scene.bodies for rep in body.reps):
+            raise NotImplementedError('m2 output currently requires explicit SurfaceRep geometry')
         B, N, dev = len(self.scene.bodies), self.N, self.dev
         o_group, o_kind, o_base, o_dim, o_ind, base, total, any_ind = _spec_arrays(outputs, B, N, dev, self.groups)
         pool = torch.zeros(max(total, 1), dtype=torch_real, device=dev)
@@ -580,7 +627,7 @@ class FusedWall(WallAggregate):
                 continue
             if any_ind:
                 if it["ind"] is None:
-                    ind = it["topo"].indicator(it["rep"], it["ba"].lpos).to(torch_real).contiguous()
+                    ind = it["topo"].indicator(it["rep"], it["ba"].lpos, it["ba"].lsup).to(torch_real).contiguous()
                     it["ind"] = (ind, wp.from_torch(ind, dtype=real))
                 windv = it["ind"][1]
             else:
@@ -591,16 +638,43 @@ class FusedWall(WallAggregate):
             wstart, wperm, wc, wcand, wlsup = it["w"]
             wR = it["R"][2]
             wp.launch(_wall_contract_kernel, dim=it["rows"], device=dev, inputs=[
-                wstart, wperm, wc, wcand, wlsup, windv, wR,
+                wstart, wperm, wc, wcand, wlsup, windv, wR, wp.from_torch(it["quad"],dtype=real), wp.from_torch(it["qstatus"],dtype=wp.int32),
                 len(outputs), o_group, o_kind, o_base, o_dim, o_ind, wa1, it["bi"] * N * 2, it["bi"], N, wpool])
+            if any(o.kind == 'm2' for o in outputs):
+                self._ensure_second(it)
+                if it['ind'] is None:
+                    ind = it['topo'].indicator(it['rep'],it['ba'].lpos,it['ba'].lsup).to(torch_real).contiguous()
+                    it['ind'] = (ind,wp.from_torch(ind,dtype=real))
+                wp.launch(_second_contract_kernel,dim=it['rows'],device=dev,inputs=[
+                    wstart,wperm,wp.from_torch(it['second'][0],dtype=real),wcand,wlsup,it['ind'][1],wR,
+                    wp.from_torch(it['quad'],dtype=real),wp.from_torch(it['qstatus'],dtype=wp.int32),wp.from_torch(it['second'][1],dtype=real),
+                    len(outputs),o_group,o_kind,o_base,it['bi'],N,wpool])
         _sync(dev)
         res = {}
         for o, b0 in zip(outputs, base):
             dim = KINDS[o.kind][1]
             t = pool[b0:b0 + B * N * dim].to(F64)
-            shape = {"lam": (B, N), "lap": (B, N), "g0": (B, N, 2), "a1g1": (B, N, 2), "cov": (B, N, 2, 2), "m1": (B, N, 2)}[o.kind]
+            shape = {"lam": (B, N), "lap": (B, N), "g0": (B, N, 2), "a1g1": (B, N, 2), "cov": (B, N, 2, 2), "m1": (B, N, 2), "m2": (B, N, 2, 2)}[o.kind]
             res[o.name] = t.reshape(shape)
         return res
+
+    def _ensure_second(self, it):
+        if it['second'] is not None:
+            return
+        dev = self.dev
+        c2 = torch.zeros((it['keep'][0].shape[0],3*len(self.groups)),dtype=torch_real,device=dev)
+        planes = torch.zeros(3*len(self.groups),dtype=torch_real,device=dev)
+        for g in it.get('gidx', []):
+            ch = self.groups[g].channels
+            mask = _constant([float(ch is None or k in ch) for k in (9,10,11)],dev)
+            group = self.groups[g].resolved()
+            route = (group.nodes,group.panels) if group.route == 'cheb' else False
+            c2[:,g*3:(g+1)*3] = warpbc.second_channels(it['topo'].qi,it['topo'].e,it['ba'].lpos,it['ba'].lsup,
+                it['rep'].vertices,it['rep'].edges,group.kernel,device=dev,stable=route).to(torch_real)*mask
+            mass = warptriangle.plane_second_moment(self.groups[g].kernel)
+            planes[g*3:(g+1)*3] = _constant([mass,0.,mass],dev)*mask
+        it['second'] = (c2,planes)
+
 
     def _tensors(self):
         """every persistent input of the contraction / cone-area kernels of this FusedWall, in a fixed order: (name, item index, tensor)."""
@@ -609,6 +683,12 @@ class FusedWall(WallAggregate):
             keep, topo, ba = it["keep"], it["topo"], it["ba"]
             if keep[0] is not None:
                 out.append(("c", k, keep[0]))
+            if it['second'] is not None:
+                out.append(("second",k,it['second'][0]))
+            for g in sorted(it['estimates']):
+                out.append(("estimate."+str(g),k,it['estimates'][g]))
+            out.append(("quad",k,it["quad"]))
+            out.append(("qstatus",k,it["qstatus"]))
             out.append(("lsup", k, keep[4]))
             if topo is not None:
                 out.append(("e", k, topo.e))
@@ -627,6 +707,9 @@ class FusedWall(WallAggregate):
     def copy_from(self, other):
         """overwrite the data of this FusedWall with that of `other` (the same scene, groups and query count) in place, so that kernels / CUDA graphs that read this object's buffers see the new position set;
         the arrays derived lazily from them are rebuilt by their kernels (call `reset_derived` when this object outlives a graph capture)."""
+        for current,new in zip(self.items,other.items):
+            if current['second'] is not None:
+                other._ensure_second(new)
         a, b = self._tensors(), other._tensors()
         assert [(n, k) for n, k, _ in a] == [(n, k) for n, k, _ in b], "FusedWall.copy_from: different structure"
         for (_, _, ta), (_, _, tb) in zip(a, b):
@@ -639,6 +722,7 @@ class FusedWall(WallAggregate):
                 it["ind"] = None
             it["ind0"] = None
             it["cone"] = None
+            it["second"] = None
 
     def _poly_cache(self, it):
         """float64 device copies of the inputs of the polygon kernels (cone area, direction extreme) of one item, built once per position set."""
@@ -646,7 +730,7 @@ class FusedWall(WallAggregate):
             ba, rep, dev = it["ba"], it["rep"], self.dev
             lpos = ba.lpos.to(F64).contiguous().reshape(-1)
             lsup = ba.lsup.to(F64).contiguous()
-            ind = it["topo"].indicator(rep, ba.lpos).to(F64).contiguous()
+            ind = it["topo"].indicator(rep, ba.lpos, ba.lsup).to(F64).contiguous()
             verts = rep.vertices.to(dev, F64).contiguous().reshape(-1)
             edges = rep.edges.to(dev, torch.int32).contiguous().reshape(-1)
             pe = it["topo"].e.to(torch.int32).contiguous()

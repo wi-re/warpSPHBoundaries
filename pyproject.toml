@@ -23,7 +23,7 @@ classifiers = [
 dependencies = ["numpy", "scipy", "mpmath", "torch", "warp-lang", "warpSPHCore>=0.6.0"]
 
 [project.optional-dependencies]
-scripts = ["matplotlib"]
+scripts = ["matplotlib", "markdown-it-py"]
 test = ["pytest"]
 
 [project.urls]

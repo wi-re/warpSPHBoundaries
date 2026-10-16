@@ -11,7 +11,7 @@ The 1D functions F_k(q), F_k'(q) are tabulated once per kernel (exact mpmath eva
 evaluated by cubic Hermite interpolation; tier 4 uses exact polynomial coefficients of Delta^k W.  Supported bodies: `DiskBody` (solid disk or cavity) and
 `HalfPlaneBody` (tier 3 with kappa = 0 is EXACT = the planar closed form).  Supported fields: constants per body (what a static or uniformly moving wall needs):
 the operations are  lambda * rho_b (Density), lambda * A (Interpolate),  a (x) grad lambda (Gradient), a . grad lambda, curl (Divergence, Curl).
-Fields varying along the surface need the moment versions of F_k (same derivation, not done): use tier 2 elements for those.
+Scene's SDF path uses the shared order-two twelve-moment family in curvature_moments; the legacy boundary-operation entry point below remains constant-field only.
 """
 from dataclasses import dataclass
 from fractions import Fraction
@@ -67,10 +67,95 @@ class Tier3:
         self.q = torch.as_tensor(q, dtype=torch.float64, device=device)
         self.F = torch.as_tensor(F, dtype=torch.float64, device=device)
         self.dF = torch.as_tensor(dF, dtype=torch.float64, device=device)
+        self.q_min = float(q[0])
+        from ..edge.curvature import whole_plane_variance
+        self.variance = float(whole_plane_variance(kname))
         # Lambda(q) = int_q^1 F0(s) ds (exact integral of the Hermite spline), for the first moment of a half plane
         hh = self.q[1:] - self.q[:-1]
         seg = 0.5 * hh * (self.F[0][:-1] + self.F[0][1:]) + hh * hh * (self.dF[0][:-1] - self.dF[0][1:]) / 12.0
         self.Lam = torch.cat([torch.flip(torch.cumsum(torch.flip(seg, [0]), 0), [0]), torch.zeros(1, dtype=torch.float64, device=device)])
+        # Exact segment integrals of the existing cubic Hermite coefficient
+        # splines, optionally weighted by q. No new fitted kernel tables.
+        h = hh[None]
+        left, right = self.F[:, :-1], self.F[:, 1:]
+        slope0, slope1 = self.dF[:, :-1]*h, self.dF[:, 1:]*h
+        self._coeff = (left, slope0, 3*(right-left)-2*slope0-slope1,
+                       2*(left-right)+slope0+slope1)
+        self._cumulative = []
+        for power in (0, 1):
+            segment = sum(c*(h/(j+1) if power == 0 else h*(self.q[:-1][None]/(j+1)+h/(j+2)))
+                          for j, c in enumerate(self._coeff))
+            tail = torch.flip(torch.cumsum(torch.flip(segment, [1]), 1), [1])
+            self._cumulative.append(torch.cat([tail, torch.zeros((3, 1), dtype=torch.float64, device=device)], 1))
+
+    def _integral(self, k, distance, power=0):
+        """Integral_a^1 q^power F_k(q) dq of the Hermite spline, power=0/1."""
+        a = distance.abs()
+        q = a.clamp(self.q_min, 1.)
+        index = torch.bucketize(q, self.q[1:-1].contiguous())
+        left, right = self.q[index], self.q[index+1]
+        h = right-left
+        t = (q-left)/h
+        result = self._cumulative[power][k, index+1]
+        for j, coefficients in enumerate(self._coeff):
+            weight = ((1-t**(j+1))/(j+1) if power == 0 else
+                      left*(1-t**(j+1))/(j+1)+h*(1-t**(j+2))/(j+2))
+            result = result+h*coefficients[k, index]*weight
+        gap = (self.q[0]-a).clamp(min=0)
+        if power == 0:
+            result = result+self.F[k, 0]*gap-self.dF[k, 0]*gap**2/2
+        else:
+            result = result+self.F[k, 0]*(self.q[0]*gap-gap**2/2)+self.dF[k, 0]*(-self.q[0]*gap**2/2+gap**3/3)
+        return torch.where(a < 1, result, torch.zeros_like(result))
+
+    def curvature_moments(self, distance, normal, curvature, variation=None):
+        """All 12 unit-support moments through geometric order two.
+
+        curvature=h*kappa, variation=h²*d(kappa)/ds; tangent=(-n_y,n_x).
+        Outputs are m00,m10,m01,m20,m11,m02,Gx,Gy,g1xx,g1xy,g1yx,g1yy.
+        The signed-distance SDF/normal must be valid; Scene guards sampled jets
+        before this method. This asymptotic family is not an error certificate.
+        """
+        d, k = distance, curvature
+        b = torch.zeros_like(d) if variation is None else variation
+        a = d.abs()
+        f0, df0 = self._hermite(0, a)
+        f1, _ = self._hermite(1, a)
+        B0, B2 = -df0, -2*f1
+        B4 = -6*self._integral(1, a, 1)
+        plane = torch.where(d >= 0, f0, 1-f0)
+        tangential_second = -2*self._integral(1, a)
+        normal_second = a*a*f0+2*self._integral(0, a, 1)
+        tangential_second = torch.where(d >= 0, tangential_second, self.variance-tangential_second)
+        normal_second = torch.where(d >= 0, normal_second, self.variance-normal_second)
+        mass = plane-k*B2/2+3*d*k*k*B2/8
+        first_t = -b*B4/6
+        first_n = -B2+k*d*B2/2+k*k*(B4-3*d*d*B2)/8
+        second_tt = tangential_second-k*B4/2+5*d*k*k*B4/8
+        second_tn = b*d*B4/6
+        second_nn = normal_second-k*d*d*B2/2+k*k*(-2*d*B4+3*d**3*B2)/8
+        gradient_t = -b*B2/2
+        gradient_n = -B0+k*d*B0/2+3*k*k*(B2-d*d*B0)/8
+        cov_tt = plane-3*k*B2/2+15*d*k*k*B2/8
+        cov_tn = b*d*B2/2
+        cov_nn = plane+d*B0-k*d*d*B0/2+k*k*(-6*d*B2+3*d**3*B0)/8
+        n = normal
+        t = torch.stack([-n[:, 1], n[:, 0]], 1)
+        tt, nn = t[:, :, None]*t[:, None, :], n[:, :, None]*n[:, None, :]
+        tn = t[:, :, None]*n[:, None, :]+n[:, :, None]*t[:, None, :]
+        first = first_t[:, None]*t+first_n[:, None]*n
+        second = second_tt[:, None, None]*tt+second_tn[:, None, None]*tn+second_nn[:, None, None]*nn
+        gradient = gradient_t[:, None]*t+gradient_n[:, None]*n
+        cov = cov_tt[:, None, None]*tt+cov_tn[:, None, None]*tn+cov_nn[:, None, None]*nn
+        scalar_second = torch.stack([second[:, 0, 0], second[:, 0, 1], second[:, 1, 1]], 1)
+        values = torch.cat([mass[:, None], first, scalar_second, gradient, cov.flatten(1)], 1)
+        # Normal-free exact values for empty/full support, including centres.
+        whole = torch.zeros_like(values)
+        whole[:, 0] = 1
+        whole[:, 3] = whole[:, 5] = self.variance
+        whole[:, 8] = whole[:, 11] = 1
+        values = torch.where((d <= -1)[:, None], whole, values)
+        return torch.where((d >= 1)[:, None], torch.zeros_like(values), values)
 
     def planar_moments(self, d):
         """first moments of the half plane solid at SIGNED distance d / h (positive on the fluid side, units of h), valid for d >= 0 and (by the complement) d < 0:
@@ -81,7 +166,7 @@ class Tier3:
         a = d.abs()
         lam0, dl0 = self._hermite(0, a)
         # Lambda by Hermite interpolation (derivative -F0)
-        qq = a.clamp(float(self.q[0]), 1.0)
+        qq = a.clamp(self.q_min, 1.0)
         idx = torch.bucketize(qq, self.q[1:-1].contiguous())
         q0, q1 = self.q[idx], self.q[idx + 1]
         hq = q1 - q0
@@ -90,6 +175,11 @@ class Tier3:
         m0, m1_ = -self.F[0][idx] * hq, -self.F[0][idx + 1] * hq
         t2, t3 = t_ * t_, t_ * t_ * t_
         Lam = (2 * t3 - 3 * t2 + 1) * f0 + (t3 - 2 * t2 + t_) * m0 + (-2 * t3 + 3 * t2) * f1 + (t3 - t2) * m1_
+        # _hermite extends F0 linearly below q[0]. Integrate the SAME
+        # continuation to zero rather than dropping [a,q[0]] from Lambda.
+        # Omitting this strip biases the first moment by ~q[0]/2 at the wall.
+        gap = (self.q[0] - a).clamp(min=0)
+        Lam = Lam + self.F[0][0] * gap - 0.5 * self.dF[0][0] * gap * gap
         Lam = torch.where(a < 1.0, Lam, torch.zeros_like(Lam))
         m1n_c = a * lam0 + Lam                       # complement / solid-side half plane moment (positive d)
         g1nn_c = lam0 - a * dl0
@@ -104,7 +194,7 @@ class Tier3:
 
     def _hermite(self, k, q):
         """F_k(q), F_k'(q) by cubic Hermite interpolation (q clamped to the table, F = 0 for q >= 1)."""
-        qq = q.clamp(float(self.q[0]), 1.0)
+        qq = q.clamp(self.q_min, 1.0)
         idx = torch.bucketize(qq, self.q[1:-1].contiguous())          # interval index 0..n-1
         q0, q1 = self.q[idx], self.q[idx + 1]
         h = q1 - q0

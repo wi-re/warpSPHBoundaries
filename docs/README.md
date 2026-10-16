@@ -6,6 +6,12 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 
 | file | content | status |
 |---|---|---|
+| [validation.md](validation.md) | accuracy scope, limitations, external evidence storage and reproduction commands | development progress and generated artifacts are outside the repo |
+| [surface-moments.md](surface-moments.md) | twelve-moment SurfaceRep contract, device conditioning, diagnostics and validation | CPU/CUDA finite ε32 gate passed; other representations remain partial |
+| [sdf-guard.md](sdf-guard.md) | sampled-cell interval guard, curvature-pole rejection, explicit fallback and accuracy limits | conservative domain guard; local-model integral tolerance remains open |
+| [sdf-distance-only.md](sdf-distance-only.md) | curvature-free semi-analytic half-plane reference, twelve moments and separated error budgets | reference complete; geometric bias explicitly measured |
+| [derivations/curvature-moments-2d.md](derivations/curvature-moments-2d.md) | consistent order-two curvature/variation corrections, twelve moments, sampled-jet guard and differential identities | implemented in Scene; higher-order accuracy limits remain |
+| [sdf-accepted-accuracy.md](sdf-accepted-accuracy.md) | baseline accepted smooth-SDF audit and reference construction | historical mixed model; superseded by the shared curvature-moment family |
 | `notation.md` | conventions shared by all derivations and code | draft |
 | `derivation.md` | exact closed forms: 2D/3D planar, 3D sphere (the `PLAN.md` track; Maple + mpmath validated) | [V] |
 | `boundary-operations.md` | warpSPH-style boundary operations (Interpolate/Gradient/Divergence/Curl/Density), Warp P1 pair engine, kernels, throughput, tier 3/4 implicit bodies (disk, half-plane) with hard tier switches | [V] tiers 1–4 |
