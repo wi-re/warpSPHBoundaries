@@ -3,7 +3,7 @@
 // integral_0^r t^(k+1) W(t)dt. Edge/arc integrals use split Gauss quadrature.
 // Query gradients follow integration by parts: G_i=-oint W n_i and
 // g1_ij=delta_ij M0-oint y_i W n_j. These are not mass-grid differences.
-import {SHAPES,radialJet,gauss} from './term-engine.js';
+import {SHAPES,radialJet,gauss} from './term-engine.js?v=20261022-2';
 export const FIELDS2D=['m00','m10','m01','m20','m11','m02','Gx','Gy','g1xx','g1xy','g1yx','g1yy','grad_norm'];
 export const DEFAULT2D={geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24};
 export const MODELS2D={mesh:['Triangle mesh','Split Gauss integration of regular radial flux, summed over triangles.'],exact:['Polygon · radial flux','Split Gauss integration over polygon edges; float64 numerical quadrature.'],rectangle:['Rectangle · radial flux','Four-edge integration of the same regular flux; rectangle only.'],sdf:['SDF · distance only','Local half-plane integrals with analytic or sampled SDF jets.'],curvature:['SDF · curvature O(2)','Quadratic-graph expansion of each integrand; circle only, R/h ≥ 2.'],disk:['Circle · boundary quadrature','Circle arcs split at kernel knots; refine Gauss nodes to assess convergence.']};
