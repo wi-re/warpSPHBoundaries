@@ -1,0 +1,48 @@
+// Shared host-side layout for browser WebGPU dispatch and native WGSL tests.
+import {FIELDS2D,MODELS2D,validate2d,geometry2d,fluxPlan} from './browser-compute2d.js?v=20261022-3';
+import {SHAPES,gauss} from './term-engine.js?v=20261022-3';
+export function grid2d(payload){
+ const c=validate2d(payload),geometry=geometry2d(c),n=c.resolution;
+ const lo=[0,1].map(i=>c.geometry==='circle'?-c.radius:Math.min(...geometry.vertices.map(p=>p[i]))),hi=[0,1].map(i=>c.geometry==='circle'?c.radius:Math.max(...geometry.vertices.map(p=>p[i]))),half=Math.max(...hi.map((x,i)=>x-lo[i]))/2+c.padding*c.h;
+ const [x,y]=lo.map((v,i)=>Array.from({length:n},(_,j)=>(v+hi[i])/2-half+2*half*j/(n-1)));
+ return {c,geometry,x,y};
+}
+export function meshBoundary2d(triangles){
+ const edges=new Map();
+ for(const triangle of triangles)for(let i=0;i<3;i++){
+  const a=triangle[i],b=triangle[(i+1)%3],ka=JSON.stringify(a),kb=JSON.stringify(b),forward=ka<kb,key=forward?ka+'|'+kb:kb+'|'+ka;
+  const row=edges.get(key)??{a:forward?a:b,b:forward?b:a,count:0};row.count+=forward?1:-1;edges.set(key,row);
+ }
+ const boundary=[];for(const {a,b,count}of edges.values())for(let i=0;i<Math.abs(count);i++)boundary.push(count>0?[a,b]:[b,a]);return boundary;
+}
+export function modelError2d(model,c,x,y){
+ if(model==='rectangle'&&c.geometry!=='rectangle')return 'Built-in rectangle requires rectangle geometry';
+ if(model==='disk'&&c.geometry!=='circle')return 'Circle reference requires circle geometry';
+ if(model==='curvature'&&(c.geometry!=='circle'||c.radius/c.h<2))return 'Curvature model requires circle geometry and R/h ≥ 2';
+ if(c.sdf_source==='sampled'&&['sdf','curvature'].includes(model)){
+  const spacing=c.sdf_spacing*c.h,nx=Math.ceil((x.at(-1)-x[0])/spacing+3)+4,ny=Math.ceil((y.at(-1)-y[0])/spacing+3)+4;
+  if(nx*ny>2_000_000)return 'SDF lattice too large; increase SDF spacing';
+ }
+ return null;
+}
+export function compile2d(payload){
+ const plan=grid2d(payload),{c,geometry,x,y}=plan,edges=meshBoundary2d(geometry.triangles),table=new Float32Array(236+geometry.vertices.length*2+edges.length*4),shape=SHAPES[c.kernel];
+ table.set(gauss(c.quadrature).flat());
+ const flux=fluxPlan(c.kernel);
+ for(let degree=0;degree<=2;degree++){const base=128+degree*32;table[base]=flux[degree].total;table.set(flux[degree].inner,base+1);table.set(flux[degree].tail,base+13);}
+ table.set(flux[0].inner.map((v,i)=>v*(i+2)),224);
+ table.set(geometry.vertices.flat().map(x=>x/c.h),236);table.set(edges.flat(2).map(x=>x/c.h),236+geometry.vertices.length*2);
+ const uniform=new ArrayBuffer(96),u=new Uint32Array(uniform),f=new Float32Array(uniform);
+ u.set([c.resolution,FIELDS2D.indexOf(c.field),['rectangle','triangle','circle'].indexOf(c.geometry),0,geometry.vertices.length,edges.length,c.quadrature,['cubic','w2','w4','w6'].indexOf(c.kernel)]);
+ f.set([x[0]/c.h,y[0]/c.h,(x[1]-x[0])/c.h,c.h,c.radius/c.h,c.sdf_spacing,c.sdf_source==='sampled'?1:0,flux[0].inner[0]*(c.kernel==='cubic'?4:2),shape.n,shape.P[1]??0,shape.P[2]??0,shape.P[3]??0,x[0]/c.h-3*c.sdf_spacing,y[0]/c.h-3*c.sdf_spacing,0,0],8);
+ return {...plan,table,uniform:new Uint8Array(uniform)};
+}
+export function resultRow2d(model,values,milliseconds,c,engine){
+ let min=Infinity,max=-Infinity,missing=0;
+ const data=Array.from(values,v=>{if(!Number.isFinite(v)){missing++;return null;}min=Math.min(min,v);max=Math.max(max,v);return v;});
+ const notes=[`Browser ${engine}; selected-integrand evaluation without mass-grid finite differences.`,MODELS2D[model][1],`${c.quadrature} Gauss nodes per smooth panel. Numerical quadrature approximates the represented model; arithmetic and geometry/model errors are separate.`];
+ if(model==='mesh')notes.push('Opposite shared triangle edges cancel algebraically before fp32 boundary evaluation; the represented mesh is unchanged.');
+ if(c.geometry==='circle'&&['mesh','exact'].includes(model))notes.push(`The inscribed ${c.segments}-gon approximates the circle.`);
+ if(['sdf','curvature'].includes(model))notes.push(c.sdf_source==='sampled'?'Bilinearly sampled SDF with finite-difference normals and curvature; fp32 cancellation in small lattice spacings can affect jets.':'Analytic signed distance and normal; ambiguous normal samples remain missing.');
+ return {model,label:MODELS2D[model][0],values:data,min:Number.isFinite(min)?min:null,max:Number.isFinite(max)?max:null,missing,notes,milliseconds};
+}

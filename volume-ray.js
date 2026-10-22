@@ -1,6 +1,6 @@
 // Pure CPU ray caster, also used by regression tests. Integrate segments in
 // depth order, splitting at slice intersections rather than overpainting them.
-import {cameraFrame,sampleVolume,clamp} from './volume-math.js?v=20261022-2';
+import {cameraFrame,sampleVolume,clamp} from './volume-math.js?v=20261022-3';
 export function rayBox(origin,direction){
  let near=0,far=Infinity;
  for(let j=0;j<3;j++){

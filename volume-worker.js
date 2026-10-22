@@ -1,4 +1,4 @@
-import {renderPixels} from './volume-ray.js?v=20261022-2';
+import {renderPixels} from './volume-ray.js?v=20261022-3';
 let values,distance,n;
 onmessage=event=>{
  if(event.data.type==='volume'){({values,distance,n}=event.data);return;}

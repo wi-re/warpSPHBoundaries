@@ -3,17 +3,18 @@
 // integral_0^r t^(k+1) W(t)dt. Edge/arc integrals use split Gauss quadrature.
 // Query gradients follow integration by parts: G_i=-oint W n_i and
 // g1_ij=delta_ij M0-oint y_i W n_j. These are not mass-grid differences.
-import {SHAPES,radialJet,gauss} from './term-engine.js?v=20261022-2';
+import {SHAPES,radialJet,gauss} from './term-engine.js?v=20261022-3';
 export const FIELDS2D=['m00','m10','m01','m20','m11','m02','Gx','Gy','g1xx','g1xy','g1yx','g1yy','grad_norm'];
 export const DEFAULT2D={geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24};
-export const MODELS2D={mesh:['Triangle mesh','Split Gauss integration of regular radial flux, summed over triangles.'],exact:['Polygon · radial flux','Split Gauss integration over polygon edges; float64 numerical quadrature.'],rectangle:['Rectangle · radial flux','Four-edge integration of the same regular flux; rectangle only.'],sdf:['SDF · distance only','Local half-plane integrals with analytic or sampled SDF jets.'],curvature:['SDF · curvature O(2)','Quadratic-graph expansion of each integrand; circle only, R/h ≥ 2.'],disk:['Circle · boundary quadrature','Circle arcs split at kernel knots; refine Gauss nodes to assess convergence.']};
+export const MODELS2D={mesh:['Triangle mesh','Split Gauss integration of regular radial flux, summed over triangles.'],exact:['Polygon · radial flux','Split Gauss integration over polygon edges; numerical quadrature.'],rectangle:['Rectangle · radial flux','Four-edge integration of the same regular flux; rectangle only.'],sdf:['SDF · distance only','Local half-plane integrals with analytic or sampled SDF jets.'],curvature:['SDF · curvature O(2)','Quadratic-graph expansion of each integrand; circle only, R/h ≥ 2.'],disk:['Circle · boundary quadrature','Circle arcs split at kernel knots; refine Gauss nodes to assess convergence.']};
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1],cross=(a,b)=>a[0]*b[1]-a[1]*b[0],sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
 const norm2={w2:7/Math.PI,w4:9/Math.PI,w6:78/(7*Math.PI),cubic:80/(7*Math.PI)};
 const choose=(n,k)=>{let v=1;for(let i=1;i<=k;i++)v=v*(n-i+1)/i;return v;};
 const horner=(p,x)=>{let v=0;for(let i=p.length-1;i>=0;i--)v=v*x+p[i];return v;};
 const fluxCache=new Map();
+export function value2d(r,name){if(r>=1)return 0;const k=SHAPES[name];return norm2[name]*(name==='cubic'?(1-r)**3-4*Math.max(.5-r,0)**3:(1-r)**k.n*k.P.reduce((s,c,i)=>s+c*r**i,0));}
 export function kernel2d(r,name){return radialJet(r,name).map(v=>v*norm2[name]/SHAPES[name].C);}
-function fluxPlan(name){
+export function fluxPlan(name){
  if(fluxCache.has(name))return fluxCache.get(name);
  const shape=SHAPES[name],ratio=norm2[name]/shape.C,coeffs=shape.coeffs.map(c=>c*ratio),plans=[];
  for(let degree=0;degree<=2;degree++){
@@ -31,7 +32,7 @@ export function flux(r,name,degree){
  const integral=r>=1?p.total:p.total-(1-r)**(p.power+1)*horner(p.tail,1-r);
  return integral/r**(degree+2);
 }
-function whole(name){const v=Array(12).fill(0);v[0]=1;v[3]=v[5]=Math.PI*fluxPlan(name)[2].total;v[8]=v[11]=1;return v;}
+export function whole2d(name){const v=Array(12).fill(0);v[0]=1;v[3]=v[5]=Math.PI*fluxPlan(name)[2].total;v[8]=v[11]=1;return v;}
 export function geometry2d(c){
  let v;if(c.geometry==='circle')v=Array.from({length:c.segments},(_,i)=>[c.radius*Math.cos(2*Math.PI*i/c.segments),c.radius*Math.sin(2*Math.PI*i/c.segments)]);
  else {v=c.geometry==='rectangle'?[[-c.width/2,-c.height/2],[c.width/2,-c.height/2],[c.width/2,c.height/2],[-c.width/2,c.height/2]]:c.vertices.slice(0,3).map(p=>[...p]);const a=c.angle*Math.PI/180;v=v.map(([x,y])=>[Math.cos(a)*x-Math.sin(a)*y,Math.sin(a)*x+Math.cos(a)*y]);}
@@ -55,7 +56,7 @@ export function signed2d(p,c,vertices){
 // Accumulate all 12 channels together. Moments and query gradients have
 // different fluxes; first gradient moments are completed with delta_ij M0.
 function addBoundary(out,x,y,nx,ny,weight,name){
- const r=Math.hypot(x,y),d=x*nx+y*ny,W=kernel2d(r,name)[0],f0=flux(r,name,0)*d*weight,f1=flux(r,name,1)*d*weight,f2=flux(r,name,2)*d*weight,w=W*weight;
+ const r=Math.hypot(x,y),d=x*nx+y*ny,W=value2d(r,name),f0=flux(r,name,0)*d*weight,f1=flux(r,name,1)*d*weight,f2=flux(r,name,2)*d*weight,w=W*weight;
  out[0]+=f0;out[1]+=x*f1;out[2]+=y*f1;out[3]+=x*x*f2;out[4]+=x*y*f2;out[5]+=y*y*f2;
  out[6]-=nx*w;out[7]-=ny*w;out[8]-=x*nx*w;out[9]-=x*ny*w;out[10]-=y*nx*w;out[11]-=y*ny*w;
 }
@@ -74,7 +75,7 @@ export function polygonChannels(vertices,point,name,nodes=24){
  return finish(out);
 }
 export function diskChannels(p,R,name,nodes=24){
- const D=Math.hypot(...p);if(D>=R+1)return Array(12).fill(0);if(D+1<=R)return whole(name);
+ const D=Math.hypot(...p);if(D>=R+1)return Array(12).fill(0);if(D+1<=R)return whole2d(name);
  const angle=D?Math.atan2(p[1],p[0]):0,cuts=[0,Math.PI];
  for(const r of name==='cubic'?[.5,1]:[1])if(D){const v=(D*D+R*R-r*r)/(2*D*R);if(Math.abs(v)<1)cuts.push(Math.acos(v));}
  for(let a=1/Math.max(R,D,1);a<Math.PI;a*=2)cuts.push(a);
@@ -83,7 +84,7 @@ export function diskChannels(p,R,name,nodes=24){
  return finish(out);
 }
 export function planeChannels(d,n,name,nodes=24,curvature=0){
- if(d>=1)return Array(12).fill(0);if(d<=-1)return whole(name);if(!Number.isFinite(d)||!Number.isFinite(curvature))return Array(12).fill(NaN);
+ if(d>=1)return Array(12).fill(0);if(d<=-1)return whole2d(name);if(!Number.isFinite(d)||!Number.isFinite(curvature))return Array(12).fill(NaN);
  const local=polygonChannels([[-4,-4],[4,-4],[4,-d],[-4,-d]],[0,0],name,nodes);
  // Enforce exact reflection symmetries instead of quadrature residuals.
  local[1]=local[4]=local[6]=local[9]=local[10]=0;
@@ -132,6 +133,7 @@ export function compute2d(payload,progress=()=>{}){
   const values=[];
   for(let i=0;i<points.length;i++){
    const p=points[i].map(x=>x/c.h);let channels;
+   if(['mesh','exact','rectangle'].includes(model)){const d=c.geometry==='circle'?signed2d(p,{geometry:'polygon'},v)[0]:distance[i]/c.h;if(d>=1){values.push(0);continue;}if(d<=-1){values.push(select2d(whole2d(c.kernel),c.field));continue;}}
    if(model==='exact'||model==='rectangle'){channels=polygonChannels(v,p,c.kernel,c.quadrature);}
    else if(model==='mesh'){channels=Array(12).fill(0);for(const triangle of triangles){const q=polygonChannels(triangle,p,c.kernel,c.quadrature);channels=channels.map((v,j)=>v+q[j]);}}
    else if(model==='disk')channels=diskChannels(p,c.radius/c.h,c.kernel,c.quadrature);

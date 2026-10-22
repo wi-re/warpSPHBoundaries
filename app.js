@@ -1,7 +1,7 @@
-import {contractElement} from './model-contract.js?v=20261022-2';
-import {gridControl} from './grid-control.js?v=20261022-2';
-import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-2';
-import {MODELS2D} from './browser-compute2d.js?v=20261022-2';
+import {contractElement} from './model-contract.js?v=20261022-3';
+import {gridControl} from './grid-control.js?v=20261022-3';
+import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-3';
+import {MODELS2D} from './browser-compute2d.js?v=20261022-3';
 const $ = id => document.getElementById(id);
 const COLORS = ['#83e5c0', '#e6b575', '#8ca7ef', '#df94cb'];
 const MODELS = {
@@ -12,12 +12,13 @@ const MODELS = {
   curvature: ['SDF · curvature O(2)', 'Order-two smooth expansion. Circle only; R/h ≥ 2.'],
   disk: ['Circle reference', 'Angular quadrature with analytic radial integrals; refine to check convergence.'],
 };
-const modelInfo=model=>(provider==='browser'?MODELS2D:MODELS)[model];
-const resultModelInfo=model=>(data?.compute_provider==='browser'||data?.results.some(r=>r.notes?.some(n=>n.includes('Browser JavaScript')))?MODELS2D:MODELS)[model];
+const modelInfo=model=>(provider!=='python'?MODELS2D:MODELS)[model];
+const isBrowserResult=()=>data?.compute_provider==='browser'||['WebGPU fp32','JavaScript float64'].includes(data?.compute_engine)||data?.results.some(r=>r.notes?.some(n=>n.startsWith('Browser ')));
+const resultModelInfo=model=>(isBrowserResult()?MODELS2D:MODELS)[model];
 const DEFAULT = {geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24};
 let config = structuredClone(DEFAULT), data = null, online = false, busy = false, revision = 0, timer, palettes;
 let provider='browser',fieldRanges=[];
-const canCompute=()=>provider==='browser'||online;
+const canCompute=()=>provider!=='python'||online;
 let probe = [0,0], hover = null, range = [0,1], fields = [], heatmaps = [], requested = false;
 let rendering = {colormap:'viridis',display:'value',scale:'shared',vmin:0,vmax:1,cut:'horizontal',boundary:true,mesh:true,band:true,grid:false,onlyband:false,smooth:false};
 const create = (tag, cls, text) => {const el=document.createElement(tag); if(cls)el.className=cls; if(text!==undefined)el.textContent=text; return el;};
@@ -73,7 +74,7 @@ function modelControls() {
     const select=create('select');select.setAttribute('aria-label',`Model in viewport ${i+1}`);
     Object.entries(MODELS).forEach(([key,[title]])=>{const opt=new Option(modelInfo(key)[0],key);opt.disabled=config.models.includes(key)&&key!==model;select.add(opt);});select.value=model;
     select.onchange=()=>{config.models[i]=select.value;modelControls();changed();};
-    card.append(heading,select,create('p','',(provider==='browser'?MODELS2D:MODELS)[model][1]));parent.append(card);
+    card.append(heading,select,create('p','',(provider!=='python'?MODELS2D:MODELS)[model][1]));parent.append(card);
   });$('add').disabled=config.models.length>=4;
 }
 function preset(name) {
@@ -85,19 +86,19 @@ function preset(name) {
   $('preset-note').textContent=notes[name];syncControls();changed();
 }
 function setConnection(value) {
-  online=value;const available=canCompute();$('connection').textContent=provider==='browser'?'Browser · live compute':value?'Python · local':'Python unavailable';$('connection').classList.toggle('offline',!available);$('compute').disabled=!available;
+  online=value;const available=canCompute();$('connection').textContent=provider==='browser'?'Browser · WebGPU / float64':provider==='gpu'?'WebGPU · fp32':provider==='worker'?'Browser · float64':value?'Python · local':'Python unavailable';$('connection').classList.toggle('offline',!available);$('compute').disabled=!available;
 }
 async function evaluate() {
   clearTimeout(timer);
   if(!canCompute())return;
   if(busy){requested=true;return;}
   busy=true;requested=false;const version=revision;
-  $('compute').disabled=true;$('compute').textContent='Computing…';$('viewports').classList.add('busy');status(provider==='browser'?'Evaluating integrals in the browser…':'Evaluating on local Python backend…');message('');
+  $('compute').disabled=true;$('compute').textContent='Computing…';$('viewports').classList.add('busy');$('compute-note').textContent=provider==='python'?'Working · local Python':provider==='worker'?'Working · float64 worker':'Working · WebGPU fp32 / float64';status(provider!=='python'?'Evaluating integrals in the browser…':'Evaluating on local Python backend…');message('');
   try{
-    let result;if(provider==='browser')result=await computeBrowser2d(structuredClone(config),note=>{if(version===revision)status(note);});else{const response=await fetch('./api/compute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config)});result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);}
-    if(version===revision){data=result;data.compute_provider=provider;showData();status(`Computed in ${(result.milliseconds/1000).toFixed(2)} s · ${result.results.filter(r=>!r.error).length} models`);$('compute-note').textContent=provider==='browser'?'Up to date · browser float64 worker':'Up to date · local Python · CPU';}
+    let result;if(provider!=='python')result=await computeBrowser2d(structuredClone(config),note=>{if(version===revision)status(note);},provider==='browser'?'auto':provider);else{const response=await fetch('./api/compute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config)});result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);}
+    if(version===revision){data=result;data.compute_provider=provider==='python'?'python':'browser';showData();status(`Computed in ${(result.milliseconds/1000).toFixed(2)} s · ${result.results.filter(r=>!r.error).length} models`);$('compute-note').textContent=provider!=='python'?`Up to date · ${result.compute_engine}`:'Up to date · local Python · CPU';if(provider!=='python'){$('connection').textContent=result.compute_engine==='WebGPU fp32'?'WebGPU · fp32':'Browser · float64';$('connection').classList.remove('offline');}if(result.compute_fallback)message(`WebGPU unavailable: ${result.compute_fallback}. Evaluated with the JavaScript float64 worker.`);}
     else status('Configuration changed · waiting for latest evaluation',true);
-  }catch(error){message(error.message);status('Evaluation failed',true);}
+  }catch(error){message(error.message);status('Evaluation failed',true);$('compute-note').textContent='Evaluation failed · previous plot retained';if(provider==='gpu'){$('connection').textContent='WebGPU · evaluation failed';$('connection').classList.add('offline');}}
   finally{
     busy=false;$('compute').disabled=!canCompute();$('compute').innerHTML='Evaluate integrals <span>↗</span>';$('viewports').classList.remove('busy');
     if(requested || (version!==revision && $('auto').checked))evaluate();
@@ -148,7 +149,7 @@ function showData() {
       download.onclick=()=>canvas.toBlob(blob=>downloadBlob(blob,`boundary-${result.model}-${data.config.field}.png`));
       const item=create('span'),line=create('i');line.style.background=COLORS[i];item.append(line,document.createTextNode(resultModelInfo(result.model)[0]));legend.append(item);
     }
-    const bottom=create('div','viewport-footer');bottom.append(create('span','',result.error?'Unavailable':`${result.milliseconds.toFixed(0)} ms · ${data.x.length} × ${data.y.length}`),create('span','',i===0?'REFERENCE · RAW FIELD':`VIEW ${i+1}`));card.append(bottom);card.append(contractElement(2,result.model,data.config,data.compute_provider==='browser'||result.notes?.some(n=>n.includes('Browser JavaScript'))));if(i===0&&rendering.display!=='value')card.append(create('div','reference-scale',`Raw reference · ${short(fieldRanges[0][0])} to ${short(fieldRanges[0][1])}`));parent.append(card);
+    const bottom=create('div','viewport-footer');bottom.append(create('span','',result.error?'Unavailable':`${result.milliseconds.toFixed(0)} ms · ${data.x.length} × ${data.y.length}`),create('span','',i===0?'REFERENCE · RAW FIELD':`VIEW ${i+1}`));card.append(bottom);card.append(contractElement(2,result.model,data.config,isBrowserResult()));if(i===0&&rendering.display!=='value')card.append(create('div','reference-scale',`Raw reference · ${short(fieldRanges[0][0])} to ${short(fieldRanges[0][1])}`));parent.append(card);
   });
   $('export').disabled=false;$('footer-grid').textContent=`${data.x.length} × ${data.y.length} grid · h = ${data.config.h} · ${data.config.kernel} · ${data.config.field}`;
   const notes=$('model-notes');notes.replaceChildren();
