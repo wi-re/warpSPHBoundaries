@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Explore SPH boundary integrals directly in your browser, with optional Python computation.">
-  <title>Boundary laboratory</title><link rel="stylesheet" href="./style.css?v=20261022-4">
+  <title>Boundary laboratory</title><link rel="stylesheet" href="./style.css?v=20261022-5">
 </head>
 <body>
 <div class="app">
@@ -15,7 +15,7 @@
   <div class="workspace">
     <aside class="left">
       <div class="panel-title">EXPERIMENT <span>01</span></div>
-      <section><label class="field">Compute provider<select id="compute-provider"><option value="browser">Browser · WebGPU / float64</option><option value="gpu">WebGPU · fp32</option><option value="worker">Browser · JavaScript float64</option><option value="python">Local Python service</option></select></label><p class="hint">WebGPU evaluates all 2D models in fp32 when available. The float64 worker is the reference and automatic fallback. Both use the same split Gauss rules; refine nodes to check integration accuracy.</p></section>
+      <section><label class="field">Compute provider<select id="compute-provider"><option value="browser">Automatic · WebGPU fp32 / float64 fallback</option><option value="gpu">WebGPU · fp32</option><option value="worker">Browser · JavaScript float64</option><option value="python">Local Python service</option></select></label><p class="hint">WebGPU evaluates all 2D models in fp32 when available. The float64 worker is the reference and automatic fallback. Both use the same split Gauss rules; refine nodes to check integration accuracy.</p></section>
       <section><label for="preset" class="eyebrow">STARTING POINT</label><select id="preset"><option value="square">Square · two triangles</option><option value="rectangle">Thin rectangle · corner interaction</option><option value="triangle">Triangle · editable vertices</option><option value="circle">Circle · curvature comparison</option></select><p id="preset-note" class="hint">One square, three ways to evaluate the solid integral.</p></section>
       <section><h2><span class="section-icon">◇</span> Boundary geometry</h2><label class="field">Geometry<select id="geometry"><option value="rectangle">Rectangle</option><option value="triangle">Triangle</option><option value="circle">Circle / constant curvature</option></select></label><div id="geometry-controls"></div><div id="vertex-controls"></div></section>
       <section><h2><span class="section-icon">∫</span> Kernel & sampling</h2><label class="field">Kernel function<select id="kernel"><option value="w4">Wendland C4</option><option value="w2">Wendland C2</option><option value="w6">Wendland C6</option><option value="cubic">Cubic spline</option></select></label><div id="sampling-controls"></div><p class="hint">h is the compact support radius; q = r / h.</p></section>
@@ -41,5 +41,5 @@
   </div>
   <footer><span><span class="status-dot"></span><span id="status">Ready</span></span><span id="footer-grid">Shared coordinates · support-normalized channels</span><span>warpSPHBoundaries <b>/</b> laboratory</span></footer>
 </div>
-<script type="module" src="./app.js?v=20261022-4"></script>
+<script type="module" src="./app.js?v=20261022-5"></script>
 </body></html>

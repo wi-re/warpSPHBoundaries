@@ -3,7 +3,7 @@
 // integral_0^r t^(k+1) W(t)dt. Edge/arc integrals use split Gauss quadrature.
 // Query gradients follow integration by parts: G_i=-oint W n_i and
 // g1_ij=delta_ij M0-oint y_i W n_j. These are not mass-grid differences.
-import {SHAPES,radialJet,gauss} from './term-engine.js?v=20261022-4';
+import {SHAPES,radialJet,gauss} from './term-engine.js?v=20261022-5';
 export const FIELDS2D=['m00','m10','m01','m20','m11','m02','Gx','Gy','g1xx','g1xy','g1yx','g1yy','grad_norm'];
 export const DEFAULT2D={geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24};
 export const MODELS2D={mesh:['Triangle mesh','Split Gauss integration of regular radial flux, summed over triangles.'],exact:['Polygon · radial flux','Split Gauss integration over polygon edges; numerical quadrature.'],rectangle:['Rectangle · radial flux','Four-edge integration of the same regular flux; rectangle only.'],sdf:['SDF · distance only','Local half-plane integrals with analytic or sampled SDF jets.'],curvature:['SDF · curvature O(2)','Quadratic-graph expansion of each integrand; circle only, R/h ≥ 2.'],disk:['Circle · boundary quadrature','Circle arcs split at kernel knots; refine Gauss nodes to assess convergence.']};
@@ -43,15 +43,20 @@ export function geometry2d(c){
 }
 export function signed2d(p,c,vertices){
  if(c.geometry==='circle'){const r=Math.hypot(...p);return [r-c.radius,r?p.map(x=>x/r):[NaN,NaN]];}
- let best=Infinity,closest,face,inside=false,ambiguous=false;
+ let best=Infinity,closest,face,onEdge=false,inside=false,ambiguous=false;
  for(let i=0;i<vertices.length;i++){
-  const a=vertices[i],b=vertices[(i+1)%vertices.length],edge=sub(b,a),len=Math.hypot(...edge),t=Math.max(0,Math.min(1,dot(sub(p,a),edge)/(len*len))),q=[a[0]+t*edge[0],a[1]+t*edge[1]],delta=sub(p,q),r=Math.hypot(...delta),n=[edge[1]/len,-edge[0]/len];
+  const a=vertices[i],b=vertices[(i+1)%vertices.length],edge=sub(b,a),len=Math.hypot(...edge),t=Math.max(0,Math.min(1,dot(sub(p,a),edge)/(len*len))),q=t===0?a:t===1?b:[a[0]+t*edge[0],a[1]+t*edge[1]],n=[edge[1]/len,-edge[0]/len],interior=t>0&&t<1,r=interior?Math.abs(dot(sub(p,a),n)):Math.hypot(...sub(p,q));
   if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;
   const eps=2e-14*Math.max(1,r);
-  if(r<best-eps){best=r;closest=q;face=n;ambiguous=false;}
+  if(r<best-eps)ambiguous=false;
   else if(Math.abs(r-best)<=eps&&(Math.hypot(...sub(q,closest))>eps||(r<=eps&&Math.hypot(...sub(n,face))>eps)))ambiguous=true;
+  if(r<best){best=r;closest=q;face=n;onEdge=interior;}
  }
- const d=inside?-best:best,n=best>2e-14?sub(p,closest).map(x=>x/(d||1)):face;return [d,ambiguous?[NaN,NaN]:n];
+ // All supported polygons are convex: exterior projection is unique, including
+ // edge/vertex transitions. Near-equal edge distances there are not medial ties.
+ // Use the face normal directly instead of dividing a tiny projected residual.
+ const d=inside?-best:best,n=onEdge||best<=2e-14?face:sub(p,closest).map(x=>x/d);
+ return [d,ambiguous&&(inside||best<=2e-14)?[NaN,NaN]:n];
 }
 // Accumulate all 12 channels together. Moments and query gradients have
 // different fluxes; first gradient moments are completed with delta_ij M0.

@@ -89,15 +89,20 @@ fn edge(sum:ptr<function,Sum>,a:vec2f,b:vec2f){
  }
 }
 fn signedPolygon(p:vec2f)->GeometryJet{
- var best=1e30;var closest=vec2f(0);var face=vec2f(0);var inside=false;var ambiguous=false;
+ var best=1e30;var closest=vec2f(0);var face=vec2f(0);var onEdge=false;var inside=false;var ambiguous=false;
  for(var i=0u;i<s.counts.x;i++){
-  let a=vertex(i);let b=vertex((i+1u)%s.counts.x);let e=b-a;let t=clamp(dot(p-a,e)/dot(e,e),0.0,1.0);let targetPoint=a+t*e;let r=length(p-targetPoint);let n=vec2f(e.y,-e.x)/length(e);
+  let a=vertex(i);let b=vertex((i+1u)%s.counts.x);let e=b-a;let t=clamp(dot(p-a,e)/dot(e,e),0.0,1.0);var targetPoint=a+t*e;if t==0.0{targetPoint=a;}if t==1.0{targetPoint=b;}
+  let n=vec2f(e.y,-e.x)/length(e);let interior=t>0.0 && t<1.0;var r=length(p-targetPoint);if interior{r=abs(dot(p-a,n));}
   if (a.y>p.y)!=(b.y>p.y){if p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x{inside=!inside;}}
   let eps=0.000002*max(1.0,r);
-  if r<best-eps{best=r;closest=targetPoint;face=n;ambiguous=false;}
+  if r<best-eps{ambiguous=false;}
   else if abs(r-best)<=eps && (length(targetPoint-closest)>eps || (r<=eps && length(n-face)>eps)){ambiguous=true;}
+  if r<best{best=r;closest=targetPoint;face=n;onEdge=interior;}
  }
- let d=select(best,-best,inside);var n=face;if best>0.000002{n=(p-closest)/d;}return GeometryJet(d,n,!ambiguous);
+ // Convex polygon projection is unique outside, even at edge/vertex transitions.
+ // Preserve genuine interior medial ties and undefined boundary-corner normals.
+ let d=select(best,-best,inside);var n=face;if !onEdge && best>0.000002{n=(p-closest)/d;}
+ return GeometryJet(d,n,!(ambiguous && (inside || best<=0.000002)));
 }
 fn signedGeometry(p:vec2f)->GeometryJet{
  if s.ids.z!=2u{return signedPolygon(p);}let r=length(p);if r==0.0{return GeometryJet(-s.params.x,vec2f(0),false);}return GeometryJet(r-s.params.x,p/r,true);

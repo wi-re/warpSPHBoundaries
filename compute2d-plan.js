@@ -1,6 +1,6 @@
 // Shared host-side layout for browser WebGPU dispatch and native WGSL tests.
-import {FIELDS2D,MODELS2D,validate2d,geometry2d,fluxPlan} from './browser-compute2d.js?v=20261022-4';
-import {SHAPES,gauss} from './term-engine.js?v=20261022-4';
+import {FIELDS2D,MODELS2D,validate2d,geometry2d,fluxPlan} from './browser-compute2d.js?v=20261022-5';
+import {SHAPES,gauss} from './term-engine.js?v=20261022-5';
 export function grid2d(payload){
  const c=validate2d(payload),geometry=geometry2d(c),n=c.resolution;
  const lo=[0,1].map(i=>c.geometry==='circle'?-c.radius:Math.min(...geometry.vertices.map(p=>p[i]))),hi=[0,1].map(i=>c.geometry==='circle'?c.radius:Math.max(...geometry.vertices.map(p=>p[i]))),half=Math.max(...hi.map((x,i)=>x-lo[i]))/2+c.padding*c.h;

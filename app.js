@@ -1,7 +1,7 @@
-import {contractElement} from './model-contract.js?v=20261022-4';
-import {gridControl} from './grid-control.js?v=20261022-4';
-import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-4';
-import {MODELS2D} from './browser-compute2d.js?v=20261022-4';
+import {contractElement} from './model-contract.js?v=20261022-5';
+import {gridControl} from './grid-control.js?v=20261022-5';
+import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-5';
+import {MODELS2D} from './browser-compute2d.js?v=20261022-5';
 const $ = id => document.getElementById(id);
 const COLORS = ['#83e5c0', '#e6b575', '#8ca7ef', '#df94cb'];
 const MODELS = {
@@ -86,7 +86,7 @@ function preset(name) {
   $('preset-note').textContent=notes[name];syncControls();changed();
 }
 function setConnection(value) {
-  online=value;const available=canCompute();$('connection').textContent=provider==='browser'?'Browser · WebGPU / float64':provider==='gpu'?'WebGPU · fp32':provider==='worker'?'Browser · float64':value?'Python · local':'Python unavailable';$('connection').classList.toggle('offline',!available);$('compute').disabled=!available;
+  online=value;const available=canCompute();$('connection').textContent=provider==='browser'?'Automatic · GPU fp32 / CPU float64':provider==='gpu'?'WebGPU · fp32':provider==='worker'?'Browser · float64':value?'Python · local':'Python unavailable';$('connection').classList.toggle('offline',!available);$('compute').disabled=!available;
 }
 async function evaluate() {
   clearTimeout(timer);

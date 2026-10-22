@@ -1,4 +1,4 @@
-import {FIELD_IDS,axialTerms,selectAxial,integrand,gauss,ballSeries} from './term-engine.js?v=20261022-4';
+import {FIELD_IDS,axialTerms,selectAxial,integrand,gauss,ballSeries} from './term-engine.js?v=20261022-5';
 export const BROWSER_MODELS={
  sphere:['Sphere · polynomial integral','Exact-degree radial integration of each moment/kernel derivative; sphere only.'],
  sdf:['SDF · local plane','Local half-space moment family using geometry distance and normal.'],
