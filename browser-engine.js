@@ -1,10 +1,10 @@
-import {FIELD_IDS,SHAPES,gauss} from './term-engine.js?v=20261022-3';
-import {BROWSER_MODELS,validate,grid,samples,modelError,resultRow,packageResult} from './browser-compute.js?v=20261022-3';
+import {FIELD_IDS,SHAPES,gauss} from './term-engine.js?v=20261022-4';
+import {BROWSER_MODELS,validate,grid,samples,modelError,resultRow,packageResult} from './browser-compute.js?v=20261022-4';
 let resourcesPromise;
 async function resources(){
  if(!navigator.gpu)throw new Error('WebGPU is not available');
  const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw new Error('No WebGPU compute adapter');
- const device=await adapter.requestDevice(),response=await fetch(new URL('./terms-compute.wgsl?v=20261022-3',import.meta.url));if(!response.ok)throw new Error('Could not load compute shader');
+ const device=await adapter.requestDevice(),response=await fetch(new URL('./terms-compute.wgsl?v=20261022-4',import.meta.url));if(!response.ok)throw new Error('Could not load compute shader');
  const module=device.createShaderModule({code:await response.text(),label:'Boundary moment evaluation'}),info=await module.getCompilationInfo(),errors=info.messages.filter(m=>m.type==='error');
  if(errors.length)throw new Error(errors.map(m=>`${m.lineNum}: ${m.message}`).join('\n'));
  const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'compute_terms'}});return {device,pipeline};
@@ -12,7 +12,7 @@ async function resources(){
 let worker,job=0;
 const pending=new Map();
 function cpu(config,progress){
- if(!worker){worker=new Worker(new URL('./compute-worker.js?v=20261022-3',import.meta.url),{type:'module'});worker.onmessage=event=>{const {id,result,error,progress:note}=event.data,item=pending.get(id);if(!item)return;if(note){item.progress(note);return;}pending.delete(id);if(error)item.reject(new Error(error));else item.resolve(result);};worker.onerror=event=>{for(const item of pending.values())item.reject(new Error(event.message));pending.clear();worker.terminate();worker=null;};}
+ if(!worker){worker=new Worker(new URL('./compute-worker.js?v=20261022-4',import.meta.url),{type:'module'});worker.onmessage=event=>{const {id,result,error,progress:note}=event.data,item=pending.get(id);if(!item)return;if(note){item.progress(note);return;}pending.delete(id);if(error)item.reject(new Error(error));else item.resolve(result);};worker.onerror=event=>{for(const item of pending.values())item.reject(new Error(event.message));pending.clear();worker.terminate();worker=null;};}
  return new Promise((resolve,reject)=>{const id=++job;pending.set(id,{resolve,reject,progress});worker.postMessage({id,config});});
 }
 async function gpu(config,progress){

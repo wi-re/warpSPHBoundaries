@@ -6,9 +6,9 @@ struct Settings {
   up: vec4f,
   forward: vec4f,
   transfer: vec4f, // window min/max, density, ray steps
-  mode: vec4f, // volume enabled, slice opacity, support band mask, lighting
-  offsets: vec4f, // plane positions in centred unit cube
-  planes: vec4f, // YZ, XZ, XY enable flags
+  mode: vec4f, // reserved, reserved, support band mask, lighting
+  reserved0: vec4f, // retained uniform padding
+  reserved1: vec4f, // retained uniform padding
 }
 @group(0) @binding(0) var<uniform> s: Settings;
 @group(0) @binding(1) var field: texture_3d<f32>;
@@ -59,46 +59,17 @@ fn illumination(p: vec3f, base: vec3f) -> vec3f {
   // At least two samples per voxel along the ray, including diagonal views.
   let steps = max(u32(s.transfer.w),u32(ceil((end-begin)*f32(textureDimensions(field).x-1u)*2.0)));
   let dt = (end-begin)/f32(steps);
-  var planeT = vec3f(end+1.0);
-  for(var axis=0u;axis<3u;axis++) {
-    if s.planes[axis] > 0.5 && abs(direction[axis])>0.000001 {
-      let t = (s.offsets[axis]-origin[axis])/direction[axis];
-      if t >= begin && t <= end { planeT[axis]=t; }
-    }
-  }
   var accumulated = vec4f(0);
   for(var i=0u;i<1024u;i++) {
     if i >= steps || accumulated.a > 0.995 { break; }
-    let left = begin+f32(i)*dt;
-    let right = min(end,begin+f32(i+1u)*dt);
-    var cursor=left;
-    // Three planes can intersect the same step. Process nearest first and
-    // integrate the volume on each side, so a plane never erases a nearer shell.
-    for(var event=0u;event<4u;event++) {
-      let next=min(planeT.x,min(planeT.y,planeT.z));
-      let stop=min(right,next);
-      if s.mode.x > 0.5 && stop > cursor {
-        let p=origin+direction*((cursor+stop)*0.5);
-        let sample=volumeAt(p);
-        if acceptable(sample) {
-          let mapped=mapValue(sample.r);
-          let alpha=1.0-pow(max(1.0-mapped.a,0.000001),s.transfer.z*(stop-cursor)*128.0);
-          var rgb=mapped.rgb;
-          if s.mode.w > 0.5 && alpha > 0.001 { rgb=illumination(p,rgb); }
-          accumulated=accumulated+(1.0-accumulated.a)*vec4f(rgb*alpha,alpha);
-        }
-      }
-      cursor=stop;
-      if next > right { break; }
-      let sample=volumeAt(origin+direction*next);
-      if acceptable(sample) {
-        let mapped=mapValue(sample.r);
-        let alpha=s.mode.y*min(1.0,mapped.a*8.0);
-        accumulated=accumulated+(1.0-accumulated.a)*vec4f(mapped.rgb*alpha,alpha);
-      }
-      if planeT.x==next { planeT.x=end+1.0; }
-      else if planeT.y==next { planeT.y=end+1.0; }
-      else { planeT.z=end+1.0; }
+    let p=origin+direction*(begin+(f32(i)+0.5)*dt);
+    let sample=volumeAt(p);
+    if acceptable(sample) {
+      let mapped=mapValue(sample.r);
+      let alpha=1.0-pow(max(1.0-mapped.a,0.000001),s.transfer.z*dt*128.0);
+      var rgb=mapped.rgb;
+      if s.mode.w > 0.5 && alpha > 0.001 { rgb=illumination(p,rgb); }
+      accumulated=accumulated+(1.0-accumulated.a)*vec4f(rgb*alpha,alpha);
     }
   }
   return vec4f(accumulated.rgb+(1.0-accumulated.a)*background,1);

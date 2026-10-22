@@ -1,11 +1,11 @@
-import {cameraFrame,clamp} from './volume-math.js?v=20261022-3';
+import {cameraFrame,clamp} from './volume-math.js?v=20261022-4';
 let gpuPromise;
 async function gpuResources() {
   if(!navigator.gpu)throw new Error('WebGPU is not exposed by this browser');
   const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});
   if(!adapter)throw new Error('No WebGPU adapter is available');
   const device=await adapter.requestDevice();
-  const shader=await(await fetch(new URL('./volume.wgsl?v=20261022-3',import.meta.url))).text();
+  const shader=await(await fetch(new URL('./volume.wgsl?v=20261022-4',import.meta.url))).text();
   const module=device.createShaderModule({label:'Boundary integral volume ray caster',code:shader});
   const info=await module.getCompilationInfo();
   const errors=info.messages.filter(m=>m.type==='error');
@@ -59,8 +59,7 @@ export class VolumeRenderer {
     const camera=cameraFrame(state.yaw,state.pitch,state.zoom),uniform=new Float32Array(32);
     uniform.set([...camera.eye,width/height],0);uniform.set(camera.right,4);uniform.set(camera.up,8);uniform.set(camera.forward,12);
     uniform.set([state.min,state.max,state.density,state.steps],16);
-    uniform.set([state.mode!=='slices'?1:0,state.sliceOpacity,state.band?1:0,state.lighting?1:0],20);
-    uniform.set(state.offsets,24);uniform.set(state.planes.map(x=>state.mode==='volume'?0:Number(x)),28);
+    uniform.set([0,0,state.band?1:0,state.lighting?1:0],20);
     this.device.queue.writeBuffer(this.uniform,0,uniform);
     const encoder=this.device.createCommandEncoder(),target=this.context.getCurrentTexture();
     const pass=encoder.beginRenderPass({colorAttachments:[{view:target.createView(),clearValue:{r:.04,g:.06,b:.08,a:1},loadOp:'clear',storeOp:'store'}]});
@@ -82,7 +81,7 @@ class CPUVolume {
     // A failed WebGPU context cannot be changed into 2D; replace that canvas.
     this.canvas=canvas;
     if(!canvas.getContext('2d')){const replacement=canvas.cloneNode();canvas.replaceWith(replacement);this.canvas=replacement;}
-    this.ctx=this.canvas.getContext('2d');this.worker=new Worker(new URL('./volume-worker.js?v=20261022-3',import.meta.url),{type:'module'});this.id=0;this.waiters=[];
+    this.ctx=this.canvas.getContext('2d');this.worker=new Worker(new URL('./volume-worker.js?v=20261022-4',import.meta.url),{type:'module'});this.id=0;this.waiters=[];
     this.worker.onerror=event=>onFailure(`CPU volume renderer failed: ${event.message}`);
     this.worker.onmessage=event=>{
       const {id,pixels,width,height}=event.data;

@@ -1,11 +1,11 @@
-import {contractElement} from './model-contract.js?v=20261022-3';
-import {gridControl} from './grid-control.js?v=20261022-3';
-import {FIELD_INFO,FIELD_IDS} from './term-engine.js?v=20261022-3';
-import {BROWSER_MODELS} from './browser-compute.js?v=20261022-3';
-import {computeBrowser,disposeCompute} from './browser-engine.js?v=20261022-3';
-import {renderTermPanel} from './term-panel.js?v=20261022-3';
-import {VolumeRenderer} from './volume-renderer.js?v=20261022-3';
-import {cameraFrame,clamp,decodeVolume,comparisonFields,makeTransfer,sampleVolume,sliceValues} from './volume-math.js?v=20261022-3';
+import {contractElement} from './model-contract.js?v=20261022-4';
+import {gridControl} from './grid-control.js?v=20261022-4';
+import {FIELD_INFO,FIELD_IDS} from './term-engine.js?v=20261022-4';
+import {BROWSER_MODELS} from './browser-compute.js?v=20261022-4';
+import {computeBrowser,disposeCompute} from './browser-engine.js?v=20261022-4';
+import {renderTermPanel} from './term-panel.js?v=20261022-4';
+import {VolumeRenderer} from './volume-renderer.js?v=20261022-4';
+import {cameraFrame,clamp,decodeVolume,comparisonFields,makeTransfer,sampleVolume,sliceValues} from './volume-math.js?v=20261022-4';
 const $=id=>document.getElementById(id),create=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
 const PYTHON_MODELS={sphere:['Sphere · polynomial integral','Float64 exact-degree radial shell integration. Sphere geometry only.'],sdf:['SDF · local plane','Exact 3D half-space formula using the geometry distance; includes model error.'],voxel:['Voxel · FFT quadrature','Sampled solid occupancy convolved with the 3D kernel; grid-dependent quadrature.']};
 const MODELS={...PYTHON_MODELS,...BROWSER_MODELS};
@@ -15,8 +15,8 @@ const fmt=x=>!Number.isFinite(x)?'—':(Math.abs(x)>0&&Math.abs(x)<.001?x.toExpo
 const short=x=>Math.abs(x)>0&&Math.abs(x)<.001?x.toExponential(2):Number(x.toPrecision(4)).toString();
 let config=structuredClone(DEFAULT),data,arrays=[],distance,fields=[],palettes,lut,online=false,busy=false,revision=0,timer,queued=false,generation=0;
 let renderers=[],renderStatus=[],framePending=false,selectedModel=0,importRevision=-1;
-let state={yaw:.68,pitch:.36,zoom:2.3,mode:'both',steps:256,density:.65,renderScale:.8,lighting:true,band:false,box:true,
-  colormap:'viridis',opacity:'boundary',knots:structuredClone(PRESETS.boundary),min:0,max:1,offsets:[0,0,0],planes:[true,false,true],sliceOpacity:.6,display:'value'};
+let state={yaw:.68,pitch:.36,zoom:2.3,mode:'volume',steps:256,density:.65,renderScale:.8,lighting:true,band:false,box:true,
+  colormap:'viridis',opacity:'boundary',knots:structuredClone(PRESETS.boundary),min:0,max:1,offsets:[0,0,0],planes:[false,false,false],sliceOpacity:0,display:'value'};
 let sliceOffsets=[0,0,0],provider='browser';
 function canCompute(){return provider!=='python'||online;}
 $('field').replaceChildren(...FIELD_INFO.map(([id,label])=>{const o=create('option','',label);o.value=id;return o;}));
@@ -134,17 +134,17 @@ function drawOverlay(view){
 function updateOffsets(){if(!data)return;state.offsets=sliceOffsets.map((v,j)=>(v-data[['x','y','z'][j]][0])/(data[['x','y','z'][j]].at(-1)-data[['x','y','z'][j]][0])-.5);}
 function buildSliceControls(){const parent=$('slice-controls');parent.replaceChildren();
   for(let axis=0;axis<3;axis++){
-    const label=['YZ · x offset','XZ · y offset','XY · z offset'][axis],wrapper=create('div','slice-offset'),top=create('div','range-top'),toggle=create('label'),checkbox=create('input'),numeric=create('input'),slider=create('input');checkbox.type='checkbox';checkbox.checked=state.planes[axis];checkbox.setAttribute('aria-label',`Show ${['YZ','XZ','XY'][axis]} plane`);toggle.append(checkbox,document.createTextNode(label));
+    const label=['YZ · x offset','XZ · y offset','XY · z offset'][axis],wrapper=create('div','slice-offset'),top=create('div','range-top'),labelElement=create('span','',label),numeric=create('input'),slider=create('input');
     const grid=data[['x','y','z'][axis]],lo=grid[0],hi=grid.at(-1),step=(hi-lo)/(grid.length-1)/8;
     for(const input of [numeric,slider]){input.type=input===numeric?'number':'range';input.min=lo;input.max=hi;input.step=input===numeric?'any':step;input.value=sliceOffsets[axis];input.setAttribute('aria-label',`${label}${input===numeric?' value':''}`);}
-    const change=(value,editing=false)=>{if(value.trim()==='')return;const parsed=+value;if(!Number.isFinite(parsed))return;sliceOffsets[axis]=clamp(parsed,lo,hi);if(!editing)numeric.value=sliceOffsets[axis].toFixed(4);slider.value=sliceOffsets[axis];updateOffsets();drawSlices();requestDraw();};
-    slider.oninput=()=>change(slider.value);numeric.oninput=()=>change(numeric.value,true);numeric.onchange=()=>change(numeric.value);checkbox.onchange=()=>{state.planes[axis]=checkbox.checked;requestDraw();};
-    top.append(toggle,numeric);wrapper.append(top,slider);parent.append(wrapper);
+    const change=(value,editing=false)=>{if(value.trim()==='')return;const parsed=+value;if(!Number.isFinite(parsed))return;sliceOffsets[axis]=clamp(parsed,lo,hi);if(!editing)numeric.value=sliceOffsets[axis].toFixed(4);slider.value=sliceOffsets[axis];updateOffsets();drawSlices();};
+    slider.oninput=()=>change(slider.value);numeric.oninput=()=>change(numeric.value,true);numeric.onchange=()=>change(numeric.value);
+    top.append(labelElement,numeric);wrapper.append(top,slider);parent.append(wrapper);
   }
 }
 function buildSlices(){const parent=$('slices');parent.replaceChildren();for(const axis of [2,1,0]){const card=create('div','slice-card'),title=create('div','slice-title');title.append(create('b','',['YZ','XZ','XY'][axis]),create('span',''));const canvas=create('canvas');canvas.dataset.axis=axis;canvas.setAttribute('aria-label',`${['YZ','XZ','XY'][axis]} integral slice; click to position crosshair`);card.append(title,canvas);parent.append(card);
     canvas.onpointerdown=e=>{const rect=canvas.getBoundingClientRect(),axes=axis===0?[1,2]:axis===1?[0,2]:[0,1],uv=[clamp((e.clientX-rect.left)/rect.width,0,1),clamp(1-(e.clientY-rect.top)/rect.height,0,1)];
-      axes.forEach((j,k)=>{const grid=data[['x','y','z'][j]];sliceOffsets[j]=grid[0]+uv[k]*(grid.at(-1)-grid[0]);});updateOffsets();buildSliceControls();drawSlices();requestDraw();};
+      axes.forEach((j,k)=>{const grid=data[['x','y','z'][j]];sliceOffsets[j]=grid[0]+uv[k]*(grid.at(-1)-grid[0]);});updateOffsets();buildSliceControls();drawSlices();};
   }}
 function buildSliceSelector(){const select=$('slice-model');select.replaceChildren();data.results.forEach((r,i)=>{const opt=new Option(MODELS[r.model][0],i);opt.disabled=!!r.error;select.add(opt);});select.value=selectedModel;}
 function drawSlices(){if(!data||!lut)return;const n=data.shape[0],values=fields[selectedModel];if(!values)return;
@@ -180,15 +180,14 @@ function installTransferEditor(){const canvas=$('transfer-editor');let dragging=
 }
 function download(blob,name){if(!blob)throw new Error('No rendered image is available');const a=create('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function exportResult(){return {...data,view:{...state,offsets:undefined,sliceOffsets,selectedModel}};}
-function restoreView(view){if(!view||typeof view!=='object')return;const numeric={yaw:[-100,100],pitch:[-1.45,1.45],zoom:[1.1,5],steps:[64,768],density:[.01,4],renderScale:[.4,1],sliceOpacity:[0,1]};for(const [key,[lo,hi]]of Object.entries(numeric))if(Number.isFinite(view[key]))state[key]=clamp(view[key],lo,hi);if(Number.isFinite(view.min)&&Number.isFinite(view.max)&&view.max>view.min){state.min=view.min;state.max=view.max;}
-  for(const key of ['lighting','band','box'])if(typeof view[key]==='boolean')state[key]=view[key];if(['volume','slices','both'].includes(view.mode))state.mode=view.mode;if(palettes[view.colormap])state.colormap=view.colormap;if(['value','difference','absolute'].includes(view.display))state.display=view.display;if(PRESETS[view.opacity]||view.opacity==='custom')state.opacity=view.opacity;
+function restoreView(view){if(!view||typeof view!=='object')return;const numeric={yaw:[-100,100],pitch:[-1.45,1.45],zoom:[1.1,5],steps:[64,768],density:[.01,4],renderScale:[.4,1]};for(const [key,[lo,hi]]of Object.entries(numeric))if(Number.isFinite(view[key]))state[key]=clamp(view[key],lo,hi);if(Number.isFinite(view.min)&&Number.isFinite(view.max)&&view.max>view.min){state.min=view.min;state.max=view.max;}
+  for(const key of ['lighting','band','box'])if(typeof view[key]==='boolean')state[key]=view[key];state.mode='volume';state.planes=[false,false,false];state.sliceOpacity=0;if(palettes[view.colormap])state.colormap=view.colormap;if(['value','difference','absolute'].includes(view.display))state.display=view.display;if(PRESETS[view.opacity]||view.opacity==='custom')state.opacity=view.opacity;
   if(Array.isArray(view.knots)&&view.knots.length>=2&&view.knots.length<=12&&view.knots.every(p=>Array.isArray(p)&&p.length===2&&p.every(x=>Number.isFinite(x)&&x>=0&&x<=1))&&view.knots[0][0]===0&&view.knots.at(-1)[0]===1&&view.knots.every((p,i)=>!i||p[0]>view.knots[i-1][0]))state.knots=structuredClone(view.knots);
-  if(Array.isArray(view.planes)&&view.planes.length===3&&view.planes.every(x=>typeof x==='boolean'))state.planes=[...view.planes];if(Array.isArray(view.sliceOffsets)&&view.sliceOffsets.length===3&&view.sliceOffsets.every(Number.isFinite))sliceOffsets=[...view.sliceOffsets];if(data&&Number.isInteger(view.selectedModel)&&arrays[view.selectedModel])selectedModel=view.selectedModel;
+  if(Array.isArray(view.sliceOffsets)&&view.sliceOffsets.length===3&&view.sliceOffsets.every(Number.isFinite))sliceOffsets=[...view.sliceOffsets];if(data&&Number.isInteger(view.selectedModel)&&arrays[view.selectedModel])selectedModel=view.selectedModel;
 }
 function renderingControls(){
   const parent=$('ray-controls');parent.replaceChildren();rangeControl(parent,'steps','Ray samples',64,768,32,state,requestDraw);rangeControl(parent,'density','Optical density',.05,4,.05,state,requestDraw);rangeControl(parent,'renderScale','Render resolution',.4,1,.05,state,requestDraw);
-  const alpha=$('slice-alpha');alpha.replaceChildren();rangeControl(alpha,'sliceOpacity','Plane opacity',0,1,.05,state,requestDraw);
-  $('render-mode').value=state.mode;$('colormap').value=state.colormap;$('display').value=state.display;$('opacity-preset').value=state.opacity;for(const key of ['lighting','band','box'])$(key).checked=state[key];$('tf-min').value=short(state.min);$('tf-max').value=short(state.max);buildKnots();
+  $('colormap').value=state.colormap;$('display').value=state.display;$('opacity-preset').value=state.opacity;for(const key of ['lighting','band','box'])$(key).checked=state[key];$('tf-min').value=short(state.min);$('tf-max').value=short(state.max);buildKnots();
 }
 function applySavedView(view){
   if(!view)return;restoreView(view);
@@ -197,7 +196,7 @@ function applySavedView(view){
 }
 for(const key of ['kernel','field','supersampling','quality','curvature_order','series_order'])$(key).onchange=()=>{config[key]=['supersampling','quality','curvature_order','series_order'].includes(key)?+$(key).value:$(key).value;changed();};
 $('geometry').onchange=()=>preset($('geometry').value);$('preset').onchange=()=>preset($('preset').value);$('compute').onclick=evaluate;$('auto').onchange=()=>{clearTimeout(timer);if($('auto').checked)changed();};
-$('render-mode').onchange=()=>{state.mode=$('render-mode').value;requestDraw();};$('colormap').onchange=()=>{state.colormap=$('colormap').value;drawEverything();};
+$('colormap').onchange=()=>{state.colormap=$('colormap').value;drawEverything();};
 $('display').onchange=()=>{state.display=$('display').value;if(data){if(state.opacity!=='custom')sensibleOpacity();fitWindow();if(!arrays[0]&&state.display!=='value')message('A difference volume needs a valid first model as its reference.');}};
 for(const key of ['lighting','band','box'])$(key).onchange=()=>{state[key]=$(key).checked;requestDraw();};
 $('slice-model').onchange=()=>{selectedModel=+$('slice-model').value;drawSlices();};$('auto-window').onclick=()=>fitWindow();

@@ -11,10 +11,14 @@ struct Settings {
 }
 @group(0) @binding(0) var<uniform> s:Settings;
 @group(0) @binding(1) var<storage,read> table:array<f32>;
-@group(0) @binding(2) var<storage,read_write> output:array<vec2f>;
+@group(0) @binding(2) var<storage,read_write> output:array<vec4f>;
 struct Sum { value:vec3f, correction:vec3f }
 fn add(sum:ptr<function,Sum>,v:vec3f){let y=v-(*sum).correction;let t=(*sum).value+y;(*sum).correction=(t-(*sum).value)-y;(*sum).value=t;}
-fn nan()->f32{return bitcast<f32>(0x7fc00000u);}
+// Invalid samples carry explicit flags. WGSL constant expressions cannot
+// construct NaN portably, and nonfinite arithmetic is not a validity protocol.
+struct GeometryJet { d:f32, normal:vec2f, normalValid:bool }
+struct LocalJet { d:f32, normal:vec2f, curvature:f32, normalValid:bool, curvatureValid:bool }
+struct Evaluation { value:vec3f, valid:bool }
 fn cross2(a:vec2f,b:vec2f)->f32{return a.x*b.y-a.y*b.x;}
 fn vertex(i:u32)->vec2f{return vec2f(table[236u+2u*i],table[237u+2u*i]);}
 fn kernel(r:f32)->f32{
@@ -84,7 +88,7 @@ fn edge(sum:ptr<function,Sum>,a:vec2f,b:vec2f){
   for(var node=0u;node<s.counts.z;node++){let v=mid+half*table[2u*node];add(sum,boundary(z*n+v*t,n)*(half*table[2u*node+1u]));}
  }
 }
-fn signedPolygon(p:vec2f)->vec3f{
+fn signedPolygon(p:vec2f)->GeometryJet{
  var best=1e30;var closest=vec2f(0);var face=vec2f(0);var inside=false;var ambiguous=false;
  for(var i=0u;i<s.counts.x;i++){
   let a=vertex(i);let b=vertex((i+1u)%s.counts.x);let e=b-a;let t=clamp(dot(p-a,e)/dot(e,e),0.0,1.0);let targetPoint=a+t*e;let r=length(p-targetPoint);let n=vec2f(e.y,-e.x)/length(e);
@@ -93,10 +97,10 @@ fn signedPolygon(p:vec2f)->vec3f{
   if r<best-eps{best=r;closest=targetPoint;face=n;ambiguous=false;}
   else if abs(r-best)<=eps && (length(targetPoint-closest)>eps || (r<=eps && length(n-face)>eps)){ambiguous=true;}
  }
- let d=select(best,-best,inside);var n=face;if best>0.000002{n=(p-closest)/d;}if ambiguous{n=vec2f(nan());}return vec3f(d,n);
+ let d=select(best,-best,inside);var n=face;if best>0.000002{n=(p-closest)/d;}return GeometryJet(d,n,!ambiguous);
 }
-fn signedGeometry(p:vec2f)->vec3f{
- if s.ids.z!=2u{return signedPolygon(p);}let r=length(p);if r==0.0{return vec3f(-s.params.x,nan(),nan());}return vec3f(r-s.params.x,p/r);
+fn signedGeometry(p:vec2f)->GeometryJet{
+ if s.ids.z!=2u{return signedPolygon(p);}let r=length(p);if r==0.0{return GeometryJet(-s.params.x,vec2f(0),false);}return GeometryJet(r-s.params.x,p/r,true);
 }
 fn polygon(p:vec2f,mesh:bool,d:f32)->vec3f{
  if d>=1.0{return vec3f(0);}if d<=-1.0{return whole();}var sum=Sum(vec3f(0),vec3f(0));
@@ -118,9 +122,9 @@ fn disk(p:vec2f)->vec3f{
   }
  }return sum.value;
 }
-fn latticeValue(p:vec2f)->f32{return signedGeometry(p).x;}
-fn jets(p:vec2f,analytic:vec3f)->vec4f{
- if s.params.z<0.5{return vec4f(analytic,1.0/s.params.x);}
+fn latticeValue(p:vec2f)->f32{return signedGeometry(p).d;}
+fn jets(p:vec2f,analytic:GeometryJet)->LocalJet{
+ if s.params.z<0.5{return LocalJet(analytic.d,analytic.normal,1.0/s.params.x,analytic.normalValid,true);}
  let spacing=s.params.y;let uv=(p-s.lattice.xy)/spacing;let index=floor(uv);let f=uv-index;
  var d=0.0;var g=vec2f(0);var H=vec3f(0);let ex=vec2f(spacing,0);let ey=vec2f(0,spacing);
  for(var a=0u;a<2u;a++){for(var b=0u;b<2u;b++){
@@ -128,8 +132,8 @@ fn jets(p:vec2f,analytic:vec3f)->vec4f{
   d+=weight*S;g+=weight*vec2f(latticeValue(q+ex)-latticeValue(q-ex),latticeValue(q+ey)-latticeValue(q-ey))/(2.0*spacing);
   H+=weight*vec3f(latticeValue(q+2.0*ex)-2.0*S+latticeValue(q-2.0*ex),latticeValue(q+ex+ey)-latticeValue(q+ex-ey)-latticeValue(q-ex+ey)+latticeValue(q-ex-ey),latticeValue(q+2.0*ey)-2.0*S+latticeValue(q-2.0*ey))/(4.0*spacing*spacing);
  }}
- let lengthG=length(g);var n=vec2f(nan());if lengthG>=0.000001{n=g/lengthG;}
- let level=(g.y*g.y*H.x-2.0*g.x*g.y*H.y+g.x*g.x*H.z)/max(lengthG*lengthG*lengthG,1e-30);let den=1.0-d*level;var k=nan();if abs(den)>0.05{k=level/den;}return vec4f(d,n,k);
+ let lengthG=length(g);let normalValid=lengthG>=0.000001;var n=vec2f(0);if normalValid{n=g/lengthG;}
+ let level=(g.y*g.y*H.x-2.0*g.x*g.y*H.y+g.x*g.x*H.z)/max(lengthG*lengthG*lengthG,1e-30);let den=1.0-d*level;let curvatureValid=abs(den)>0.05;var k=0.0;if curvatureValid{k=level/den;}return LocalJet(d,n,k,normalValid,curvatureValid);
 }
 fn term(y:vec2f,n:vec2f,derivative:bool)->vec3f{
  let k=jet(length(y));let W=k.x;let L=k.y;let Q=k.z;let z=dot(y,n);let id=s.ids.y;
@@ -142,29 +146,29 @@ fn term(y:vec2f,n:vec2f,derivative:bool)->vec3f{
  if id==6u || id==7u{let i=id-6u;if derivative{return vec3f(-n[i]*L-y[i]*z*Q,0,0);}return vec3f(-y[i]*L,0,0);}
  let i=(id-8u)/2u;let j=(id-8u)%2u;if derivative{return vec3f(-(n[i]*y[j]+y[i]*n[j])*L-y[i]*y[j]*z*Q,0,0);}return vec3f(-y[i]*y[j]*L,0,0);
 }
-fn plane(j:vec4f,curvature:bool)->vec3f{
- let d=j.x;if d>=1.0{return vec3f(0);}if d<=-1.0{return whole();}
+fn plane(j:LocalJet,curvature:bool)->Evaluation{
+ let d=j.d;if d>=1.0{return Evaluation(vec3f(0),true);}if d<=-1.0{return Evaluation(whole(),true);}
  // A missing normal still permits a scalar mass integral.
- let valid=j.y==j.y && j.z==j.z;var n=vec2f(0,1);if valid{n=j.yz;}else if s.ids.y!=0u{return vec3f(nan());}
- if curvature && j.w!=j.w{return vec3f(nan());}
+ var n=vec2f(0,1);if j.normalValid{n=j.normal;}else if s.ids.y!=0u{return Evaluation(vec3f(0),false);}
+ if curvature && !j.curvatureValid{return Evaluation(vec3f(0),false);}
  let t=vec2f(n.y,-n.x);let a=-4.0*t-4.0*n;let b=4.0*t-4.0*n;let c=4.0*t-d*n;let e=-4.0*t-d*n;
  var sum=Sum(vec3f(0),vec3f(0));edge(&sum,a,b);edge(&sum,b,c);edge(&sum,c,e);edge(&sum,e,a);
  if curvature{
   let R=sqrt(max(0.0,1.0-d*d));var cuts:array<f32,48>;cuts[0]=-R;cuts[1]=R;var count=2u;insert(&cuts,&count,0.0,-R,R);
   if s.counts.w==0u && abs(d)<0.5{let r=sqrt(0.25-d*d);insert(&cuts,&count,-r,-R,R);insert(&cuts,&count,r,-R,R);}
   for(var panel=1u;panel<count;panel++){let half=(cuts[panel]-cuts[panel-1u])*0.5;let mid=(cuts[panel]+cuts[panel-1u])*0.5;
-   for(var node=0u;node<s.counts.z;node++){let x=mid+half*table[2u*node];let y=t*x-d*n;let corr=-0.5*j.w*x*x*term(y,n,false)+0.125*j.w*j.w*x*x*x*x*term(y,n,true);add(&sum,corr*(half*table[2u*node+1u]));}
+   for(var node=0u;node<s.counts.z;node++){let x=mid+half*table[2u*node];let y=t*x-d*n;let corr=-0.5*j.curvature*x*x*term(y,n,false)+0.125*j.curvature*j.curvature*x*x*x*x*term(y,n,true);add(&sum,corr*(half*table[2u*node+1u]));}
   }
- }return sum.value;
+ }return Evaluation(sum.value,true);
 }
 @compute @workgroup_size(64)
 fn compute_terms2d(@builtin(global_invocation_id) invocation:vec3u){
  let index=invocation.x;let n=s.ids.x;if index>=n*n{return;}
- let p=s.grid.xy+s.grid.z*vec2f(f32(index%n),f32(index/n));let geometry=signedGeometry(p);var v=vec3f(0);
+ let p=s.grid.xy+s.grid.z*vec2f(f32(index%n),f32(index/n));let geometry=signedGeometry(p);var v=vec3f(0);var valid=true;
  switch s.ids.w{
-  case 0u,1u,2u:{var d=geometry.x;if s.ids.z==2u{d=signedPolygon(p).x;}v=polygon(p,s.ids.w==0u,d);}
-  case 3u,4u:{v=plane(jets(p,geometry),s.ids.w==4u);}
+  case 0u,1u,2u:{var d=geometry.d;if s.ids.z==2u{d=signedPolygon(p).d;}v=polygon(p,s.ids.w==0u,d);}
+  case 3u,4u:{let evaluated=plane(jets(p,geometry),s.ids.w==4u);v=evaluated.value;valid=evaluated.valid;}
   default:{v=disk(p);}
  }
- var value=v.x;if s.ids.y==12u{value=length(v.yz);}output[index]=vec2f(value,geometry.x*s.grid.w);
+ var value=v.x;if s.ids.y==12u{value=length(v.yz);}output[index]=vec4f(value,geometry.d*s.grid.w,select(0.0,1.0,valid),0.0);
 }

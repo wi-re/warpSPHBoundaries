@@ -1,8 +1,8 @@
-import {compile2d,modelError2d,resultRow2d} from './compute2d-plan.js?v=20261022-3';
-import {MODELS2D} from './browser-compute2d.js?v=20261022-3';
+import {compile2d,modelError2d,resultRow2d,decodeSamples2d} from './compute2d-plan.js?v=20261022-4';
+import {MODELS2D} from './browser-compute2d.js?v=20261022-4';
 let worker,job=0,resourcePromise;const pending=new Map();
 function cpu(config,progress){
- if(!worker){worker=new Worker(new URL('./compute-worker2d.js?v=20261022-3',import.meta.url),{type:'module'});worker.onmessage=event=>{const {id,result,error,progress:note}=event.data,item=pending.get(id);if(!item)return;if(note){item.progress(note);return;}pending.delete(id);if(error)item.reject(new Error(error));else{result.compute_engine='JavaScript float64';item.resolve(result);}};worker.onerror=event=>{for(const item of pending.values())item.reject(new Error(event.message));pending.clear();worker.terminate();worker=null;};}
+ if(!worker){worker=new Worker(new URL('./compute-worker2d.js?v=20261022-4',import.meta.url),{type:'module'});worker.onmessage=event=>{const {id,result,error,progress:note}=event.data,item=pending.get(id);if(!item)return;if(note){item.progress(note);return;}pending.delete(id);if(error)item.reject(new Error(error));else{result.compute_engine='JavaScript float64';item.resolve(result);}};worker.onerror=event=>{for(const item of pending.values())item.reject(new Error(event.message));pending.clear();worker.terminate();worker=null;};}
  return new Promise((resolve,reject)=>{const id=++job;pending.set(id,{resolve,reject,progress});worker.postMessage({id,config});});
 }
 async function resources(){
@@ -10,7 +10,7 @@ async function resources(){
  const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});if(!adapter)throw new Error('No WebGPU compute adapter');
  const device=await adapter.requestDevice();
  try{
-  const response=await fetch(new URL('./terms2d-compute.wgsl?v=20261022-3',import.meta.url));if(!response.ok)throw new Error('Could not load the 2D compute shader');
+  const response=await fetch(new URL('./terms2d-compute.wgsl?v=20261022-4',import.meta.url));if(!response.ok)throw new Error('Could not load the 2D compute shader');
   const module=device.createShaderModule({label:'2D boundary integrals · fp32',code:await response.text()}),info=await module.getCompilationInfo(),errors=info.messages.filter(m=>m.type==='error');
   if(errors.length)throw new Error(errors.map(e=>`${e.lineNum}: ${e.message}`).join('\n'));
   const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'compute_terms2d'}});
@@ -21,7 +21,7 @@ export async function computeGPU2d(config,progress=()=>{}){
  const started=performance.now(),plan=compile2d(config),{c,x,y,geometry,table}=plan;
  progress('Preparing WebGPU fp32 · first use compiles the 2D shader…');
  const {device,pipeline}=await(resourcePromise??=resources()),ready=performance.now();
- const uniform=device.createBuffer({size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),lookup=device.createBuffer({size:table.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST}),output=device.createBuffer({size:c.resolution**2*8,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),read=device.createBuffer({size:c.resolution**2*8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const uniform=device.createBuffer({size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),lookup=device.createBuffer({size:table.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST}),output=device.createBuffer({size:c.resolution**2*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),read=device.createBuffer({size:c.resolution**2*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
  const results=[];let distance;
  try{
   device.queue.writeBuffer(lookup,0,table);
@@ -31,8 +31,8 @@ export async function computeGPU2d(config,progress=()=>{}){
    progress(`WebGPU fp32 · ${MODELS2D[model][0]}`);const tick=performance.now(),raw=plan.uniform.slice();new Uint32Array(raw.buffer)[3]=['mesh','exact','rectangle','sdf','curvature','disk'].indexOf(model);device.queue.writeBuffer(uniform,0,raw);
    device.pushErrorScope('validation');let validation;
    try{
-    const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(Math.ceil(c.resolution**2/64));pass.end();encoder.copyBufferToBuffer(output,0,read,0,c.resolution**2*8);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
-    const pairs=new Float32Array(read.getMappedRange()),values=new Float32Array(c.resolution**2);distance??=new Array(values.length);for(let i=0;i<values.length;i++){values[i]=pairs[i*2];distance[i]=pairs[i*2+1];}read.unmap();
+    const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(Math.ceil(c.resolution**2/64));pass.end();encoder.copyBufferToBuffer(output,0,read,0,c.resolution**2*16);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+    const decoded=decodeSamples2d(new Float32Array(read.getMappedRange())),values=decoded.values;distance??=decoded.distance;read.unmap();
     results.push(resultRow2d(model,values,performance.now()-tick,c,'WebGPU fp32'));
    }finally{validation=await device.popErrorScope();}if(validation)throw new Error(validation.message);
   }

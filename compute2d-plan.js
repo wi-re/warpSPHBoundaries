@@ -1,6 +1,6 @@
 // Shared host-side layout for browser WebGPU dispatch and native WGSL tests.
-import {FIELDS2D,MODELS2D,validate2d,geometry2d,fluxPlan} from './browser-compute2d.js?v=20261022-3';
-import {SHAPES,gauss} from './term-engine.js?v=20261022-3';
+import {FIELDS2D,MODELS2D,validate2d,geometry2d,fluxPlan} from './browser-compute2d.js?v=20261022-4';
+import {SHAPES,gauss} from './term-engine.js?v=20261022-4';
 export function grid2d(payload){
  const c=validate2d(payload),geometry=geometry2d(c),n=c.resolution;
  const lo=[0,1].map(i=>c.geometry==='circle'?-c.radius:Math.min(...geometry.vertices.map(p=>p[i]))),hi=[0,1].map(i=>c.geometry==='circle'?c.radius:Math.max(...geometry.vertices.map(p=>p[i]))),half=Math.max(...hi.map((x,i)=>x-lo[i]))/2+c.padding*c.h;
@@ -45,4 +45,13 @@ export function resultRow2d(model,values,milliseconds,c,engine){
  if(c.geometry==='circle'&&['mesh','exact'].includes(model))notes.push(`The inscribed ${c.segments}-gon approximates the circle.`);
  if(['sdf','curvature'].includes(model))notes.push(c.sdf_source==='sampled'?'Bilinearly sampled SDF with finite-difference normals and curvature; fp32 cancellation in small lattice spacings can affect jets.':'Analytic signed distance and normal; ambiguous normal samples remain missing.');
  return {model,label:MODELS2D[model][0],values:data,min:Number.isFinite(min)?min:null,max:Number.isFinite(max)?max:null,missing,notes,milliseconds};
+}
+
+// Shader buffers contain only finite values plus an explicit 0/1 validity flag.
+// Missing values are introduced on the JS side, after GPU readback.
+export function decodeSamples2d(raw){
+ if(raw.length%4)throw new Error('Invalid 2D GPU sample stride');
+ const values=new Float32Array(raw.length/4),distance=new Array(values.length);
+ for(let i=0;i<values.length;i++){values[i]=raw[i*4+2]>.5?raw[i*4]:NaN;distance[i]=raw[i*4+1];}
+ return {values,distance};
 }

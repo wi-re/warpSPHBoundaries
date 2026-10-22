@@ -13,3 +13,6 @@ Manual resolutions: 17–513 nodes/axis in 2D, 17–129 in 3D.
 The Local Python provider requires the package's loopback service.
 
 Live site: https://fluids.dev/warpSPHBoundaries/volume.html
+
+3D renderings are volume-only. Separate 2D cross-sections remain available.
+Old saved slice-plane settings do not enable volume overlays.

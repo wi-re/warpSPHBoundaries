@@ -1,4 +1,4 @@
-import {FIELD_INFO,FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-3';
+import {FIELD_INFO,FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-4';
 const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 const formulas={
  moments:'Mα = ∫Ω yα Wₕ(|y|) dV',
