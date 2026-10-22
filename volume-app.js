@@ -1,9 +1,11 @@
+import {contractElement} from './model-contract.js';
+import {gridControl} from './grid-control.js';
 import {FIELD_INFO,FIELD_IDS} from './term-engine.js';
 import {BROWSER_MODELS} from './browser-compute.js';
 import {computeBrowser,disposeCompute} from './browser-engine.js';
 import {renderTermPanel} from './term-panel.js';
 import {VolumeRenderer} from './volume-renderer.js';
-import {cameraFrame,clamp,decodeVolume,difference,makeTransfer,sampleVolume,sliceValues} from './volume-math.js';
+import {cameraFrame,clamp,decodeVolume,comparisonFields,makeTransfer,sampleVolume,sliceValues} from './volume-math.js';
 const $=id=>document.getElementById(id),create=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
 const PYTHON_MODELS={sphere:['Sphere · polynomial integral','Float64 exact-degree radial shell integration. Sphere geometry only.'],sdf:['SDF · local plane','Exact 3D half-space formula using the geometry distance; includes model error.'],voxel:['Voxel · FFT quadrature','Sampled solid occupancy convolved with the 3D kernel; grid-dependent quadrature.']};
 const MODELS={...PYTHON_MODELS,...BROWSER_MODELS};
@@ -32,7 +34,7 @@ function syncControls(){
   if(config.geometry==='sphere')rangeControl(shape,'radius','Sphere radius R',.2,5,.05,config,changed);
   else for(const [key,label]of [['width','Width x'],['height','Height y'],['depth','Depth z']])rangeControl(shape,key,label,.2,6,.05,config,changed);
   const sampling=$('grid-controls');sampling.replaceChildren();rangeControl(sampling,'h','Support radius h',.15,2,.05,config,changed);
-  rangeControl(sampling,'resolution','Volume resolution',17,81,8,config,changed,'³');rangeControl(sampling,'padding','View padding',1,2,.05,config,changed,'h');
+  gridControl(sampling,config,{label:'Volume resolution',max:129,sliderMax:81,unit:'³',changed});rangeControl(sampling,'padding','View padding',1,2,.05,config,changed,'h');
   const models=$('models');models.replaceChildren();
   Object.entries(provider==='python'?{...PYTHON_MODELS,curvature:MODELS.curvature,ball_series:MODELS.ball_series}:BROWSER_MODELS).forEach(([key,[title,note]])=>{
     const item=create('div','volume-model'),label=create('label','check'),input=create('input');input.type='checkbox';input.checked=config.models.includes(key);input.setAttribute('aria-label',title);
@@ -40,7 +42,7 @@ function syncControls(){
     label.append(input,document.createTextNode(title));item.append(label,create('small','',note));models.append(item);
   });
 }
-function preset(kind){config={...structuredClone(DEFAULT),kernel:config.kernel,geometry:['curvature','small-ball'].includes(kind)?'sphere':kind};if(kind==='curvature'){config.models=['sphere','sdf','curvature'];config.h=.3;}if(kind==='small-ball'){config.radius=.2;config.h=1.2;config.models=['sphere','ball_series','quadrature'];}if(!['sphere','curvature','small-ball'].includes(kind))config.models=[provider==='python'?'voxel':'quadrature','sdf'];if(provider==='python')config.models=config.models.map(m=>m==='quadrature'?'voxel':m);if(kind==='tetrahedron'){config.h=.55;config.width=2;config.height=2;config.depth=2;}if(kind==='box'){config.width=2.6;config.height=1.6;config.depth=1.2;config.h=.65;}sliceOffsets=[0,0,0];state.offsets=[0,0,0];syncControls();changed();}
+function preset(kind){config={...structuredClone(DEFAULT),kernel:config.kernel,resolution:config.resolution,geometry:['curvature','small-ball'].includes(kind)?'sphere':kind};if(kind==='curvature'){config.models=['sphere','sdf','curvature'];config.h=.3;}if(kind==='small-ball'){config.radius=.2;config.h=1.2;config.models=['sphere','ball_series','quadrature'];}if(!['sphere','curvature','small-ball'].includes(kind))config.models=[provider==='python'?'voxel':'quadrature','sdf'];if(provider==='python')config.models=config.models.map(m=>m==='quadrature'?'voxel':m);if(kind==='tetrahedron'){config.h=.55;config.width=2;config.height=2;config.depth=2;}if(kind==='box'){config.width=2.6;config.height=1.6;config.depth=1.2;config.h=.65;}sliceOffsets=[0,0,0];state.offsets=[0,0,0];syncControls();changed();}
 function connect(value){online=value;$('connection').textContent=provider==='python'?(value?'Python · local':'Python unavailable'):'Browser · live compute';$('connection').classList.toggle('offline',provider==='python'&&!value);$('compute').disabled=!canCompute();}
 async function evaluate(){
   clearTimeout(timer);if(!canCompute())return;if(busy){queued=true;return;}busy=true;queued=false;const version=revision;
@@ -53,7 +55,7 @@ async function evaluate(){
 }
 function validateResult(result){
   if(result?.dimension!==3||result.schema_version!==1||result.encoding!=='base64-f32-le'||result.order!=='zyx'||!Array.isArray(result.shape)||result.shape.length!==3)throw new Error('Expected a dimension-3 volume with base64-f32-le encoding and zyx storage');
-  const n=result.shape[0];if(!Number.isInteger(n)||n<17||n>81||result.shape.some(v=>v!==n))throw new Error('Volume dimensions must be equal, with 17–81 nodes per axis');
+  const n=result.shape[0];if(!Number.isInteger(n)||n<17||n>129||result.shape.some(v=>v!==n))throw new Error('Volume dimensions must be equal, with 17–129 nodes per axis');
   for(const axis of ['x','y','z']){if(!Array.isArray(result[axis])||result[axis].length!==n||result[axis].some((v,i)=>!Number.isFinite(v)||(i&&v<=result[axis][i-1])))throw new Error('Invalid volume coordinate axes');}
   // Ray casting uses one uniformly sampled cube. Reject alternate layouts rather
   // than displaying stretched or incorrectly indexed imported data.
@@ -71,14 +73,23 @@ async function loadVolume(result,imported=true){
   selectedModel=Math.max(0,result.results.findIndex(r=>!r.error));
   for(let j=0;j<3;j++)sliceOffsets[j]=clamp(sliceOffsets[j],data[['x','y','z'][j]][0],data[['x','y','z'][j]].at(-1));
   state.h=data.config.h;updateOffsets();fitWindow(false);buildSliceControls();buildSlices();buildSliceSelector();await buildVolumes();showNotes();renderTermPanel($('term-equations'),result.config);$('save').disabled=false;
+  $('quantity-note').textContent=result.config.field==='grad_norm'?'Gradient magnitude combines vector components before taking the norm. Geometry/model error and integration error are described separately beneath each view.':/^(G|H|g1)|laplacian/.test(result.config.field)?'Signed kernel-derivative fields can cross zero inside the volume. The signed opacity preset makes those zero sets transparent; use “Constant opacity” or the full-color slices to distinguish a zero from missing data. Local SDF normals can change across nearest-face/medial boundaries.':'';
   $('grid-status').textContent=`${result.shape.join(' × ')} · h = ${result.config.h} · ${result.config.kernel} · ${result.config.field} · z/y/x storage`;
   if(imported)status('Saved 3D volume loaded · display controls remain interactive');
   message('');drawEverything();
 }
-function displayedFields(){const reference=arrays[0];return arrays.map(values=>{if(!values)return null;if(state.display==='value')return values;if(!reference)return Float32Array.from(values,()=>NaN);return difference(values,reference,state.display==='absolute');});}
+function viewState(index){
+ if(index!==0||state.display==='value'||!arrays[0])return {...state};
+ let min=Infinity,max=-Infinity;for(const v of arrays[0])if(Number.isFinite(v)){min=Math.min(min,v);max=Math.max(max,v);}
+ if(!Number.isFinite(min)){min=0;max=1;}if(min<0&&max>0){max=Math.max(-min,max);min=-max;}if(max===min)max=min+1e-6;
+ return {...state,min,max,knots:['constant','linear','solid','custom'].includes(state.opacity)?state.knots:PRESETS[min < -1e-6?'difference':'boundary']};
+}
+function viewLUT(index){const v=viewState(index);return index===0&&state.display!=='value'?makeTransfer(palettes[state.colormap],v.knots):lut;}
+function updateReferenceCaption(){const el=$('volumes').querySelector('.reference-scale');if(el){const v=viewState(0);el.textContent=state.display==='value'?'':`Raw reference · own scale ${short(v.min)} to ${short(v.max)}. Other views and the main legend show differences.`;}}
+function displayedFields(){return comparisonFields(arrays,state.display);}
 function fitWindow(upload=true){
-  if(!data)return;fields=displayedFields();let low=Infinity,high=-Infinity;
-  for(const volume of fields)if(volume)for(const value of volume)if(Number.isFinite(value)){low=Math.min(low,value);high=Math.max(high,value);}
+  if(!data)return;$('legend-caption').textContent=state.display==='value'?'Transfer window · shared by all views':'Difference window · views 2+ · view 1 uses its raw scale';fields=displayedFields();let low=Infinity,high=-Infinity;
+  for(const volume of (state.display==='value'?fields:fields.slice(1)))if(volume)for(const value of volume)if(Number.isFinite(value)){low=Math.min(low,value);high=Math.max(high,value);}
   if(!Number.isFinite(low)){low=0;high=1;}
   if(state.display==='value'&&data.config.field==='m00'){low=Math.min(0,low);if(low>-1e-6)low=0;}
   else if(state.display==='difference'||(low<0&&high>0)){high=Math.max(Math.abs(low),Math.abs(high));low=-high;}
@@ -94,19 +105,19 @@ async function buildVolumes(){
     const save=create('button','','↓');save.setAttribute('aria-label',`Export 3D viewport ${i+1} PNG`);heading.append(label,save);card.append(heading);parent.append(card);
     if(result.error){card.append(create('div','error-plot',result.error));save.disabled=true;return;}
     const stage=create('div','volume-stage'),canvas=create('canvas','volume-image'),overlay=create('canvas','volume-overlay');canvas.setAttribute('aria-label',`${MODELS[result.model][0]} 3D volume; drag to orbit`);stage.append(canvas,overlay);card.append(stage);
-    const info=create('div','viewport-footer');info.append(create('span','',`${Math.round(result.milliseconds)} ms compute · ${data.shape[0]}³`),create('span','',i===0?'REFERENCE VIEW':`VIEW ${i+1}`));card.append(info);
+    const info=create('div','viewport-footer');info.append(create('span','',`${Math.round(result.milliseconds)} ms compute · ${data.shape[0]}³`),create('span','',i===0?'REFERENCE · RAW FIELD':`VIEW ${i+1}`));card.append(info);card.append(contractElement(3,result.model,data.config));if(i===0)card.append(create('div','reference-scale'));
     const renderer=await VolumeRenderer.create(canvas,text=>{if(current===generation){renderStatus[i]=text;updateGPUStatus();}},text=>{if(current===generation)message(text);});
     if(current!==generation){renderer.dispose();return;}
-    renderer.setVolume(fields[i],distance,data.shape[0],data.config.h);if(lut)renderer.setTransfer(lut);
+    renderer.setVolume(fields[i],distance,data.shape[0],data.config.h);if(lut)renderer.setTransfer(viewLUT(i));
     renderers[i]={renderer,overlay,stage};installOrbit(stage);
-    save.onclick=async()=>{try{const capture=renderer.draw({...state},true);const blob=capture?await capture:await renderer.readPNG();download(blob,`boundary-3d-${result.model}-${data.config.field}.png`);}catch(e){message(`PNG export failed: ${e.message}`);}};
+    save.onclick=async()=>{try{const capture=renderer.draw(viewState(i),true);const blob=capture?await capture:await renderer.readPNG();download(blob,`boundary-3d-${result.model}-${data.config.field}.png`);}catch(e){message(`PNG export failed: ${e.message}`);}};
     requestDraw();
   });await Promise.all(pending);if(!renderers.some(Boolean))$('gpu-status').textContent='No compatible volume models selected';
 }
 function updateGPUStatus(){const statuses=[...new Set(renderStatus.filter(Boolean))];$('gpu-status').textContent=statuses.join(' · ');const fallback=statuses.length>0&&statuses.every(s=>s.startsWith('CPU'));$('gpu-status').classList.toggle('fallback',fallback);$('lighting').disabled=fallback;}
 function uploadFields(){if(!data)return;fields=displayedFields();renderers.forEach((view,i)=>view?.renderer.setVolume(fields[i],distance,data.shape[0],data.config.h));}
-function updateTransfer(){if(!palettes)return;lut=makeTransfer(palettes[state.colormap],state.knots);renderers.forEach(view=>view?.renderer.setTransfer(lut));$('legend-min').textContent=short(state.min);$('legend-max').textContent=short(state.max);$('colorbar').style.background=`linear-gradient(to right,${palettes[state.colormap].filter((_,i)=>i%8===0).map(rgb=>`rgb(${rgb.join(',')})`).join(',')})`;}
-function requestDraw(){if(framePending)return;framePending=true;requestAnimationFrame(()=>{framePending=false;renderers.forEach(view=>{if(view){view.renderer.draw({...state,offsets:[...state.offsets],planes:[...state.planes]});drawOverlay(view);}});});}
+function updateTransfer(){if(!palettes)return;lut=makeTransfer(palettes[state.colormap],state.knots);renderers.forEach((view,i)=>view?.renderer.setTransfer(viewLUT(i)));updateReferenceCaption();$('legend-min').textContent=short(state.min);$('legend-max').textContent=short(state.max);$('colorbar').style.background=`linear-gradient(to right,${palettes[state.colormap].filter((_,i)=>i%8===0).map(rgb=>`rgb(${rgb.join(',')})`).join(',')})`;}
+function requestDraw(){if(framePending)return;framePending=true;requestAnimationFrame(()=>{framePending=false;renderers.forEach((view,i)=>{if(view){view.renderer.draw(viewState(i));drawOverlay(view);}});});}
 function drawEverything(){updateTransfer();drawTransfer();drawSlices();requestDraw();}
 function installOrbit(stage){let drag;
   stage.onpointerdown=e=>{drag=[e.clientX,e.clientY];stage.setPointerCapture(e.pointerId);};stage.onpointermove=e=>{if(!drag)return;state.yaw-=(e.clientX-drag[0])*.008;state.pitch=clamp(state.pitch+(e.clientY-drag[1])*.008,-1.45,1.45);drag=[e.clientX,e.clientY];requestDraw();};
@@ -139,13 +150,14 @@ function buildSliceSelector(){const select=$('slice-model');select.replaceChildr
 function drawSlices(){if(!data||!lut)return;const n=data.shape[0],values=fields[selectedModel];if(!values)return;
   $('slices').querySelectorAll('canvas').forEach(canvas=>{
     const axis=+canvas.dataset.axis,grid=data[['x','y','z'][axis]],offset=(sliceOffsets[axis]-grid[0])/(grid.at(-1)-grid[0]),slice=sliceValues(values,n,axis,offset),axes=axis===0?[1,2]:axis===1?[0,2]:[0,1];
+    const displayState=viewState(selectedModel),sliceLUT=viewLUT(selectedModel);
     const imageCanvas=document.createElement('canvas');imageCanvas.width=n;imageCanvas.height=n;const image=imageCanvas.getContext('2d').createImageData(n,n);
-    for(let y=0;y<n;y++)for(let x=0;x<n;x++){const value=slice[y*n+x],index=clamp(Math.round((value-state.min)/(state.max-state.min)*255),0,255)*4,target=((n-1-y)*n+x)*4;image.data.set(Number.isFinite(value)?[lut[index],lut[index+1],lut[index+2],255]:[38,48,58,255],target);}
+    for(let y=0;y<n;y++)for(let x=0;x<n;x++){const value=slice[y*n+x],index=clamp(Math.round((value-displayState.min)/(displayState.max-displayState.min)*255),0,255)*4,target=((n-1-y)*n+x)*4;image.data.set(Number.isFinite(value)?[sliceLUT[index],sliceLUT[index+1],sliceLUT[index+2],255]:[38,48,58,255],target);}
     imageCanvas.getContext('2d').putImageData(image,0,0);const w=Math.max(120,Math.round(canvas.clientWidth*1.5));canvas.width=w;canvas.height=w;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=true;const cell=w/(n-1);ctx.drawImage(imageCanvas,-cell/2,-cell/2,w+cell,w+cell);
     ctx.strokeStyle='#ffffff99';ctx.lineWidth=1;ctx.setLineDash([4,5]);ctx.beginPath();const u=state.offsets[axes[0]]+.5,v=state.offsets[axes[1]]+.5;ctx.moveTo(u*w,0);ctx.lineTo(u*w,w);ctx.moveTo(0,(1-v)*w);ctx.lineTo(w,(1-v)*w);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#fff';ctx.font='13px Consolas,monospace';ctx.fillText('xyz'[axes[0]],w-17,w-8);ctx.fillText('xyz'[axes[1]],8,17);
     canvas.parentElement.querySelector('.slice-title span').textContent=`${'xyz'[axis]} = ${sliceOffsets[axis].toFixed(3)}`;
   });
-  const uv=state.offsets.map(x=>x+.5),parts=fields.map((f,i)=>f?`${MODELS[data.results[i].model][0]}: ${fmt(sampleVolume(f,data.shape[0],uv))}`:null).filter(Boolean);
+  const uv=state.offsets.map(x=>x+.5),parts=fields.map((f,i)=>f?`${i===0&&state.display!=='value'?'Reference (raw) · ':''}${MODELS[data.results[i].model][0]}: ${fmt(sampleVolume(f,data.shape[0],uv))}`:null).filter(Boolean);
   $('probe').textContent=`x ${sliceOffsets[0].toFixed(3)} · y ${sliceOffsets[1].toFixed(3)} · z ${sliceOffsets[2].toFixed(3)} | ${parts.join(' · ')}`;
 }
 function showNotes(){const parent=$('model-notes');parent.replaceChildren();data.results.forEach((r,i)=>{const details=create('details'),summary=create('summary','',MODELS[r.model][0]);details.append(summary);(r.error?[r.error]:r.notes).forEach(note=>details.append(create('p','',note)));if(i&&arrays[0]&&arrays[i]){let max=0,sum=0,count=0;for(let j=0;j<arrays[i].length;j++){const d=arrays[i][j]-arrays[0][j];if(Number.isFinite(d)){max=Math.max(max,Math.abs(d));sum+=d*d;count++;}}if(count)details.append(create('p','',`Across raw float32 grid: max |Δ to view 1| ${short(max)}; RMS ${short(Math.sqrt(sum/count))}. These are model differences, not certified numerical errors.`));}parent.append(details);});}
@@ -194,7 +206,7 @@ function resetTransfer(){state.knots=structuredClone(PRESETS.boundary);state.opa
 $('opacity-preset').onchange=()=>{const key=$('opacity-preset').value;if(PRESETS[key]){state.knots=structuredClone(PRESETS[key]);state.opacity=key;buildKnots();drawEverything();}};$('reset-transfer').onclick=resetTransfer;
 $('reset-camera').onclick=()=>{Object.assign(state,{yaw:.68,pitch:.36,zoom:2.3});requestDraw();};
 $('save').onclick=()=>download(new Blob([JSON.stringify(exportResult())],{type:'application/json'}),'boundary-volume.json');$('open').onclick=()=>$('file').click();
-$('file').onchange=async()=>{const file=$('file').files[0];if(!file)return;try{if(file.size>25_000_000)throw new Error('Volume file exceeds 25 MB');const result=JSON.parse(await file.text());validateResult(result);restoreView(result.view);await loadVolume(result);applySavedView(result.view);}catch(e){message(`Could not open volume: ${e.message}`);}finally{$('file').value='';}};
+$('file').onchange=async()=>{const file=$('file').files[0];if(!file)return;try{if(file.size>100_000_000)throw new Error('Volume file exceeds 100 MB');const result=JSON.parse(await file.text());validateResult(result);restoreView(result.view);await loadVolume(result);applySavedView(result.view);}catch(e){message(`Could not open volume: ${e.message}`);}finally{$('file').value='';}};
 window.addEventListener('resize',()=>{drawEverything();});window.addEventListener('pagehide',()=>{renderers.forEach(v=>v?.renderer.dispose());disposeCompute();});
 async function start(){
   try{const response=await fetch('./palettes.json');if(!response.ok)throw new Error();palettes=await response.json();}catch{message('Could not load colormaps. Serve this folder over HTTP.');return;}

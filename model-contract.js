@@ -1,0 +1,21 @@
+// Two independent questions: which domain/model is represented, and how is
+// that model evaluated? “Analytic” alone says nothing about geometry error.
+export function modelContract(dimension,model,config,browser=true){
+ const polygon=config.geometry==='circle'?`Inscribed ${config.segments}-gon: an approximation to the circle.`:'The represented polygon, without a local geometry approximation.';
+ if(dimension===2){
+  if(['mesh','exact','rectangle'].includes(model))return {model:polygon,evaluation:browser?'Numerical split Gauss quadrature of radial boundary flux. Approximates the polygon integral; refine Gauss nodes.':'Analytic closed-form edge integrals for the polygon. Floating-point roundoff remains.'};
+  if(model==='disk')return {model:'The original circle; no polygonization.',evaluation:browser?'Numerical Gauss quadrature over the circle boundary. Approximates its area integral; refine Gauss nodes.':'Analytic radial integration plus numerical angular quadrature of the original circle. Refine Gauss nodes.'};
+  if(model==='sdf')return {model:'Local half-plane: an approximation to the solid near the closest boundary.'+(config.sdf_source==='sampled'?' Distance and normals also use a sampled SDF.':''),evaluation:browser?'Numerical boundary quadrature of the half-plane integral. Both geometry-model and quadrature error remain.':'Analytic integral of that half-plane. Exact for the surrogate model in real arithmetic; geometry-model error remains.'};
+  return {model:'Local curvature expansion through order two; a truncated approximation to the original circle integral.'+(config.sdf_source==='sampled'?' Distance, normals and curvature use a sampled SDF.':''),evaluation:browser?'Numerical Gauss integration of the expansion coefficients. This is not the exact integral of the quadratic graph.':'Tabulated/Hermite radial coefficients of the truncated expansion. Table interpolation and truncation errors remain.'};
+ }
+ if(model==='sphere')return {model:'The original sphere; no local geometry approximation.',evaluation:'Polynomial shell integrals evaluated by an exact-degree Gauss rule. Exact in real arithmetic; floating-point error remains.'};
+ if(model==='sdf')return {model:'Local tangent half-space: an approximation to the original solid.',evaluation:'Analytic half-space integral evaluated by an exact-degree polynomial rule. Exact for the surrogate in real arithmetic; geometry-model error remains.'};
+ if(model==='quadrature')return {model:'The original sphere, box or tetrahedron, tested directly at integration samples.',evaluation:'Numerical support cubature of the original solid integral. Sharp occupancy boundaries introduce quadrature error; refine cubature quality.'};
+ if(model==='voxel')return {model:'Voxel occupancy approximates the original solid geometry.',evaluation:'Sampled spatial quadrature, evaluated by FFT convolution. Refine the grid and occupancy sampling; neither the geometry nor the volume integral is exact.'};
+ if(model==='curvature')return {model:`Local curvature expansion through order ${config.curvature_order??2}; a truncated approximation to the original sphere integral.`,evaluation:'Polynomial coefficients integrated by an exact-degree rule. Exact coefficients of a truncated model; not an exact integral of the quadratic graph.'};
+ return {model:`Small-ball mean-value expansion through order ${config.series_order??4}; a truncated approximation to the ball integral.`,evaluation:'Analytic evaluation of the retained kernel-derivative terms. Omitted series terms remain even with exact arithmetic.'};
+}
+export function contractElement(dimension,model,config,browser=true){
+ const c=modelContract(dimension,model,config,browser),container=document.createElement('div');container.className='model-contract';
+ for(const [title,value]of [['Geometry / model',c.model],['Integral evaluation',c.evaluation]]){const p=document.createElement('p'),label=document.createElement('strong');label.textContent=title+': ';p.append(label,document.createTextNode(value));container.append(p);}return container;
+}

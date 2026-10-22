@@ -49,3 +49,7 @@ export function sliceValues(values,n,axis,offset) {
   }
   return out;
 }
+// A comparison keeps the original first field; only subsequent views subtract.
+export function comparisonFields(arrays,display){
+ return arrays.map((values,i)=>!values?null:display==='value'||i===0?values:arrays[0]?difference(values,arrays[0],display==='absolute'):Float32Array.from(values,()=>NaN));
+}

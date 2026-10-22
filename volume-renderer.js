@@ -27,7 +27,7 @@ export class VolumeRenderer {
     try{
       gpuPromise??=gpuResources();const resources=await gpuPromise;
       const result=new VolumeRenderer(canvas,resources,onFailure);onStatus('WebGPU · ray casting');return result;
-    }catch(error){onStatus(`CPU fallback · unlit, ≤160 ray steps · ${error.message}`);return new CPUVolume(canvas,onFailure);}
+    }catch(error){onStatus(`CPU fallback · unlit, grid-aware ray steps · ${error.message}`);return new CPUVolume(canvas,onFailure);}
   }
   constructor(canvas,{device,pipeline,format},onFailure) {
     this.canvas=canvas;this.device=device;this.pipeline=pipeline;this.format=format;

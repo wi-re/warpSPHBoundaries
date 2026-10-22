@@ -47,7 +47,7 @@ export function inside(p,c,g){
 }
 export function validate(c){
  if(!['sphere','box','tetrahedron'].includes(c.geometry)||!['w2','w4','w6','cubic'].includes(c.kernel)||!Object.hasOwn(FIELD_IDS,c.field))throw new Error('Unsupported geometry, kernel or term');
- for(const [key,lo,hi]of [['radius',.2,5],['width',.2,6],['height',.2,6],['depth',.2,6],['h',.15,2],['padding',1,2],['resolution',17,81]])if(!Number.isFinite(c[key])||c[key]<lo||c[key]>hi)throw new Error(`Invalid ${key}`);
+ for(const [key,lo,hi]of [['radius',.2,5],['width',.2,6],['height',.2,6],['depth',.2,6],['h',.15,2],['padding',1,2],['resolution',17,129]])if(!Number.isFinite(c[key])||c[key]<lo||c[key]>hi)throw new Error(`Invalid ${key}`);
  if(!Number.isInteger(c.resolution)||!Array.isArray(c.models)||c.models.length<1||c.models.length>3||new Set(c.models).size!==c.models.length||c.models.some(m=>!BROWSER_MODELS[m]))throw new Error('Choose one to three distinct browser models');
  if(![0,1,2].includes(c.curvature_order??2)||![0,2,4].includes(c.series_order??4))throw new Error('Unknown expansion order');
  if(![1,2].includes(c.quality??1))throw new Error('Unknown quadrature quality');return c;

@@ -1,11 +1,13 @@
-Boundary laboratory — portable static viewer
+Boundary laboratory: static browser application
 
-Serve this folder on an HTTPS static host (including GitHub Pages), or a
-localhost HTTP server, and open volume.html. No Python compute service,
-Warp or warpSPH installation is required for the 3D browser providers.
-WebGPU is optional: the JavaScript float64 worker remains available.
+Open volume.html for 3D, or index.html?2d=1 for 2D.
+Serve this directory over HTTP/HTTPS; do not use a file: URL.
+Both dimension tabs compute in the browser without Python or Warp.
+3D uses WebGPU when available and a float64 JavaScript fallback.
+2D uses a float64 worker with split boundary Gauss quadrature.
+Each view distinguishes its geometry/model from its integration method.
+Comparison view 1 retains its raw field and its own scale.
+Manual resolutions: 17–513 nodes/axis in 2D, 17–129 in 3D.
+The Local Python provider requires the package's loopback service.
 
-The 2D tab can reopen saved results; fresh 2D computation uses the optional
-local Python service. The 3D mesh preset uses approximate support cubature;
-the analytic mesh reference is not compiled into the browser. Equations,
-normalization and model validity are documented in the 3D interface.
+Live site: https://fluids.dev/warpSPHBoundaries/volume.html
