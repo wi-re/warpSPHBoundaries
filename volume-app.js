@@ -1,11 +1,11 @@
-import {contractElement} from './model-contract.js?v=20261022-5';
-import {gridControl} from './grid-control.js?v=20261022-5';
-import {FIELD_INFO,FIELD_IDS} from './term-engine.js?v=20261022-5';
-import {BROWSER_MODELS} from './browser-compute.js?v=20261022-5';
-import {computeBrowser,disposeCompute} from './browser-engine.js?v=20261022-5';
-import {renderTermPanel} from './term-panel.js?v=20261022-5';
-import {VolumeRenderer} from './volume-renderer.js?v=20261022-5';
-import {cameraFrame,clamp,decodeVolume,comparisonFields,makeTransfer,sampleVolume,sliceValues} from './volume-math.js?v=20261022-5';
+import {contractElement} from './model-contract.js?v=20261022-6';
+import {gridControl} from './grid-control.js?v=20261022-6';
+import {FIELD_INFO,FIELD_IDS} from './term-engine.js?v=20261022-6';
+import {BROWSER_MODELS} from './browser-compute.js?v=20261022-6';
+import {computeBrowser,disposeCompute} from './browser-engine.js?v=20261022-6';
+import {renderTermPanel} from './term-panel.js?v=20261022-6';
+import {VolumeRenderer} from './volume-renderer.js?v=20261022-6';
+import {cameraFrame,clamp,decodeVolume,comparisonFields,makeTransfer,sampleVolume,sliceValues} from './volume-math.js?v=20261022-6';
 const $=id=>document.getElementById(id),create=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
 const PYTHON_MODELS={sphere:['Sphere · polynomial integral','Float64 exact-degree radial shell integration. Sphere geometry only.'],sdf:['SDF · local plane','Exact 3D half-space formula using the geometry distance; includes model error.'],voxel:['Voxel · FFT quadrature','Sampled solid occupancy convolved with the 3D kernel; grid-dependent quadrature.']};
 const MODELS={...PYTHON_MODELS,...BROWSER_MODELS};
@@ -42,7 +42,7 @@ function syncControls(){
     label.append(input,document.createTextNode(title));item.append(label,create('small','',note));models.append(item);
   });
 }
-function preset(kind){config={...structuredClone(DEFAULT),kernel:config.kernel,resolution:config.resolution,geometry:['curvature','small-ball'].includes(kind)?'sphere':kind};if(kind==='curvature'){config.models=['sphere','sdf','curvature'];config.h=.3;}if(kind==='small-ball'){config.radius=.2;config.h=1.2;config.models=['sphere','ball_series','quadrature'];}if(!['sphere','curvature','small-ball'].includes(kind))config.models=[provider==='python'?'voxel':'quadrature','sdf'];if(provider==='python')config.models=config.models.map(m=>m==='quadrature'?'voxel':m);if(kind==='tetrahedron'){config.h=.55;config.width=2;config.height=2;config.depth=2;}if(kind==='box'){config.width=2.6;config.height=1.6;config.depth=1.2;config.h=.65;}sliceOffsets=[0,0,0];state.offsets=[0,0,0];syncControls();changed();}
+function preset(kind){config={...structuredClone(DEFAULT),kernel:config.kernel,resolution:config.resolution,geometry:['curvature','small-ball'].includes(kind)?'sphere':kind};if(kind==='curvature'){config.models=['sphere','sdf','curvature'];config.h=.3;}if(kind==='small-ball'){config.radius=.2;config.h=1.2;config.models=['sphere','ball_series','quadrature'];}if(!['sphere','curvature','small-ball'].includes(kind))config.models=provider==='python'?['voxel','sdf']:['analytic','quadrature','sdf'];if(provider==='python')config.models=config.models.map(m=>m==='quadrature'?'voxel':m);if(kind==='tetrahedron'){config.h=.55;config.width=2;config.height=2;config.depth=2;}if(kind==='box'){config.width=2.6;config.height=1.6;config.depth=1.2;config.h=.65;}sliceOffsets=[0,0,0];state.offsets=[0,0,0];syncControls();changed();}
 function connect(value){online=value;$('connection').textContent=provider==='python'?(value?'Python · local':'Python unavailable'):'Browser · live compute';$('connection').classList.toggle('offline',provider==='python'&&!value);$('compute').disabled=!canCompute();}
 async function evaluate(){
   clearTimeout(timer);if(!canCompute())return;if(busy){queued=true;return;}busy=true;queued=false;const version=revision;
@@ -81,7 +81,7 @@ async function loadVolume(result,imported=true){
 function viewState(index){
  if(index!==0||state.display==='value'||!arrays[0])return {...state};
  let min=Infinity,max=-Infinity;for(const v of arrays[0])if(Number.isFinite(v)){min=Math.min(min,v);max=Math.max(max,v);}
- if(!Number.isFinite(min)){min=0;max=1;}if(min<0&&max>0){max=Math.max(-min,max);min=-max;}if(max===min)max=min+1e-6;
+ if(!Number.isFinite(min)){min=0;max=1;}if(data.config.field==='m00'&&min>-1e-6)min=0;if(min<0&&max>0){max=Math.max(-min,max);min=-max;}if(max===min)max=min+1e-6;
  return {...state,min,max,knots:['constant','linear','solid','custom'].includes(state.opacity)?state.knots:PRESETS[min < -1e-6?'difference':'boundary']};
 }
 function viewLUT(index){const v=viewState(index);return index===0&&state.display!=='value'?makeTransfer(palettes[state.colormap],v.knots):lut;}
@@ -213,10 +213,17 @@ async function start(){
   renderTermPanel($('term-equations'),config);
   try{const response=await fetch('./api/info');if(response.ok){const info=await response.json();online=!!info.models3d;}}catch{online=false;}
   connect(online);
+  const query=new URLSearchParams(location.search),initialPreset=query.get('preset');
+  if(['sphere','box','tetrahedron','curvature','small-ball'].includes(initialPreset)){
+    $('preset').value=initialPreset;preset(initialPreset);
+    if(Object.hasOwn(FIELD_IDS,query.get('field')))config.field=query.get('field');
+    syncControls();await evaluate();return;
+  }
   try{const response=await fetch('./example.json');if(response.ok){const result=await response.json();if(result.dimension===3){restoreView(result.view);await loadVolume(result);applySavedView(result.view);status('Saved volume loaded · browser recomputation available');return;}}}catch{}
   await evaluate();
 }
 $('compute-provider').onchange=()=>{
+ if($('compute-provider').value==='python'&&config.models.includes('analytic')){$('compute-provider').value=provider;message('Analytic face-to-edge grids run in the browser float64 worker. Keep a browser provider, or deselect that model to use the Python grid service. The arbitrary-precision Python reference is available separately in mesh3d.');return;}
  provider=$('compute-provider').value;
  config.models=config.models.map(m=>provider==='python'?(m==='quadrature'?'voxel':m):(m==='voxel'?'quadrature':m));
  syncControls();connect(online);changed();

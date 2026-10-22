@@ -1,9 +1,11 @@
-import {FIELD_IDS,axialTerms,selectAxial,integrand,gauss,ballSeries} from './term-engine.js?v=20261022-5';
+import {FIELD_IDS,axialTerms,selectAxial,integrand,gauss,ballSeries} from './term-engine.js?v=20261022-6';
+import {AnalyticSolid,analyticWhole} from './mesh3d-analytic.js?v=20261022-6';
 export const BROWSER_MODELS={
  sphere:['Sphere · polynomial integral','Exact-degree radial integration of each moment/kernel derivative; sphere only.'],
  sdf:['SDF · local plane','Local half-space moment family using geometry distance and normal.'],
  curvature:['SDF · curvature expansion','Quadratic-graph expansion applied to each integrand; sphere R/h ≥ 2.'],
  ball_series:['Small ball · mean-value series','Ball mean-value expansion; R/h ≤ 0.3, single smooth kernel piece.'],
+ analytic:['Solid · analytic face-to-edge','Elementary antiderivatives of the actual tetrahedron or box. No quadrature; float64 worker evaluation.'],
  quadrature:['Solid · support cubature','Positive support-centred spherical quadrature. Approximate; refine quadrature quality.']
 };
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],sub=(a,b)=>a.map((x,i)=>x-b[i]),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -74,6 +76,16 @@ export function cubature(p,c,g,quadrature){
 }
 export function pointTerm(p,c,model,g=prepare(c),quadrature=null){
  const [distance,n]=distanceNormal(p,c,g),d=distance/c.h;
+ if(model==='analytic'){
+  if(c.geometry==='sphere')throw new Error('Analytic face-to-edge requires a polyhedral solid');
+  if(d>=1)return 0;if(d<=-1)return analyticWhole(c.kernel,c.field);
+  if(!g.analyticGeometry){
+   const vertices=g.vertices.map(v=>v.map(x=>x/c.h)),centre=[0,0,0].map((_,i)=>vertices.reduce((s,v)=>s+v[i],0)/vertices.length);
+   const faces=g.faces.map(ids=>{const [a,b,d]=ids.map(i=>vertices[i]);return dot(cross(sub(b,a),sub(d,a)),sub(a,centre))>0?ids:[ids[0],ids[2],ids[1]];});
+   g.analyticGeometry={vertices,faces};
+  }
+  return new AnalyticSolid(g.analyticGeometry.vertices,g.analyticGeometry.faces,p.map(x=>x/c.h)).field(c.kernel,c.field);
+ }
  if(model==='sphere')return selectAxial(axialTerms(d,c.kernel,c.radius/c.h),n,c.field);
  if(model==='sdf')return selectAxial(axialTerms(d,c.kernel),n,c.field);
  if(model==='curvature')return selectAxial(axialTerms(d,c.kernel,null,c.h/c.radius,c.curvature_order??2),n,c.field);
@@ -81,6 +93,7 @@ export function pointTerm(p,c,model,g=prepare(c),quadrature=null){
  return cubature(p,c,g,quadrature??samples(c));
 }
 export function modelError(model,c){
+ if(model==='analytic'&&c.geometry==='sphere')return 'Analytic face-to-edge requires tetrahedron or box geometry';
  if(['sphere','curvature','ball_series'].includes(model)&&c.geometry!=='sphere')return 'This model requires sphere geometry';
  if(model==='curvature'&&c.radius/c.h<2)return 'Curvature model requires R/h ≥ 2; the cutoff is not an accuracy guarantee';
  if(model==='ball_series'&&c.radius/c.h>.3)return 'Small-ball model requires R/h ≤ 0.3';
@@ -102,6 +115,7 @@ export function resultRow(model,values,milliseconds,engine,c){
  if(missing===values.length)return {model,label:BROWSER_MODELS[model][0],error:'No samples lie in the validity domain'};
  const notes=[`${engine}; direct selected-integrand evaluation, with no mass-grid finite differences.`,BROWSER_MODELS[model][1],'Dimensionless fields: moments divided by h^degree; gradients/Hessians multiplied by h/h². Display textures use float16; downloaded/probed grids use float32.'];
  if(model==='quadrature')notes.push(`Support cubature quality ${c.quality??1}; finite sampling and sharp solid-occupancy error remain. Compare quality levels; no renormalization, clamp or exactness claim.`);
+ if(model==='analytic')notes.push('Exact antiderivative algorithm for the original polyhedron in real arithmetic. Support intersections split edge intervals analytically, including face/edge/vertex queries. No occupancy sampling, quadrature, renormalization or value clamping. Floating-point cancellation can still matter for slivers, near tangencies and high-order profiles; use the arbitrary-precision Python reference to audit difficult cases.');
  if(model==='curvature')notes.push(`Selected curvature order ${c.curvature_order??2}.`);
  if(model==='ball_series')notes.push(`Selected mean-value order ${c.series_order??4}.`);
  if(model==='ball_series')notes.push('Origin/knot/support-crossing samples remain missing. Order four is asymptotic; missing values are not replaced with zero.');

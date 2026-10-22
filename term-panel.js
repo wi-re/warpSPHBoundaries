@@ -1,4 +1,4 @@
-import {FIELD_INFO,FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-5';
+import {FIELD_INFO,FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-6';
 const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 const formulas={
  moments:'Mα = ∫Ω yα Wₕ(|y|) dV',
@@ -28,6 +28,19 @@ export function renderTermPanel(parent,c){
  detail(parent,'Sphere / local-plane radial integrals',['cap','angular','M₀=∫r²W A₀dr;  M₁,n=∫r³W A₁dr;  M₂,n/t=∫r⁴W Aₙ/ₜdr','Gₙ=−∫r³L A₁dr;  g₁,n/t=−∫r⁴L Aₙ/ₜdr','Hₙ/ₜ=∫[r²L A₀+r⁴Q Aₙ/ₜ]dr'],'Clamp c to [−1,1]; split radial intervals at complete/partial-shell boundaries and kernel knots. Analytic derivative integrands replace finite differences of the mass grid.');
  detail(parent,'Curvature terms through order two',['curvature','curvatureMass','curvatureJ'],'Here z=−d at the tangent plane; Ω lies below the quadratic graph z=−d−Q₂/2. Positive κ is convex outward curvature. The viewer uses the umbilic sphere κ₁=κ₂=1/R, with R/h≥2. The domain cutoff is not an integral-error guarantee; higher graph/variation terms remain. Every displayed channel expands its own integrand F.');
  detail(parent,'Thin-volume / small-ball terms',['ball','Δ(yαrᵖ) = p(p+1+2|α|)yαrᵖ⁻² + ∑ᵢ αᵢ(αᵢ−1)yα−2eᵢrᵖ'],'Apply the mean-value series to the selected integrand, including derivatives. The viewer requires a/h≤0.3, excludes the radial origin, and rejects support/kernel-knot crossings. Missing samples stay missing.');
- detail(parent,'Tetrahedron and triangular-surface reference',['reference','∫T W dV = ∑faces zface ∫face M₃(r)/r³ dA,   M₃(r)=∫₀ʳ t²W(t)dt'],'The Python arbitrary-precision mesh3d reference supplies analytic face-to-edge checks. Browser solid cubature preserves the actual preset geometry but approximates its integral; it is not that exact reference implementation.');
+ detail(parent,'Analytic tetrahedron / polyhedron · volume → faces → edges',[
+  'M₃(r)=∫₀ʳ t²W(t)dt,   F(r)=M₃(r)/r³,   ∫T W dV=∑f zf ∫f F(r)dA',
+  'a=|zf|,   Hf(r)=∫ₐʳ tF(t)dt,   ∫f F dA=∑e we ∫ Hf(√(s²+we²+a²))/(s²+we²) ds',
+  'Km=∫ rᵐ/(s²+b²) ds,   Im=∫ rᵐ ds,   b=|we|,   r²=s²+b²+a²',
+  'K₀=atan(s/b)/b,   K₋₁=atan(as/(br))/(ab),   K₋₁|a=0=s/(b²r)',
+  'K₁=asinh(s/√(a²+b²))+a²K₋₁,   Km=Im−2+a²Km−2  (m≥2)',
+  'Split edge intervals at s=±√(R²−a²−we²) for each kernel cutoff R.'
+ ],'Solid · analytic face-to-edge uses these elementary antiderivatives in the browser float64 worker, for the original tetrahedron or box. There is no numerical quadrature. Exactly zero face/edge fluxes are skipped before singular auxiliaries; outside-disk edge pieces are retained. For W=1[r<R] the same formula gives sphere–tetrahedron overlap volume. The arbitrary-precision Python reference provides audits; float64 evaluation is not a certified error bound.');
+ detail(parent,'Analytic polyhedron moments and kernel derivatives',[
+  'Φn,R(r)=[rⁿ⁺²−Rⁿ⁺²] 1[r<R]/(n+2),   ∂yi Φn,R=yi rⁿ1[r<R]',
+  'reference',
+  'Gᵢ=−∑f nf,i ∫f W dA,   g₁,ij=δij M₀−∑f nf,j ∫f yi W dA',
+  'Hᵢⱼ=∑f nf,i ∫f yj L dA,   Δλ=∑f zf ∫f L dA,   L=W′(r)/r'
+ ],'The compact potential lowers polynomial degree. Face moments use the same edge primitives, so M₀, M₁, M₂, gradients, first gradient moments, Hessians and the Laplacian all close without quadrature. Derivatives are assembled from the smooth kernel, rather than treating discontinuous radial blocks as independently differentiable kernels.');
  const note=node('p','Precision: browser JavaScript uses float64 arithmetic; WebGPU compute uses float32; display textures use float16. Cubature error, local-model error, asymptotic truncation and arithmetic error are separate.','hint');parent.append(note);parent.append(node('p',`Selected expansions: curvature order ${c.curvature_order??2}; small-ball order ${c.series_order??4}.`,'hint'));
 }

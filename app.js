@@ -1,7 +1,7 @@
-import {contractElement} from './model-contract.js?v=20261022-5';
-import {gridControl} from './grid-control.js?v=20261022-5';
-import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-5';
-import {MODELS2D} from './browser-compute2d.js?v=20261022-5';
+import {contractElement} from './model-contract.js?v=20261022-6';
+import {gridControl} from './grid-control.js?v=20261022-6';
+import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-6';
+import {MODELS2D} from './browser-compute2d.js?v=20261022-6';
 const $ = id => document.getElementById(id);
 const COLORS = ['#83e5c0', '#e6b575', '#8ca7ef', '#df94cb'];
 const MODELS = {

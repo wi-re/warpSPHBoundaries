@@ -1,6 +1,6 @@
 // Pure volume-only CPU ray caster, also used by regression tests. Slice
 // offsets affect the separate 2D plots, never these rendered pixels.
-import {cameraFrame,sampleVolume,clamp} from './volume-math.js?v=20261022-5';
+import {cameraFrame,sampleVolume,clamp} from './volume-math.js?v=20261022-6';
 export function rayBox(origin,direction){
  let near=0,far=Infinity;
  for(let j=0;j<3;j++){
