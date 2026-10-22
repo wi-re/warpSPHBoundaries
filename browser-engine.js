@@ -1,10 +1,13 @@
-import {FIELD_IDS,SHAPES,gauss} from './term-engine.js?v=20261022-6';
-import {BROWSER_MODELS,validate,grid,samples,modelError,resultRow,packageResult} from './browser-compute.js?v=20261022-6';
+import {compileSeries} from './series-plan.js?v=20261022-7';
+import {compileAnalytic3d} from './analytic3d-plan.js?v=20261022-7';
+import {dispatchAnalytic,disposeAnalyticGPU} from './analytic-gpu.js?v=20261022-7';
+import {FIELD_IDS,SHAPES,gauss} from './term-engine.js?v=20261022-7';
+import {BROWSER_MODELS,validate,grid,samples,modelError,resultRow,packageResult} from './browser-compute.js?v=20261022-7';
 let resourcesPromise;
 async function resources(){
  if(!navigator.gpu)throw new Error('WebGPU is not available');
  const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw new Error('No WebGPU compute adapter');
- const device=await adapter.requestDevice(),response=await fetch(new URL('./terms-compute.wgsl?v=20261022-6',import.meta.url));if(!response.ok)throw new Error('Could not load compute shader');
+ const device=await adapter.requestDevice(),response=await fetch(new URL('./terms-compute.wgsl?v=20261022-7',import.meta.url));if(!response.ok)throw new Error('Could not load compute shader');
  const module=device.createShaderModule({code:await response.text(),label:'Boundary moment evaluation'}),info=await module.getCompilationInfo(),errors=info.messages.filter(m=>m.type==='error');
  if(errors.length)throw new Error(errors.map(m=>`${m.lineNum}: ${m.message}`).join('\n'));
  const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'compute_terms'}});return {device,pipeline};
@@ -12,7 +15,7 @@ async function resources(){
 let worker,job=0;
 const pending=new Map();
 function cpu(config,progress){
- if(!worker){worker=new Worker(new URL('./compute-worker.js?v=20261022-6',import.meta.url),{type:'module'});worker.onmessage=event=>{const {id,result,error,progress:note}=event.data,item=pending.get(id);if(!item)return;if(note){item.progress(note);return;}pending.delete(id);if(error)item.reject(new Error(error));else item.resolve(result);};worker.onerror=event=>{for(const item of pending.values())item.reject(new Error(event.message));pending.clear();worker.terminate();worker=null;};}
+ if(!worker){worker=new Worker(new URL('./compute-worker.js?v=20261022-7',import.meta.url),{type:'module'});worker.onmessage=event=>{const {id,result,error,progress:note}=event.data,item=pending.get(id);if(!item)return;if(note){item.progress(note);return;}pending.delete(id);if(error)item.reject(new Error(error));else item.resolve(result);};worker.onerror=event=>{for(const item of pending.values())item.reject(new Error(event.message));pending.clear();worker.terminate();worker=null;};}
  return new Promise((resolve,reject)=>{const id=++job;pending.set(id,{resolve,reject,progress});worker.postMessage({id,config});});
 }
 async function gpu(config,progress){
@@ -23,9 +26,10 @@ async function gpu(config,progress){
  try{
   for(const model of c.models){
    const error=modelError(model,c);if(error){results.push({model,label:BROWSER_MODELS[model][0],error});continue;}
-   if(model==='ball_series'||model==='analytic'){
-    const subset=await cpu({...c,models:[model]},progress);results.push(subset.results[0]);if(!distance){const raw=atob(subset.distance),view=new DataView(Uint8Array.from(raw,ch=>ch.charCodeAt(0)).buffer);distance=Float32Array.from({length:n**3},(_,i)=>view.getFloat32(i*4,true));}continue;
+   if(model==='analytic'){
+    const tick=performance.now(),sample=await dispatchAnalytic(compileAnalytic3d(c),progress);results.push(resultRow(model,sample.values,performance.now()-tick,'WebGPU compensated fp32',c));distance??=sample.distance;continue;
    }
+   if(model==='ball_series'){const tick=performance.now(),sample=await dispatchAnalytic(compileSeries(c,3),progress);results.push(resultRow(model,sample.values,performance.now()-tick,'WebGPU compensated fp32',c));distance??=sample.distance;continue;}
    progress(`WebGPU compute · ${BROWSER_MODELS[model][0]}`);
    const tick=performance.now(),buffer=new ArrayBuffer(64),u=new Uint32Array(buffer),f=new Float32Array(buffer);
    u.set([n,FIELD_IDS[c.field],['sphere','box','tetrahedron'].indexOf(c.geometry),{sphere:0,sdf:1,curvature:2,quadrature:3}[model]]);
@@ -40,7 +44,7 @@ async function gpu(config,progress){
  }finally{uniform.destroy();lookup.destroy();output.destroy();read.destroy();}
 }
 export async function computeBrowser(config,progress=()=>{},preference='auto'){
- if(preference==='worker'||config.models.every(m=>m==='analytic'||m==='ball_series'))return cpu(config,progress);
- try{return await gpu(config,progress);}catch(error){resourcesPromise=undefined;progress(`Compute fallback: ${error.message}. Using JavaScript worker.`);const result=await cpu(config,progress);result.compute_fallback=error.message;return result;}
+ if(preference==='worker')return cpu(config,progress);
+ try{return await gpu(config,progress);}catch(error){const failed=resourcesPromise;resourcesPromise=undefined;failed?.then(r=>r.device.destroy(),()=>{});if(preference==='gpu')throw error;progress(`Compute fallback: ${error.message}. Using JavaScript worker.`);const result=await cpu(config,progress);result.compute_fallback=error.message;return result;}
 }
-export function disposeCompute(){worker?.terminate();worker=null;for(const p of pending.values())p.reject(new Error('Compute worker closed'));pending.clear();}
+export function disposeCompute(){const old=resourcesPromise;resourcesPromise=undefined;old?.then(r=>r.device.destroy(),()=>{});disposeAnalyticGPU();worker?.terminate();worker=null;for(const p of pending.values())p.reject(new Error('Compute worker closed'));pending.clear();}

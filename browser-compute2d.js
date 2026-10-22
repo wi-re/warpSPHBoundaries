@@ -3,10 +3,12 @@
 // integral_0^r t^(k+1) W(t)dt. Edge/arc integrals use split Gauss quadrature.
 // Query gradients follow integration by parts: G_i=-oint W n_i and
 // g1_ij=delta_ij M0-oint y_i W n_j. These are not mass-grid differences.
-import {SHAPES,radialJet,gauss} from './term-engine.js?v=20261022-6';
+import {diskTableChannels} from './disk-table.js?v=20261022-7';
+import {analyticPolygon2d,diskSeries2d,analyticPlane2d} from './analytic2d.js?v=20261022-7';
+import {SHAPES,radialJet,gauss} from './term-engine.js?v=20261022-7';
 export const FIELDS2D=['m00','m10','m01','m20','m11','m02','Gx','Gy','g1xx','g1xy','g1yx','g1yy','grad_norm'];
-export const DEFAULT2D={geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24};
-export const MODELS2D={mesh:['Triangle mesh','Split Gauss integration of regular radial flux, summed over triangles.'],exact:['Polygon · radial flux','Split Gauss integration over polygon edges; numerical quadrature.'],rectangle:['Rectangle · radial flux','Four-edge integration of the same regular flux; rectangle only.'],sdf:['SDF · distance only','Local half-plane integrals with analytic or sampled SDF jets.'],curvature:['SDF · curvature O(2)','Quadratic-graph expansion of each integrand; circle only, R/h ≥ 2.'],disk:['Circle · boundary quadrature','Circle arcs split at kernel knots; refine Gauss nodes to assess convergence.']};
+export const DEFAULT2D={geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24,curvature_order:2,series_order:4};
+export const MODELS2D={strip:['Strip · analytic two walls','Exact infinite strip, ignoring the rectangle ends; elementary antiderivatives.'],sdf_analytic:['SDF · analytic half-plane','Elementary antiderivatives of the local half-plane surrogate.'],curvature_analytic:['SDF · analytic curvature coefficients','Closed-form line coefficients of the retained order 0, 1 or 2 expansion.'],disk_table:['Disk · Chebyshev lookup','Seven disk invariants, including second moments. Table approximation to boundary quadrature; float32 coefficients.'],analytic:['Polygon · analytic edges','Elementary antiderivatives of the represented polygon; exact in real arithmetic.'],analytic_mesh:['Mesh · analytic edges','Elementary triangle integrals summed over the mesh; exact in real arithmetic.'],disk_series:['Disk · mean-value series','Disk expansion through order 0, 2 or 4; R/h ≤ 0.3, one smooth kernel piece.'],mesh:['Triangle mesh','Split Gauss integration of regular radial flux, summed over triangles.'],exact:['Polygon · radial flux','Split Gauss integration over polygon edges; numerical quadrature.'],rectangle:['Rectangle · radial flux','Four-edge integration of the same regular flux; rectangle only.'],sdf:['SDF · distance only','Local half-plane integrals with analytic or sampled SDF jets.'],curvature:['SDF · curvature quadrature','Quadratic-graph expansion of each integrand; circle only, R/h ≥ 2.'],disk:['Circle · boundary quadrature','Circle arcs split at kernel knots; refine Gauss nodes to assess convergence.']};
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1],cross=(a,b)=>a[0]*b[1]-a[1]*b[0],sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
 const norm2={w2:7/Math.PI,w4:9/Math.PI,w6:78/(7*Math.PI),cubic:80/(7*Math.PI)};
 const choose=(n,k)=>{let v=1;for(let i=1;i<=k;i++)v=v*(n-i+1)/i;return v;};
@@ -88,18 +90,18 @@ export function diskChannels(p,R,name,nodes=24){
  for(let k=1;k<cuts.length;k++)for(const [node,w]of gauss(nodes))for(const sign of [-1,1]){const theta=angle+sign*(cuts[k]+cuts[k-1]+(cuts[k]-cuts[k-1])*node)/2,n=[Math.cos(theta),Math.sin(theta)];addBoundary(out,R*n[0]-p[0],R*n[1]-p[1],...n,w*(cuts[k]-cuts[k-1])/2*R,name);}
  return finish(out);
 }
-export function planeChannels(d,n,name,nodes=24,curvature=0){
+export function planeChannels(d,n,name,nodes=24,curvature=0,order=2){
  if(d>=1)return Array(12).fill(0);if(d<=-1)return whole2d(name);if(!Number.isFinite(d)||!Number.isFinite(curvature))return Array(12).fill(NaN);
  const local=polygonChannels([[-4,-4],[4,-4],[4,-d],[-4,-d]],[0,0],name,nodes);
  // Enforce exact reflection symmetries instead of quadrature residuals.
  local[1]=local[4]=local[6]=local[9]=local[10]=0;
- if(curvature){
+ if(curvature&&order>=1){
   const a=Math.sqrt(Math.max(0,1-d*d)),cuts=[-a,0,a];if(name==='cubic'&&Math.abs(d)<.5){const b=Math.sqrt(.25-d*d);cuts.push(-b,b);}cuts.sort((a,b)=>a-b);
   for(let k=1;k<cuts.length;k++)for(const [node,w]of gauss(nodes)){
    const x=(cuts[k]+cuts[k-1]+(cuts[k]-cuts[k-1])*node)/2,z=-d,r=Math.hypot(x,z),[W,L,Q]=kernel2d(r,name),weight=w*(cuts[k]-cuts[k-1])/2;
    const F=[W,x*W,z*W,x*x*W,x*z*W,z*z*W,-x*L,-z*L,-x*x*L,-x*z*L,-x*z*L,-z*z*L];
    const dz=[z*L,x*z*L,W+z*z*L,x*x*z*L,x*W+x*z*z*L,2*z*W+z**3*L,-x*z*Q,-L-z*z*Q,-x*x*z*Q,-x*L-x*z*z*Q,-x*L-x*z*z*Q,-2*z*L-z**3*Q];
-   for(let j=0;j<12;j++)local[j]+=weight*(-curvature/2*x*x*F[j]+curvature*curvature/8*x**4*dz[j]);
+   for(let j=0;j<12;j++)local[j]+=weight*(-curvature/2*x*x*F[j]+(order>=2?curvature*curvature/8*x**4*dz[j]:0));
   }
  }
  if(!n.every(Number.isFinite)){const out=Array(12).fill(NaN);out[0]=local[0];return out;}
@@ -112,10 +114,11 @@ export function validate2d(payload){
  const c={...structuredClone(DEFAULT2D),...payload};
  for(const [key,choices]of [['geometry',['rectangle','triangle','circle']],['kernel',Object.keys(SHAPES)],['field',FIELDS2D],['sdf_source',['analytic','sampled']]])if(!choices.includes(c[key]))throw new Error(`Unsupported ${key}`);
  for(const [key,lo,hi,integer]of [['width',.1,8],['height',.1,8],['radius',.15,8],['h',.1,3],['angle',-180,180],['resolution',17,513,true],['padding',1,2],['segments',8,64,true],['quadrature',8,64,true],['sdf_spacing',.03,.5]])if(!Number.isFinite(c[key])||c[key]<lo||c[key]>hi||(integer&&!Number.isInteger(c[key])))throw new Error(`Invalid ${key}`);
+ if(![0,1,2].includes(c.curvature_order)||![0,2,4].includes(c.series_order))throw new Error('Unknown 2D expansion order');
  if(!Array.isArray(c.models)||c.models.length<1||c.models.length>4||new Set(c.models).size!==c.models.length||c.models.some(m=>!MODELS2D[m]))throw new Error('Choose one to four distinct 2D models');
  if(!Array.isArray(c.vertices)||c.vertices.length!==4||c.vertices.some(p=>!Array.isArray(p)||p.length!==2||p.some(x=>!Number.isFinite(x)||Math.abs(x)>8)))throw new Error('Invalid triangle vertices');return c;
 }
-function sampledJets(c,vertices,x,y){
+export function sampledJets(c,vertices,x,y){
  const spacing=c.sdf_spacing*c.h,origin=[x[0]-3*spacing,y[0]-3*spacing],nx=Math.ceil((x.at(-1)-origin[0])/spacing)+4,ny=Math.ceil((y.at(-1)-origin[1])/spacing)+4;
  if(nx*ny>2_000_000)throw new Error('SDF lattice too large; increase SDF spacing');
  const field=Float64Array.from({length:nx*ny},(_,i)=>signed2d([origin[0]+Math.floor(i/ny)*spacing,origin[1]+i%ny*spacing],c,vertices)[0]);
@@ -126,29 +129,39 @@ function sampledJets(c,vertices,x,y){
   const d=sample(field),vx=sample(gx),vy=sample(gy),length=Math.hypot(vx,vy),n=length>=1e-6?[vx/length,vy/length]:[NaN,NaN],level=(vy*vy*sample(gxx)-2*vx*vy*sample(gxy)+vx*vx*sample(gyy))/Math.max(length**3,1e-30),den=1-d*level;
   return [d/c.h,n,Math.abs(den)>.05?level/den*c.h:NaN];};
 }
-export function compute2d(payload,progress=()=>{}){
+export function compute2d(payload,progress=()=>{},diskTable=null){
  const start=performance.now(),c=validate2d(payload),g=geometry2d(c),n=c.resolution,lo=[0,1].map(i=>c.geometry==='circle'?-c.radius:Math.min(...g.vertices.map(p=>p[i]))),hi=[0,1].map(i=>c.geometry==='circle'?c.radius:Math.max(...g.vertices.map(p=>p[i]))),half=Math.max(...hi.map((x,i)=>x-lo[i]))/2+c.padding*c.h;
  const axes=lo.map((v,i)=>Array.from({length:n},(_,j)=>(v+hi[i])/2-half+2*half*j/(n-1))),[x,y]=axes,points=Array.from({length:n*n},(_,i)=>[x[i%n],y[Math.floor(i/n)]]),signed=points.map(p=>signed2d(p,c,g.vertices)),distance=signed.map(s=>s[0]),results=[];
  let sampled=null,sampledError;
- if(c.sdf_source==='sampled'&&c.models.some(m=>m==='sdf'||m==='curvature'))try{sampled=sampledJets(c,g.vertices,x,y);}catch(e){sampledError=e.message;}
+ if(c.sdf_source==='sampled'&&c.models.some(m=>['sdf','curvature','sdf_analytic','curvature_analytic'].includes(m)))try{sampled=sampledJets(c,g.vertices,x,y);}catch(e){sampledError=e.message;}
  const v=g.vertices.map(p=>p.map(x=>x/c.h)),triangles=g.triangles.map(t=>t.map(p=>p.map(x=>x/c.h)));
  for(const model of c.models){
-  const tick=performance.now(),error=model==='rectangle'&&c.geometry!=='rectangle'?'Built-in rectangle requires rectangle geometry':model==='disk'&&c.geometry!=='circle'?'Circle reference requires circle geometry':model==='curvature'&&(c.geometry!=='circle'||c.radius/c.h<2)?'Curvature model requires circle geometry and R/h ≥ 2':(model==='sdf'||model==='curvature')?sampledError:null;
+  const tick=performance.now(),error=['rectangle','strip'].includes(model)&&c.geometry!=='rectangle'?'Built-in rectangle requires rectangle geometry':['disk','disk_series','disk_table'].includes(model)&&c.geometry!=='circle'?'Circle reference requires circle geometry':['curvature','curvature_analytic'].includes(model)&&(c.geometry!=='circle'||c.radius/c.h<2)?'Curvature model requires circle geometry and R/h ≥ 2':(['sdf','curvature','sdf_analytic','curvature_analytic'].includes(model))?sampledError:null;
   if(error){results.push({model,error});continue;}
   const values=[];
+  if(model==='disk_table'&&!diskTable){results.push({model,error:'Disk lookup coefficients are not loaded'});continue;}
+  if(model==='disk_series'&&c.radius/c.h>.3){results.push({model,error:'Small-disk series requires R/h ≤ 0.3'});continue;}
   for(let i=0;i<points.length;i++){
    const p=points[i].map(x=>x/c.h);let channels;
-   if(['mesh','exact','rectangle'].includes(model)){const d=c.geometry==='circle'?signed2d(p,{geometry:'polygon'},v)[0]:distance[i]/c.h;if(d>=1){values.push(0);continue;}if(d<=-1){values.push(select2d(whole2d(c.kernel),c.field));continue;}}
-   if(model==='exact'||model==='rectangle'){channels=polygonChannels(v,p,c.kernel,c.quadrature);}
+   if(['mesh','exact','rectangle','analytic','analytic_mesh'].includes(model)){const d=c.geometry==='circle'?signed2d(p,{geometry:'polygon'},v)[0]:distance[i]/c.h;if(d>=1){values.push(0);continue;}if(d<=-1){values.push(select2d(whole2d(c.kernel),c.field));continue;}}
+   if(model==='strip'){const a=c.angle*Math.PI/180,n=[-Math.sin(a),Math.cos(a)],q=dot(p,n),half=c.height/(2*c.h),upper=analyticPlane2d(q-half,n,c.kernel),lower=analyticPlane2d(q+half,n,c.kernel);channels=upper.map((v,j)=>v-lower[j]);values.push(select2d(channels,c.field));continue;}
+   if(model==='disk_table'){channels=diskTableChannels(diskTable,p,c.radius/c.h,whole2d(c.kernel));values.push(select2d(channels,c.field));continue;}
+   if(model==='disk_series'){values.push(diskSeries2d(p,c.radius/c.h,c.kernel,FIELDS2D.indexOf(c.field),c.series_order));continue;}
+   if(model==='analytic'){channels=analyticPolygon2d(v,p,c.kernel);}
+   else if(model==='analytic_mesh'){channels=Array(12).fill(0);for(const t of triangles){const a=analyticPolygon2d(t,p,c.kernel);channels=channels.map((x,j)=>x+a[j]);}}
+   else if(model==='exact'||model==='rectangle'){channels=polygonChannels(v,p,c.kernel,c.quadrature);}
    else if(model==='mesh'){channels=Array(12).fill(0);for(const triangle of triangles){const q=polygonChannels(triangle,p,c.kernel,c.quadrature);channels=channels.map((v,j)=>v+q[j]);}}
    else if(model==='disk')channels=diskChannels(p,c.radius/c.h,c.kernel,c.quadrature);
-   else{const [d,normal,kappa]=sampled?sampled(points[i]):[signed[i][0]/c.h,signed[i][1],c.h/c.radius];channels=planeChannels(d,normal,c.kernel,c.quadrature,model==='curvature'?kappa:0);}
+   else{const [d,normal,kappa]=sampled?sampled(points[i]):[signed[i][0]/c.h,signed[i][1],c.h/c.radius];channels=['sdf_analytic','curvature_analytic'].includes(model)?analyticPlane2d(d,normal,c.kernel,model==='curvature_analytic'?kappa:0,c.curvature_order):planeChannels(d,normal,c.kernel,c.quadrature,model==='curvature'?kappa:0,c.curvature_order);}
    values.push(select2d(channels,c.field));if(i%n===n-1)progress(`${MODELS2D[model][0]} · ${Math.round((i+1)/points.length*100)}%`);
   }
   const finite=values.filter(Number.isFinite),notes=['Browser JavaScript float64 worker; radial flux with split Gauss quadrature. Direct kernel-gradient integrals, no grid finite differences.',MODELS2D[model][1],`${c.quadrature} Gauss nodes per smooth panel. Refine to assess numerical convergence; no exactness or certified tolerance claim.`];
-  if(model==='sdf'||model==='curvature')notes.push(c.sdf_source==='sampled'?`Bilinear sampled SDF; finite-difference jets at spacing ${c.sdf_spacing} h.`:'Analytic signed distance and normals; ambiguous polygon normals remain missing.');
-  if(c.geometry==='circle'&&['mesh','exact'].includes(model))notes.push(`Inscribed ${c.segments}-gon approximates the circle.`);
-  results.push({model,label:MODELS2D[model][0],values:values.map(v=>Number.isFinite(v)?v:null),min:null,max:null,missing:values.length-finite.length,notes,milliseconds:performance.now()-tick});
+  if(['analytic','analytic_mesh','sdf_analytic','curvature_analytic','strip'].includes(model))notes.splice(0,notes.length,'Browser float64 elementary antiderivatives. Exact integrals of the represented model or retained coefficients in real arithmetic; no quadrature. Geometry-model, truncation and floating-point errors remain as applicable.');
+  if(model==='disk_table')notes.splice(0,notes.length,'Disk Chebyshev table of seven rotational invariants; float32 coefficients and float64 interpolation. Reference uses 32-node split circle-flux quadrature. Interpolation and reference errors remain.');
+  if(model==='disk_series')notes.splice(0,notes.length,`Disk mean-value expansion, order ${c.series_order}. Truncation error remains; samples crossing the origin, a knot or support boundary stay missing.`);
+  if(['sdf','curvature','sdf_analytic','curvature_analytic'].includes(model))notes.push(c.sdf_source==='sampled'?`Bilinear sampled SDF; finite-difference jets at spacing ${c.sdf_spacing} h.`:'Analytic signed distance and normals; ambiguous polygon normals remain missing.');
+  if(c.geometry==='circle'&&['mesh','exact','analytic','analytic_mesh'].includes(model))notes.push(`Inscribed ${c.segments}-gon approximates the circle.`);
+  results.push({model,engine:'JavaScript float64',label:MODELS2D[model][0],values:values.map(v=>Number.isFinite(v)?v:null),min:null,max:null,missing:values.length-finite.length,notes,milliseconds:performance.now()-tick});
   // Avoid spreading large manually requested grids into the argument stack.
   const row=results.at(-1);if(finite.length){row.min=finite.reduce((a,b)=>Math.min(a,b),Infinity);row.max=finite.reduce((a,b)=>Math.max(a,b),-Infinity);}
  }

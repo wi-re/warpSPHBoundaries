@@ -1,4 +1,4 @@
-import {FIELD_INFO,FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-6';
+import {FIELD_INFO,FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-7';
 const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 const formulas={
  moments:'Mα = ∫Ω yα Wₕ(|y|) dV',
@@ -43,4 +43,12 @@ export function renderTermPanel(parent,c){
   'Hᵢⱼ=∑f nf,i ∫f yj L dA,   Δλ=∑f zf ∫f L dA,   L=W′(r)/r'
  ],'The compact potential lowers polynomial degree. Face moments use the same edge primitives, so M₀, M₁, M₂, gradients, first gradient moments, Hessians and the Laplacian all close without quadrature. Derivatives are assembled from the smooth kernel, rather than treating discontinuous radial blocks as independently differentiable kernels.');
  const note=node('p','Precision: browser JavaScript uses float64 arithmetic; WebGPU compute uses float32; display textures use float16. Cubature error, local-model error, asymptotic truncation and arithmetic error are separate.','hint');parent.append(note);parent.append(node('p',`Selected expansions: curvature order ${c.curvature_order??2}; small-ball order ${c.series_order??4}.`,'hint'));
+}
+
+export function renderTermPanel2d(parent,c){
+ parent.replaceChildren();parent.append(node('h2','2D equations · '+c.field),node('p','y = source − query; Wₕ(r)=h⁻²W(r/h). Derivatives act on the kernel.','hint'));
+ const equations={m00:'λ=∫Ω Wₕ dA',m10:'M₁₀/h=∫Ω yₓWₕ dA/h',m01:'M₀₁/h=∫Ω yᵧWₕ dA/h',m20:'M₂₀/h²=∫Ω yₓ²Wₕ dA/h²',m11:'M₁₁/h²=∫Ω yₓyᵧWₕ dA/h²',m02:'M₀₂/h²=∫Ω yᵧ²Wₕ dA/h²',Gx:'hGₓ=−h∮∂Ω Wₕnₓ dl',Gy:'hGᵧ=−h∮∂Ω Wₕnᵧ dl',grad_norm:'|hG|=h√(Gₓ²+Gᵧ²)',g1xx:'g₁,xx=λ−∮∂Ω yₓWₕnₓ dl',g1xy:'g₁,xy=−∮∂Ω yₓWₕnᵧ dl',g1yx:'g₁,yx=−∮∂Ω yᵧWₕnₓ dl',g1yy:'g₁,yy=λ−∮∂Ω yᵧWₕnᵧ dl'};equation(parent,equations[c.field]);
+ detail(parent,'Polygon / triangle analytic edges',['Φn,R=(rⁿ⁺²−Rⁿ⁺²)1[r<R]/(n+2),  ∂yiΦ=yi rⁿ1[r<R]','∫Ω rⁿ1[r<R]dA=∑edges wₑ∫[min(r,R)ⁿ⁺²−|wₑ|ⁿ⁺²]/[(n+2)(s²+wₑ²)] ds','r²=s²+wₑ²; endpoint antiderivatives use powers and asinh.'],'Analytic edge models evaluate antiderivatives. Radial-flux comparison models evaluate boundary quadrature. For a circle, polygon models represent an inscribed polygon.');
+ detail(parent,'Local half-plane and curvature orders',['B₂j(d)=∫t²j W(√(t²+d²))dt','λ≈λplane−κB₂/2+3dκ²B₂/8','Gₙ≈−B₀+κdB₀/2+3κ²(B₂−d²B₀)/8'],`Curvature order ${c.curvature_order??2}. Analytic coefficient variants integrate each retained line moment in closed form; quadrature variants approximate those coefficients. Both approximate the original curved geometry.`);
+ detail(parent,'Disk boundary / lookup / small-disk orders',['∫disk yαW dA=∮circle yα(y·n)A|α|(r)dl','Aₖ(r)=r⁻ᵏ⁻²∫₀ʳ tᵏ⁺¹W(t)dt','∫disk F dA≈πa²[F(c)+a²ΔF(c)/8+a⁴Δ²F(c)/192]'],`Small-disk order ${c.series_order??4}. The lookup interpolates seven rotational invariants from circle-flux quadrature. It is a table approximation, not an exact disk formula. The mean-value series requires R/h≤0.3 and one smooth kernel piece; invalid samples stay missing.`);
 }

@@ -1,11 +1,12 @@
-import {contractElement} from './model-contract.js?v=20261022-6';
-import {gridControl} from './grid-control.js?v=20261022-6';
-import {FIELD_INFO,FIELD_IDS} from './term-engine.js?v=20261022-6';
-import {BROWSER_MODELS} from './browser-compute.js?v=20261022-6';
-import {computeBrowser,disposeCompute} from './browser-engine.js?v=20261022-6';
-import {renderTermPanel} from './term-panel.js?v=20261022-6';
-import {VolumeRenderer} from './volume-renderer.js?v=20261022-6';
-import {cameraFrame,clamp,decodeVolume,comparisonFields,makeTransfer,sampleVolume,sliceValues} from './volume-math.js?v=20261022-6';
+import {renderMethods} from './method-catalogue.js?v=20261022-7';
+import {contractElement} from './model-contract.js?v=20261022-7';
+import {gridControl} from './grid-control.js?v=20261022-7';
+import {FIELD_INFO,FIELD_IDS} from './term-engine.js?v=20261022-7';
+import {BROWSER_MODELS} from './browser-compute.js?v=20261022-7';
+import {computeBrowser,disposeCompute} from './browser-engine.js?v=20261022-7';
+import {renderTermPanel} from './term-panel.js?v=20261022-7';
+import {VolumeRenderer} from './volume-renderer.js?v=20261022-7';
+import {cameraFrame,clamp,decodeVolume,comparisonFields,makeTransfer,sampleVolume,sliceValues} from './volume-math.js?v=20261022-7';
 const $=id=>document.getElementById(id),create=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
 const PYTHON_MODELS={sphere:['Sphere · polynomial integral','Float64 exact-degree radial shell integration. Sphere geometry only.'],sdf:['SDF · local plane','Exact 3D half-space formula using the geometry distance; includes model error.'],voxel:['Voxel · FFT quadrature','Sampled solid occupancy convolved with the 3D kernel; grid-dependent quadrature.']};
 const MODELS={...PYTHON_MODELS,...BROWSER_MODELS};
@@ -22,13 +23,14 @@ function canCompute(){return provider!=='python'||online;}
 $('field').replaceChildren(...FIELD_INFO.map(([id,label])=>{const o=create('option','',label);o.value=id;return o;}));
 function message(text){$('message').hidden=!text;$('message').textContent=text;}
 function status(text,stale=false){$('status').textContent=text;$('status').classList.toggle('stale',stale);}
-function changed(){revision++;status('Configuration changed · volume awaits evaluation',true);$('compute-note').textContent=canCompute()?'Awaiting new integral grid':'Local Python service is unavailable';renderTermPanel($('term-equations'),config);clearTimeout(timer);if(canCompute()&&$('auto').checked)timer=setTimeout(evaluate,450);}
+function changed(){renderMethods($('method-catalogue'),3,config);revision++;status('Configuration changed · volume awaits evaluation',true);$('compute-note').textContent=canCompute()?'Awaiting new integral grid':'Local Python service is unavailable';renderTermPanel($('term-equations'),config);clearTimeout(timer);if(canCompute()&&$('auto').checked)timer=setTimeout(evaluate,450);}
 function rangeControl(parent,key,label,min,max,step,target,onChange,unit=''){
   const labelElement=create('label','range'),top=create('span','range-top'),output=create('output'),input=create('input');input.type='range';input.min=min;input.max=max;input.step=step;input.value=target[key];input.setAttribute('aria-label',label);
   const update=()=>{output.value=`${Number(input.value).toFixed(step<.1?2:step<1?1:0)}${unit}`;};update();top.append(create('span','',label),output);labelElement.append(top,input);parent.append(labelElement);
   input.oninput=()=>{target[key]=+input.value;update();onChange();};
 }
 function syncControls(){
+  renderMethods($('method-catalogue'),3,config);
   for(const key of ['geometry','kernel','field','supersampling','quality','curvature_order','series_order'])$(key).value=config[key];$('occupancy-control').hidden=provider!=='python';$('quality').disabled=provider==='python';
   const shape=$('shape-controls');shape.replaceChildren();
   if(config.geometry==='sphere')rangeControl(shape,'radius','Sphere radius R',.2,5,.05,config,changed);
@@ -48,9 +50,9 @@ async function evaluate(){
   clearTimeout(timer);if(!canCompute())return;if(busy){queued=true;return;}busy=true;queued=false;const version=revision;
   $('compute').disabled=true;$('compute').textContent='Computing volume…';$('volumes').classList.add('pending-volume');message('');status(provider==='python'?'Computing integral grid in local Python…':'Computing moment integrals in the browser…');
   try{
-    let result;if(provider==='python'){const response=await fetch('./api/compute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config)});result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);}else result=await computeBrowser(structuredClone(config),note=>{if(version===revision)status(note);},provider==='worker'?'worker':'auto');
+    let result;if(provider==='python'){const response=await fetch('./api/compute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config)});result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);}else result=await computeBrowser(structuredClone(config),note=>{if(version===revision)status(note);},provider==='worker'?'worker':provider==='gpu'?'gpu':'auto');
     if(version===revision){await loadVolume(result,false);status(`Computed ${(result.shape[0]**3).toLocaleString()} samples/model in ${(result.milliseconds/1000).toFixed(2)} s`);$('compute-note').textContent=provider==='python'?'Up to date · local Python':'Up to date · browser computation';if(result.compute_fallback)message('WebGPU compute unavailable: '+result.compute_fallback+'. Evaluated with the JavaScript float64 worker.');}
-  }catch(e){message(e.message);status('Volume evaluation failed',true);}
+  }catch(e){message(e.message);status('Volume evaluation failed',true);$('compute-note').textContent='Evaluation failed · previous volume retained';if(provider==='gpu'){$('connection').textContent='WebGPU · evaluation failed';$('connection').classList.add('offline');}}
   finally{busy=false;$('compute').disabled=!canCompute();$('compute').innerHTML='Evaluate volume <span>↗</span>';$('volumes').classList.remove('pending-volume');if(queued||(version!==revision&&revision!==importRevision&&$('auto').checked))evaluate();}
 }
 function validateResult(result){
@@ -105,7 +107,7 @@ async function buildVolumes(){
     const save=create('button','','↓');save.setAttribute('aria-label',`Export 3D viewport ${i+1} PNG`);heading.append(label,save);card.append(heading);parent.append(card);
     if(result.error){card.append(create('div','error-plot',result.error));save.disabled=true;return;}
     const stage=create('div','volume-stage'),canvas=create('canvas','volume-image'),overlay=create('canvas','volume-overlay');canvas.setAttribute('aria-label',`${MODELS[result.model][0]} 3D volume; drag to orbit`);stage.append(canvas,overlay);card.append(stage);
-    const info=create('div','viewport-footer');info.append(create('span','',`${Math.round(result.milliseconds)} ms compute · ${data.shape[0]}³`),create('span','',i===0?'REFERENCE · RAW FIELD':`VIEW ${i+1}`));card.append(info);card.append(contractElement(3,result.model,data.config));if(i===0)card.append(create('div','reference-scale'));
+    const info=create('div','viewport-footer');info.append(create('span','',`${Math.round(result.milliseconds)} ms compute · ${data.shape[0]}³${result.engine?' · '+result.engine:''}`),create('span','',i===0?'REFERENCE · RAW FIELD':`VIEW ${i+1}`));card.append(info);card.append(contractElement(3,result.model,data.config));if(i===0)card.append(create('div','reference-scale'));
     const renderer=await VolumeRenderer.create(canvas,text=>{if(current===generation){renderStatus[i]=text;updateGPUStatus();}},text=>{if(current===generation)message(text);});
     if(current!==generation){renderer.dispose();return;}
     renderer.setVolume(fields[i],distance,data.shape[0],data.config.h);if(lut)renderer.setTransfer(viewLUT(i));

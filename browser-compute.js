@@ -1,11 +1,11 @@
-import {FIELD_IDS,axialTerms,selectAxial,integrand,gauss,ballSeries} from './term-engine.js?v=20261022-6';
-import {AnalyticSolid,analyticWhole} from './mesh3d-analytic.js?v=20261022-6';
+import {FIELD_IDS,axialTerms,selectAxial,integrand,gauss,ballSeries} from './term-engine.js?v=20261022-7';
+import {AnalyticSolid,analyticWhole} from './mesh3d-analytic.js?v=20261022-7';
 export const BROWSER_MODELS={
  sphere:['Sphere · polynomial integral','Exact-degree radial integration of each moment/kernel derivative; sphere only.'],
  sdf:['SDF · local plane','Local half-space moment family using geometry distance and normal.'],
  curvature:['SDF · curvature expansion','Quadratic-graph expansion applied to each integrand; sphere R/h ≥ 2.'],
  ball_series:['Small ball · mean-value series','Ball mean-value expansion; R/h ≤ 0.3, single smooth kernel piece.'],
- analytic:['Solid · analytic face-to-edge','Elementary antiderivatives of the actual tetrahedron or box. No quadrature; float64 worker evaluation.'],
+ analytic:['Solid · analytic face-to-edge','Elementary antiderivatives of the actual tetrahedron or box. No quadrature; compensated fp32 on WebGPU or float64 in the worker.'],
  quadrature:['Solid · support cubature','Positive support-centred spherical quadrature. Approximate; refine quadrature quality.']
 };
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],sub=(a,b)=>a.map((x,i)=>x-b[i]),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -119,7 +119,7 @@ export function resultRow(model,values,milliseconds,engine,c){
  if(model==='curvature')notes.push(`Selected curvature order ${c.curvature_order??2}.`);
  if(model==='ball_series')notes.push(`Selected mean-value order ${c.series_order??4}.`);
  if(model==='ball_series')notes.push('Origin/knot/support-crossing samples remain missing. Order four is asymptotic; missing values are not replaced with zero.');
- return {model,label:BROWSER_MODELS[model][0],values:encode(values),min,max,missing,notes,milliseconds};
+ return {model,engine,label:BROWSER_MODELS[model][0],values:encode(values),min,max,missing,notes,milliseconds};
 }
 export function computeCPU(config,progress=()=>{}){
  const c=validate(config),{n,axis}=grid(c),g=prepare(c),distance=new Float32Array(n**3),results=[],quad=c.models.includes('quadrature')?samples(c):null,start=performance.now();

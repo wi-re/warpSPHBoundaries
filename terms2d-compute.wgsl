@@ -158,11 +158,11 @@ fn plane(j:LocalJet,curvature:bool)->Evaluation{
  if curvature && !j.curvatureValid{return Evaluation(vec3f(0),false);}
  let t=vec2f(n.y,-n.x);let a=-4.0*t-4.0*n;let b=4.0*t-4.0*n;let c=4.0*t-d*n;let e=-4.0*t-d*n;
  var sum=Sum(vec3f(0),vec3f(0));edge(&sum,a,b);edge(&sum,b,c);edge(&sum,c,e);edge(&sum,e,a);
- if curvature{
+ if curvature && s.lattice.w>=1.0{
   let R=sqrt(max(0.0,1.0-d*d));var cuts:array<f32,48>;cuts[0]=-R;cuts[1]=R;var count=2u;insert(&cuts,&count,0.0,-R,R);
   if s.counts.w==0u && abs(d)<0.5{let r=sqrt(0.25-d*d);insert(&cuts,&count,-r,-R,R);insert(&cuts,&count,r,-R,R);}
   for(var panel=1u;panel<count;panel++){let half=(cuts[panel]-cuts[panel-1u])*0.5;let mid=(cuts[panel]+cuts[panel-1u])*0.5;
-   for(var node=0u;node<s.counts.z;node++){let x=mid+half*table[2u*node];let y=t*x-d*n;let corr=-0.5*j.curvature*x*x*term(y,n,false)+0.125*j.curvature*j.curvature*x*x*x*x*term(y,n,true);add(&sum,corr*(half*table[2u*node+1u]));}
+   for(var node=0u;node<s.counts.z;node++){let x=mid+half*table[2u*node];let y=t*x-d*n;let corr=-0.5*j.curvature*x*x*term(y,n,false)+select(vec3f(0),0.125*j.curvature*j.curvature*x*x*x*x*term(y,n,true),s.lattice.w>=2.0);add(&sum,corr*(half*table[2u*node+1u]));}
   }
  }return Evaluation(sum.value,true);
 }
@@ -173,7 +173,31 @@ fn compute_terms2d(@builtin(global_invocation_id) invocation:vec3u){
  switch s.ids.w{
   case 0u,1u,2u:{var d=geometry.d;if s.ids.z==2u{d=signedPolygon(p).d;}v=polygon(p,s.ids.w==0u,d);}
   case 3u,4u:{let evaluated=plane(jets(p,geometry),s.ids.w==4u);v=evaluated.value;valid=evaluated.valid;}
+  case 6u:{v=diskLookup(p);}
   default:{v=disk(p);}
  }
  var value=v.x;if s.ids.y==12u{value=length(v.yz);}output[index]=vec4f(value,geometry.d*s.grid.w,select(0.0,1.0,valid),0.0);
+}
+// Some valid WebGPU asin implementations err by ~2e-4 here. Two half-angle
+// reductions and a convergent atan series preserve the table panel coordinate.
+fn diskPanelAngle(u:f32)->f32{
+ let x=sqrt(u)/(1.0+sqrt(max(0.0,1.0-u)));let y=x/(1.0+sqrt(1.0+x*x));let yy=y*y;var term=y;var sum=y;
+ for(var k=1;k<16;k++){term*= -yy;sum+=term/f32(2*k+1);}return 4.0*sum;
+}
+fn diskLookup(p:vec2f)->vec3f{
+ let D=length(p);let R=s.params.x;if D>=R+1.0{return vec3f(0);}if D+1.0<=R{return whole();}
+ let base=u32(s.lattice.z);var start=base;var pa=3u;let pb=3u;var a=0.0;var b=0.0;var scale=1.0;
+ if R>1.0{start+=54432u;pa=6u;a=(D-R+1.0)/2.0;b=1.0/R;}
+ else{
+  let branch=select(1u,0u,R<=0.5);let delta=D-R;var cuts:array<f32,4>;
+  if branch==0u{cuts=array<f32,4>(-R,0.0,1.0-2.0*R,1.0);}else{cuts=array<f32,4>(-R,1.0-2.0*R,0.0,1.0);}
+  var k=2u;for(var j=0u;j<2u;j++){if delta>=cuts[j] && delta<cuts[j+1u]{k=j;break;}}
+  let u=clamp((delta-cuts[k])/max(cuts[k+1u]-cuts[k],1e-30),0.0,1.0);a=2.0/3.141592653589793*diskPanelAngle(u);b=select(2.0*R-1.0,2.0*R,branch==0u);start+=(branch*3u+k)*9072u;scale=R*R;
+ }
+ a=clamp(a,0.0,1.0);b=clamp(b,0.0,1.0);let i=min(pa-1u,u32(a*f32(pa)));let j=min(pb-1u,u32(b*f32(pb)));let x=2.0*(a*f32(pa)-f32(i))-1.0;let y=2.0*(b*f32(pb)-f32(j))-1.0;
+ var Tx:array<f32,12>;var Ty:array<f32,12>;Tx[0]=1.0;Tx[1]=x;Ty[0]=1.0;Ty[1]=y;for(var k=2u;k<12u;k++){Tx[k]=2.0*x*Tx[k-1u]-Tx[k-2u];Ty[k]=2.0*y*Ty[k-1u]-Ty[k-2u];}
+ var v:array<f32,7>;var correction:array<f32,7>;start+=(i*pb+j)*1008u;
+ for(var u=0u;u<12u;u++){for(var w=0u;w<12u;w++){for(var c=0u;c<7u;c++){let z=scale*Tx[u]*Ty[w]*table[start+(u*12u+w)*7u+c]-correction[c];let t=v[c]+z;correction[c]=(t-v[c])-z;v[c]=t;}}}
+ var normal=vec2f(1,0);if D>0.0{normal=p/D;}else{v[1]=0.0;v[4]=0.0;let m=(v[2]+v[3])*0.5;v[2]=m;v[3]=m;let g=(v[5]+v[6])*0.5;v[5]=g;v[6]=g;}
+ let id=s.ids.y;if id==0u{return vec3f(v[0],0,0);}if id<=2u{return vec3f(v[1]*normal[id-1u],0,0);}if id<=5u{let pair=array<vec2u,3>(vec2u(0,0),vec2u(0,1),vec2u(1,1))[id-3u];return vec3f(select(0.0,v[2],pair.x==pair.y)+(v[3]-v[2])*normal[pair.x]*normal[pair.y],0,0);}if id<=7u{return vec3f(v[4]*normal[id-6u],0,0);}if id<=11u{let i=(id-8u)/2u;let j=(id-8u)%2u;return vec3f(select(0.0,v[5],i==j)+(v[6]-v[5])*normal[i]*normal[j],0,0);}return vec3f(0,v[4]*normal);
 }

@@ -2,7 +2,7 @@
 // Port of mesh3d/reference.py; no quadrature or sampled solid occupancy.
 // See docs/derivations/tet-face-edge-chain.md. Exact in real arithmetic;
 // JavaScript arithmetic/transcendentals remain float64 (not certified intervals).
-import {FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-6';
+import {FIELD_IDS,SHAPES} from './term-engine.js?v=20261022-7';
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),sub=(a,b)=>a.map((x,i)=>x-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const choose=(n,k)=>{let v=1;for(let i=1;i<=k;i++)v=v*(n-i+1)/i;return v;};
@@ -41,7 +41,7 @@ function primitives(s,w,a){
  for(let m=2;m<K.length;m++)K[m]=I[m-2]+a*a*K[m-2];
  return {I,K,km1,r,c};
 }
-function linePrimitive(j,n,s,c){
+export function linePrimitive(j,n,s,c){
  const r=Math.hypot(s,c);
  if(j===0){if(n===-1)return Math.asinh(s/c);let prev=s;if(!n)return prev;let curr=(s*r+(c?c*c*Math.asinh(s/c):0))/2;if(n===1)return curr;const values=[prev,curr];for(let m=2;m<=n;m++)values[m]=(s*r**m+m*c*c*values[m-2])/(m+1);return values[n];}
  if(j%2===1){const h=(j-1)/2;return compensated(Array.from({length:h+1},(_,i)=>choose(h,i)*(-c*c)**(h-i)*r**(n+2*i+2)/(n+2*i+2)));}

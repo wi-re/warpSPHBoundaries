@@ -1,21 +1,24 @@
-import {contractElement} from './model-contract.js?v=20261022-6';
-import {gridControl} from './grid-control.js?v=20261022-6';
-import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-6';
-import {MODELS2D} from './browser-compute2d.js?v=20261022-6';
+import {renderMethods} from './method-catalogue.js?v=20261022-7';
+import {renderTermPanel2d} from './term-panel.js?v=20261022-7';
+import {contractElement} from './model-contract.js?v=20261022-7';
+import {gridControl} from './grid-control.js?v=20261022-7';
+import {computeBrowser2d,disposeCompute2d} from './browser-engine2d.js?v=20261022-7';
+import {MODELS2D} from './browser-compute2d.js?v=20261022-7';
 const $ = id => document.getElementById(id);
 const COLORS = ['#83e5c0', '#e6b575', '#8ca7ef', '#df94cb'];
 const MODELS = {
+  strip:MODELS2D.strip,sdf_analytic:MODELS2D.sdf_analytic,curvature_analytic:MODELS2D.curvature_analytic,disk_table:MODELS2D.disk_table,analytic:MODELS2D.analytic,analytic_mesh:MODELS2D.analytic_mesh,disk_series:MODELS2D.disk_series,
   mesh: ['Triangle mesh', 'Exact edge integrals summed over the mesh triangles.'],
   exact: ['Exact polygon', 'Closed-form edge reduction of the represented polygon.'],
   rectangle: ['Built-in rectangle', 'The same exact edge engine, evaluated over four rectangle edges.'],
   sdf: ['SDF · distance only', 'Local half-plane model; geometry error remains near corners and curves.'],
-  curvature: ['SDF · curvature O(2)', 'Order-two smooth expansion. Circle only; R/h ≥ 2.'],
+  curvature: ['SDF · curvature table', 'Order-two smooth expansion. Circle only; R/h ≥ 2.'],
   disk: ['Circle reference', 'Angular quadrature with analytic radial integrals; refine to check convergence.'],
 };
 const modelInfo=model=>(provider!=='python'?MODELS2D:MODELS)[model];
 const isBrowserResult=()=>data?.compute_provider==='browser'||['WebGPU fp32','JavaScript float64'].includes(data?.compute_engine)||data?.results.some(r=>r.notes?.some(n=>n.startsWith('Browser ')));
 const resultModelInfo=model=>(isBrowserResult()?MODELS2D:MODELS)[model];
-const DEFAULT = {geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24};
+const DEFAULT = {geometry:'rectangle',width:2,height:2,radius:2,angle:0,vertices:[[-1,-1],[1,-1],[1,1],[-1,1]],segments:16,kernel:'w4',h:.65,resolution:81,padding:1.15,field:'m00',models:['mesh','rectangle','sdf'],sdf_source:'analytic',sdf_spacing:.12,quadrature:24,curvature_order:2,series_order:4};
 let config = structuredClone(DEFAULT), data = null, online = false, busy = false, revision = 0, timer, palettes;
 let provider='browser',fieldRanges=[];
 const canCompute=()=>provider!=='python'||online;
@@ -27,6 +30,8 @@ const short = v => Math.abs(v)<.001 && v!==0 ? v.toExponential(1) : Number(v.toP
 function message(text) {$('message').hidden=!text; $('message').textContent=text;}
 function status(text, stale=false) {$('status').textContent=text; $('status').classList.toggle('stale',stale);}
 function changed() {
+  renderMethods($('method-catalogue'),2,config);
+  renderTermPanel2d($('term-equations'),config);
   if($('curvature-label'))$('curvature-label').textContent=`Curvature κ = ${(1/config.radius).toFixed(3)} · κh = ${(config.h/config.radius).toFixed(3)}. Mesh uses an inscribed polygon.`;
   revision++; status('Configuration changed · plot awaits evaluation', true);
   $('compute-note').textContent=canCompute()?'Plot awaits evaluation':'Local Python service is unavailable';
@@ -43,7 +48,8 @@ function slider(parent, key, label, min, max, step, unit='', callback) {
   wrapper.append(top,input);parent.append(wrapper);
 }
 function syncControls() {
-  for(const key of ['geometry','kernel','field','sdf_source']) $(key).value=config[key];
+  renderMethods($('method-catalogue'),2,config);
+  for(const key of ['geometry','kernel','field','sdf_source','curvature_order','series_order']) $(key).value=config[key];
   const g=$('geometry-controls');g.replaceChildren(); $('vertex-controls').replaceChildren();
   if(config.geometry==='rectangle') {slider(g,'width','Width',.2,5,.05);slider(g,'height','Height',.2,5,.05);}
   if(config.geometry==='circle') {
@@ -72,7 +78,7 @@ function modelControls() {
     const remove=create('button','','×');remove.title='Remove viewport';remove.setAttribute('aria-label',`Remove viewport ${i+1}`);remove.disabled=config.models.length===1;
     remove.onclick=()=>{config.models.splice(i,1);modelControls();changed();};heading.append(label,remove);
     const select=create('select');select.setAttribute('aria-label',`Model in viewport ${i+1}`);
-    Object.entries(MODELS).forEach(([key,[title]])=>{const opt=new Option(modelInfo(key)[0],key);opt.disabled=config.models.includes(key)&&key!==model;select.add(opt);});select.value=model;
+    Object.entries(provider==='python'?Object.fromEntries(Object.entries(MODELS).filter(([k])=>!['analytic','analytic_mesh','disk_series','disk_table','sdf_analytic','curvature_analytic','strip'].includes(k))):MODELS2D).forEach(([key,[title]])=>{const opt=new Option(modelInfo(key)[0],key);opt.disabled=config.models.includes(key)&&key!==model;select.add(opt);});select.value=model;
     select.onchange=()=>{config.models[i]=select.value;modelControls();changed();};
     card.append(heading,select,create('p','',(provider!=='python'?MODELS2D:MODELS)[model][1]));parent.append(card);
   });$('add').disabled=config.models.length>=4;
@@ -81,9 +87,10 @@ function preset(name) {
   const keep={kernel:config.kernel,resolution:config.resolution};config={...structuredClone(DEFAULT),...keep};probe=[0,0];
   const notes={square:'One square, three ways to evaluate the solid integral.',rectangle:'Thin walls expose interactions missed by a single local plane.',triangle:'Adjust the vertices to compare an exact triangle with its SDF model.',circle:'Compare polygonization, a local plane, and smooth curvature against a circle reference.'};
   if(name==='rectangle'){config.width=3;config.height=.65;config.h=.8;}
-  if(name==='triangle'){config.geometry='triangle';config.vertices=[[-1,-.9],[1.1,-.7],[-.3,1.1],[-1,1]];config.models=['mesh','exact','sdf'];}
-  if(name==='circle'){config.geometry='circle';config.radius=2;config.h=.65;config.models=['mesh','sdf','curvature','disk'];probe=[2,0];}
-  $('preset-note').textContent=notes[name];syncControls();changed();
+  if(name==='triangle'){config.geometry='triangle';config.vertices=[[-1,-.9],[1.1,-.7],[-.3,1.1],[-1,1]];config.models=['analytic','exact','sdf'];}
+  if(name==='circle'){config.geometry='circle';config.radius=2;config.h=.65;config.models=['disk','disk_table','sdf','curvature'];probe=[2,0];}
+  if(name==='small-disk'){config.geometry='circle';config.radius=.2;config.h=1.2;config.models=['disk','disk_table','disk_series'];probe=[.6,0];}
+  $('preset-note').textContent=notes[name]??'Compare the original disk, its lookup approximation and mean-value orders.';syncControls();changed();
 }
 function setConnection(value) {
   online=value;const available=canCompute();$('connection').textContent=provider==='browser'?'Automatic · GPU fp32 / CPU float64':provider==='gpu'?'WebGPU · fp32':provider==='worker'?'Browser · float64':value?'Python · local':'Python unavailable';$('connection').classList.toggle('offline',!available);$('compute').disabled=!available;
@@ -115,6 +122,7 @@ function makeFields() {
   let low=Infinity,high=-Infinity;
   (rendering.display==='value'?fields:fields.slice(1)).forEach(f=>f?.forEach((v,j)=>{if(v!==null&&(!rendering.onlyband||Math.abs(data.distance[j])<=data.config.h)){low=Math.min(low,v);high=Math.max(high,v);}}));
   if(!Number.isFinite(low)){low=0;high=1;}
+  if(rendering.display==='value'&&['m00','m20','m02','grad_norm'].includes(data.config.field)&&low>=-1e-9*Math.max(1,Math.abs(high)))low=0;
   if(rendering.display==='difference'||(rendering.display==='value'&&!['m00','grad_norm'].includes(data.config.field)&&low<0&&high>0)){high=Math.max(Math.abs(low),Math.abs(high));low=-high;}
   if(rendering.display==='absolute')low=0;
   if(rendering.display==='value'&&data.config.field==='m00'){low=Math.min(0,low);high=Math.max(1,high);}
@@ -135,6 +143,7 @@ function makeFields() {
   });
 }
 function showData() {
+  renderTermPanel2d($('term-equations'),data.config);
   makeFields();const parent=$('viewports');parent.replaceChildren();parent.className='viewports '+(['','one','two','','four'][data.results.length]||'');
   const legend=$('line-legend');legend.replaceChildren();
   data.results.forEach((result,i)=>{
@@ -149,7 +158,7 @@ function showData() {
       download.onclick=()=>canvas.toBlob(blob=>downloadBlob(blob,`boundary-${result.model}-${data.config.field}.png`));
       const item=create('span'),line=create('i');line.style.background=COLORS[i];item.append(line,document.createTextNode(resultModelInfo(result.model)[0]));legend.append(item);
     }
-    const bottom=create('div','viewport-footer');bottom.append(create('span','',result.error?'Unavailable':`${result.milliseconds.toFixed(0)} ms · ${data.x.length} × ${data.y.length}`),create('span','',i===0?'REFERENCE · RAW FIELD':`VIEW ${i+1}`));card.append(bottom);card.append(contractElement(2,result.model,data.config,isBrowserResult()));if(i===0&&rendering.display!=='value')card.append(create('div','reference-scale',`Raw reference · ${short(fieldRanges[0][0])} to ${short(fieldRanges[0][1])}`));parent.append(card);
+    const bottom=create('div','viewport-footer');bottom.append(create('span','',result.error?'Unavailable':`${result.milliseconds.toFixed(0)} ms · ${data.x.length} × ${data.y.length}${result.engine?' · '+result.engine:''}`),create('span','',i===0?'REFERENCE · RAW FIELD':`VIEW ${i+1}`));card.append(bottom);card.append(contractElement(2,result.model,data.config,isBrowserResult()));if(i===0&&rendering.display!=='value')card.append(create('div','reference-scale',`Raw reference · ${short(fieldRanges[0][0])} to ${short(fieldRanges[0][1])}`));parent.append(card);
   });
   $('export').disabled=false;$('footer-grid').textContent=`${data.x.length} × ${data.y.length} grid · h = ${data.config.h} · ${data.config.kernel} · ${data.config.field}`;
   const notes=$('model-notes');notes.replaceChildren();
@@ -240,11 +249,11 @@ function loadResult(result) {
   if(!result.vertices.every(validPoint)||result.vertices.length>64||result.triangles.length>64||!result.triangles.every(t=>Array.isArray(t)&&t.length===3&&t.every(validPoint)))throw new Error('Invalid geometry arrays');
   revision++;data=result;config={...structuredClone(DEFAULT),...result.config,models:result.results.map(r=>r.model)};probe=[(result.x[0]+result.x.at(-1))/2,(result.y[0]+result.y.at(-1))/2];syncControls();showData();message('');status('Saved result loaded · browser recomputation available');
 }
-for(const key of ['geometry','kernel','field','sdf_source'])$(key).onchange=()=>{config[key]=$(key).value;if(key==='geometry')syncControls();changed();};
+for(const key of ['geometry','kernel','field','sdf_source','curvature_order','series_order'])$(key).onchange=()=>{config[key]=['curvature_order','series_order'].includes(key)?+$(key).value:$(key).value;if(key==='geometry')syncControls();changed();};
 $('preset').onchange=()=>preset($('preset').value);$('compute').onclick=evaluate;
 $('auto').onchange=()=>{if($('auto').checked&&canCompute())changed();};
-$('add').onclick=()=>{const available=Object.keys(MODELS).find(key=>!config.models.includes(key));if(available&&config.models.length<4){config.models.push(available);modelControls();changed();}};
-$('compute-provider').onchange=()=>{provider=$('compute-provider').value;setConnection(online);modelControls();changed();};
+$('add').onclick=()=>{const available=Object.keys(provider==='python'?MODELS:MODELS2D).find(key=>!config.models.includes(key));if(available&&config.models.length<4){config.models.push(available);modelControls();changed();}};
+$('compute-provider').onchange=()=>{if($('compute-provider').value==='python'&&config.models.some(m=>['analytic','analytic_mesh','disk_series','disk_table','sdf_analytic','curvature_analytic','strip'].includes(m))){$('compute-provider').value=provider;message('The selected analytic, lookup and series models run in the browser. Deselect those models to use the local Python grid service.');return;}provider=$('compute-provider').value;setConnection(online);modelControls();changed();};
 window.addEventListener('pagehide',disposeCompute2d);
 for(const key of Object.keys(rendering))$(key).onchange=()=>{rendering[key]=$(key).type==='checkbox'?$(key).checked:$(key).type==='number'?+$(key).value:$(key).value;$('limits').hidden=rendering.scale!=='fixed';if(data){showData();}if(key==='scale'&&rendering.vmax<=rendering.vmin)message('Maximum color limit must be greater than minimum.');};
 $('export').onclick=()=>downloadBlob(new Blob([JSON.stringify(data)],{type:'application/json'}),'boundary-experiment.json');
@@ -254,6 +263,7 @@ new ResizeObserver(()=>requestAnimationFrame(drawAll)).observe($('viewports'));w
 async function start(){
   try{palettes=await(await fetch('./palettes.json')).json();}catch{message('Could not load colormaps. Serve this folder over HTTP instead of opening a file URL.');return;}
   if(location.hash){try{const parsed=JSON.parse(decodeURIComponent(location.hash.slice(1)));if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed)){config={...structuredClone(DEFAULT),...parsed};if(!Array.isArray(config.models)||!config.models.length||config.models.length>4||config.models.some(m=>!MODELS[m]))throw new Error();}}catch{config=structuredClone(DEFAULT);message('Invalid setup link; using the square preset.');}}
+  const initialPreset=new URLSearchParams(location.search).get('preset');if(['square','rectangle','triangle','circle','small-disk'].includes(initialPreset)){$('preset').value=initialPreset;if(!location.hash)preset(initialPreset);}
   syncControls();
   try{const response=await fetch('./api/info');if(response.ok){const info=await response.json();online=!!info.models;}}catch{online=false;}
   setConnection(online);
