@@ -1,3 +1,4 @@
+import {selectComputeAdapter,adapterSummary} from './gpu-adapter.js';
 // Follows the existing browser dispatch lifecycle; no DOM/native dependencies.
 let ready;
 export async function createFluxBridgeGPU(device,code){
@@ -9,12 +10,13 @@ export async function createFluxBridgeGPU(device,code){
 }
 async function resources(){
  if(!navigator.gpu)throw Error('WebGPU is unavailable. Select the native provider or open a saved snapshot.');
- const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});if(!adapter)throw Error('No WebGPU compute adapter in this browser. Use a WebGPU-capable browser, the optional native provider, or a saved snapshot.');
- const device=await adapter.requestDevice();
+ const selection=await selectComputeAdapter(navigator.gpu),{adapter}=selection;
+ if(adapter.limits.maxStorageBuffersPerShaderStage<5)throw Error('This WebGPU adapter exposes fewer than the five compute storage buffers required by FluxBridge. See Browser GPU diagnostics.');
+ const device=await adapter.requestDevice({requiredLimits:{maxStorageBuffersPerShaderStage:5}});
  try{
   const response=await fetch(new URL('./fluxbridge-compute.wgsl',import.meta.url));if(!response.ok)throw Error('Could not load FluxBridge shader');
   const resource=await createFluxBridgeGPU(device,await response.text());device.lost.then(()=>{ready=undefined;});
-  return {...resource,adapter:adapter.info?{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description}:null};
+  return {...resource,adapter:{...adapterSummary(adapter),feature_level:selection.featureLevel,request_options:selection.options,discovery_attempts:selection.attempts}};
  }catch(e){device.destroy();throw e;}
 }
 export async function fluxBridgeGPU(){try{return await(ready??=resources());}catch(e){ready=undefined;throw e;}}

@@ -128,7 +128,7 @@ function render() {
   $('closure').textContent = `Occupancy closure: solid + porous + free = ${closure.toPrecision(12)}. ${data.dimension===2?'Area measure.':'Volume measure; this is a slice of a 3D integral.'}`;
   const quantity = $('quantity').value.split(':')[0];
   $('quantity-note').textContent = `Units: ${data.contract.units?.[quantity]??'see saved contract'}. Moments: ${data.contract.precision}; contractions: ${data.contract.contraction_precision??'host float64'}; geometry: ${data.contract.geometry_precision??'float64'}. Equal physical scale on both plot axes.`;
-  $('backend').textContent = `${source==='snapshot'?'Snapshot · ':''}${data.contract.backend} · ${data.contract.precision} · ${data.contract.device}`;
+  $('backend').textContent = `${source==='snapshot'?'Snapshot · ':''}${data.contract.backend} · ${data.contract.precision} · ${data.contract.device}${data.contract.adapter?.feature_level?' · '+data.contract.adapter.feature_level:''}`;
   linePlot(); comparisonTable();
 }
 
