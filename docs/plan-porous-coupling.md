@@ -4991,3 +4991,140 @@ general full-28 tuning is secondary to this application-specific gate.
 warpSPH/Core/Integrator and Stage 5 pressure/porosity integration stay untouched.
 
 Audit evidence/source hashes: `docs/work/fluxbridge-solid-contract-20261026.json`.
+
+## First dedicated C2/C4 solid-simplex kernels (2026-10-26)
+
+Committed the preceding precision/register research and consumer contract audit
+as **617b4c5** before starting this implementation. Unrelated dirty work was
+excluded. The first independent-library kernel set is now implemented and tested;
+this checkpoint does not claim solver/provider integration or completed WCSPH
+auxiliary groups.
+
+### Implemented entry points and scope
+
+New `fluxbridge/solid.py` exports `solid_functions` and
+`prepare_solid_geometry` through `warpSPHBoundaries.fluxbridge`. Explicit factories
+cover **2D triangles / 3D tetrahedra, Wendland C2 / C4, fp64 / fp32**, with three
+separate bundles:
+
+- `density`: lambda only, one scalar.
+- `pressure`: lambda and G, 3/4 scalars in 2D/3D.
+- `lean`: lambda, G and symmetric Cov, 6/10 independent scalars.
+
+Outputs are caller-owned `[channel,pair]` arrays, in physical support units.
+Both a reusable Warp device `element` and a one-thread-per-pair launch kernel are
+available. No FEM fields/gradients, second value moments, Hessians, material
+fields, interpreter or per-pair primitive scratch is present. The 3D generator
+shares its J stream across two incident faces, generates only p/S face reductions
+and the lean compact edge potential, and stops at the C2/C4 degree required by
+the selected bundle. Exact edge-line limits and regular exterior flux are retained.
+The 2D generator directly integrates the triangle's three edges, sharing radial
+powers, seeds and reductions. General `pow` calls were replaced by shared integer-
+power recurrences; this materially improved fp64 2D timings.
+
+Static geometry is prepared once on the host, then uploaded: 9 vec3 records per
+triangle or 26 per tet, plus common edge topology. No four FEM basis gradients
+are stored. fp32 preparation first rounds the actual vertex coordinates to fp32,
+then computes host-fp64 geometry from those coordinates. The protected path
+stores hi/lo residuals for static geometry; queries/supports/output remain fp32.
+Preparation rejects degenerate geometry, including degeneration after input
+rounding, and rejects non-representable fp32 coordinates. Existing moving-body,
+complement/background and Scene adapters are unchanged and are not newly wired.
+
+Example of the tested fp32 lean tetrahedron entry point:
+
+```python
+from warpSPHBoundaries.fluxbridge import solid_functions, prepare_solid_geometry
+
+api = solid_functions(3, kernel="w4", precision="float32", bundle="lean")
+g = prepare_solid_geometry(vertices, device="cuda:0", precision="float32")
+# q: api.vec array (vec3), h: api.real array, ids: int array
+# out: caller-owned api.real array of shape [10, pair_count]
+wp.launch(api.kernel, pair_count, inputs=[q, h, ids, g, out], device="cuda:0")
+```
+
+**Precision selection is explicit and deterministic:** fp64 defaults to ordinary
+analytic fp64; fp32 defaults to protected two-float arithmetic with no device fp64.
+`conditioning="raw"` explicitly selects the native-fp32 diagnostic. It is not an
+accepted broad-range precision path. Protected arithmetic is migrated from the
+validated research helper; its normalization is generated for the actual profile
+and dimension, with no W6 normalization assumption.
+
+### Numerical evidence and tests
+
+The public defaults pass **59 tests with actual CUDA available**, including
+package layering, plus the CPU-only invocation's **35 passes / 24 CUDA skips**.
+Independent fixture coverage is 6 triangle and 26 tetrahedron cases per C2/C4
+profile (64 case/profile combinations), across all three bundles and both dtypes
+on CPU/CUDA. Budgets remain **1e-10 fp64 / 1e-5 fp32 mixed error**. Tests cover
+orientation changes, physical support scaling, dtype coexistence, exact edge/
+vertex and near-plane cases, every output being written, and invalid geometry.
+
+Additional 8,192 transformed queries per dimension/profile compare against the
+analytic fp64 kernel at the **actual fp32 vertex/query/support values**, on CPU
+and CUDA. Protected paths pass throughout. The million-pair canonical/mixed
+runs repeat those actual-input checks; protected worst errors stay below
+**4.8e-8**. These broad comparisons are not independent quadrature for each point;
+independent tabulated fixtures establish the separate reference gate.
+
+**Raw native fp32 remains open even for C2.** On the mixed million-pair workloads,
+lean worst mixed errors are approximately 2.15e-5 / 2.46e-5 for C2 in 2D/3D, and
+2.79e-4 / 2.26e-4 for C4. C2 passes the small fixtures but not the broad gate.
+Fast raw timings are retained as diagnostic targets, never substituted for the
+accepted protected results or selected by provider dispatch. No tolerance was
+relaxed and no device-fp64 fallback was added.
+
+### First CUDA performance measurements
+
+All rates below are **million complete particle/simplex interactions per second**
+for the lean bundle (6/10 independent scalars), 1,048,576 pairs, 256-thread blocks,
+seven-sample warm CUDA-event medians and preallocated buffers. Geometry, input
+values, IDs and output contracts are matched; static preparation and transfer/
+search/assembly costs are excluded. These are first timings, not a multi-round
+performance acceptance claim; clocks/power/desktop activity are uncontrolled.
+
+| Profile / arithmetic | 2D canonical | 2D mixed | 3D canonical | 3D mixed |
+|---|---:|---:|---:|---:|
+| C2 native fp64 | 1,245 | 551 | 186 | 81 |
+| C2 protected fp32 | **6,047** | **3,118** | **536** | **272** |
+| C4 native fp64 | 1,125 | 526 | 176 | 75 |
+| C4 protected fp32 | **5,666** | **2,879** | **451** | **264** |
+
+Every graph replay is bitwise stable. Density/pressure timings, exact per-bundle
+allocation sizes, raw-fp32 diagnostic timings/errors and initial geometry
+preparation/upload costs are recorded separately in the evidence. Complete
+preparation/evaluation/readback, peak driver-memory and provider/application
+measurements remain future gates for this new family.
+
+Eight serialized C4 lean Nsight captures show:
+
+- 2D protected: **96 registers**, 32.37%/32.17% achieved occupancy canonical/mixed,
+  8,158/7,871 executed fp32 FLOPs per interaction, zero fp64 operations and zero
+  local LD/ST sectors. Native fp64 uses 94 registers and 1,177 fp64 FLOPs in the
+  canonical capture. Raw fp32 has 47 registers / 881 fp32 FLOPs, but fails accuracy.
+- 3D protected: **179 registers**, 16.67% occupancy, 51,670/46,990 fp32 FLOPs,
+  zero fp64 operations and zero local LD/ST sectors. Native fp64 uses 134
+  registers / 7,542 fp64 FLOPs canonical. Raw fp32 uses 77 registers / 5,488 fp32
+  FLOPs and fails accuracy. The 3D protected seed/correction cost remains large.
+
+FMA counts as two FLOPs; no equivalent costs are assigned to division/root,
+transcendental or integer/control work. Register caps are available as explicit
+factory experiments but are not yet selected/tuned for this family. The preceding
+full-28 register-cap results must not be confused with these uncapped lean timings.
+
+Evidence: `docs/work/fluxbridge-solid-kernels-20261026.json`; native bodies,
+arrays, logs and profiles under the raw directory recorded there. The evidence
+archives successful source versions and verifies exact native-body identity
+for the retained 3D measurements across the 2D-only power refactor and for
+explicit arithmetic modes across the default-selection/API export change.
+All prior research hashes, earlier plan content and unrelated dirty work are
+preserved. No warpSPH/Core/Integrator, browser or existing ordinary solid/fibre
+implementation was changed, and no Stage 5 work was performed.
+
+**Next executable step:** condition the raw-fp32 C2/C4 radial/face reductions using
+these dedicated protected kernels as the reference and the raw kernels as cost
+bounds. First target G/Cov, where the broad failures remain; retain actual-input
+and independent gates. Apply the already motivated 128/160-register experiment
+to the new 3D protected family as a separate performance control. Provider
+agreement/assembly and optional m1, wall-viscosity, cover and tensile bundles
+remain explicit subsequent gates; solver wiring stays deferred.
