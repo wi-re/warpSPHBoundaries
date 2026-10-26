@@ -1,0 +1,1470 @@
+{
+  "schema": 1,
+  "date": "2026-10-26",
+  "purpose": "Repeat the paired/native-fp64 sanity measurements after user reported GPU contention; unchanged code/inputs/buffers/block size.",
+  "supersedes_timing_evidence": "docs/work/fluxbridge-fp64-sanity-20261026.json",
+  "methodology": {
+    "rounds": 3,
+    "samples_per_round_and_timing_mode": 7,
+    "aggregation": "Median of three seven-sample CUDA-event medians; round ranges reported separately",
+    "block_dim": 256,
+    "pairs": 1048576,
+    "order": [
+      "canonical then mixed, repeated three times",
+      "paired then native64-series then native64-library in each process"
+    ],
+    "serialization": "Existing /tmp/fluxbridge-gpu.lock; Nsight started only after all six timing processes exited",
+    "telemetry": "200 ms nvidia-smi samples during timing runs; no clock/cache control; precheck had no active compute processes"
+  },
+  "summary": [
+    {
+      "workload": "canonical",
+      "variant": "paired",
+      "pairs": 1048576,
+      "timings": {
+        "warm": {
+          "round_medians_ms": [
+            2.967360019683838,
+            2.9655039310455322,
+            2.970911979675293
+          ],
+          "median_of_round_medians_ms": 2.967360019683838,
+          "min_round_median_ms": 2.9655039310455322,
+          "max_round_median_ms": 2.970911979675293,
+          "million_pairs_per_second": 353.36999657753773
+        },
+        "graph": {
+          "round_medians_ms": [
+            2.9512319564819336,
+            2.9581120014190674,
+            2.953439950942993
+          ],
+          "median_of_round_medians_ms": 2.953439950942993,
+          "min_round_median_ms": 2.9512319564819336,
+          "max_round_median_ms": 2.9581120014190674,
+          "million_pairs_per_second": 355.03548994290674
+        }
+      },
+      "kernel_properties": {
+        "register_count": 254,
+        "local_memory_size": 0
+      }
+    },
+    {
+      "workload": "canonical",
+      "variant": "native64-series",
+      "pairs": 1048576,
+      "timings": {
+        "warm": {
+          "round_medians_ms": [
+            8.771967887878418,
+            8.791135787963867,
+            9.178336143493652
+          ],
+          "median_of_round_medians_ms": 8.791135787963867,
+          "min_round_median_ms": 8.771967887878418,
+          "max_round_median_ms": 9.178336143493652,
+          "million_pairs_per_second": 119.27651048635012
+        },
+        "graph": {
+          "round_medians_ms": [
+            8.801823616027832,
+            8.800576210021973,
+            8.776127815246582
+          ],
+          "median_of_round_medians_ms": 8.800576210021973,
+          "min_round_median_ms": 8.776127815246582,
+          "max_round_median_ms": 8.801823616027832,
+          "million_pairs_per_second": 119.14856197778236
+        }
+      },
+      "kernel_properties": {
+        "register_count": 162,
+        "local_memory_size": 0
+      }
+    },
+    {
+      "workload": "canonical",
+      "variant": "native64-library",
+      "pairs": 1048576,
+      "timings": {
+        "warm": {
+          "round_medians_ms": [
+            8.792767524719238,
+            8.795424461364746,
+            8.794367790222168
+          ],
+          "median_of_round_medians_ms": 8.794367790222168,
+          "min_round_median_ms": 8.792767524719238,
+          "max_round_median_ms": 8.795424461364746,
+          "million_pairs_per_second": 119.23267539092885
+        },
+        "graph": {
+          "round_medians_ms": [
+            9.022303581237793,
+            9.583359718322754,
+            9.158143997192383
+          ],
+          "median_of_round_medians_ms": 9.158143997192383,
+          "min_round_median_ms": 9.022303581237793,
+          "max_round_median_ms": 9.583359718322754,
+          "million_pairs_per_second": 114.49656178385736
+        }
+      },
+      "kernel_properties": {
+        "register_count": 160,
+        "local_memory_size": 0
+      }
+    },
+    {
+      "workload": "mixed",
+      "variant": "paired",
+      "pairs": 1048576,
+      "timings": {
+        "warm": {
+          "round_medians_ms": [
+            4.52729606628418,
+            4.522336006164551,
+            4.550367832183838
+          ],
+          "median_of_round_medians_ms": 4.52729606628418,
+          "min_round_median_ms": 4.522336006164551,
+          "max_round_median_ms": 4.550367832183838,
+          "million_pairs_per_second": 231.6119786839186
+        },
+        "graph": {
+          "round_medians_ms": [
+            4.510848045349121,
+            4.519680023193359,
+            4.526112079620361
+          ],
+          "median_of_round_medians_ms": 4.519680023193359,
+          "min_round_median_ms": 4.510848045349121,
+          "max_round_median_ms": 4.526112079620361,
+          "million_pairs_per_second": 232.00226445657395
+        }
+      },
+      "kernel_properties": {
+        "register_count": 254,
+        "local_memory_size": 0
+      }
+    },
+    {
+      "workload": "mixed",
+      "variant": "native64-series",
+      "pairs": 1048576,
+      "timings": {
+        "warm": {
+          "round_medians_ms": [
+            17.5119686126709,
+            17.5118408203125,
+            17.50592041015625
+          ],
+          "median_of_round_medians_ms": 17.5118408203125,
+          "min_round_median_ms": 17.50592041015625,
+          "max_round_median_ms": 17.5119686126709,
+          "million_pairs_per_second": 59.87811394355103
+        },
+        "graph": {
+          "round_medians_ms": [
+            17.496992111206055,
+            17.44972801208496,
+            17.492319107055664
+          ],
+          "median_of_round_medians_ms": 17.492319107055664,
+          "min_round_median_ms": 17.44972801208496,
+          "max_round_median_ms": 17.496992111206055,
+          "million_pairs_per_second": 59.94493889475459
+        }
+      },
+      "kernel_properties": {
+        "register_count": 162,
+        "local_memory_size": 0
+      }
+    },
+    {
+      "workload": "mixed",
+      "variant": "native64-library",
+      "pairs": 1048576,
+      "timings": {
+        "warm": {
+          "round_medians_ms": [
+            16.401023864746094,
+            16.616960525512695,
+            16.399808883666992
+          ],
+          "median_of_round_medians_ms": 16.401023864746094,
+          "min_round_median_ms": 16.399808883666992,
+          "max_round_median_ms": 16.616960525512695,
+          "million_pairs_per_second": 63.93356955317333
+        },
+        "graph": {
+          "round_medians_ms": [
+            16.620447158813477,
+            16.393024444580078,
+            16.616735458374023
+          ],
+          "median_of_round_medians_ms": 16.616735458374023,
+          "min_round_median_ms": 16.393024444580078,
+          "max_round_median_ms": 16.620447158813477,
+          "million_pairs_per_second": 63.10361037080656
+        }
+      },
+      "kernel_properties": {
+        "register_count": 160,
+        "local_memory_size": 0
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "name": "ncu-canonical-native64-library",
+      "metrics": {
+        "gpu__time_duration.sum": 8784448.0,
+        "launch__registers_per_thread": 160.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.65,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 86.04,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 86.04,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.58,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 675.0,
+        "dmul": 1797.0,
+        "dfma": 3917.0,
+        "fadd": 72.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "flops_per_pair": {
+        "d": 10306.0,
+        "f": 336.0
+      },
+      "tflops": {
+        "d": 1.2301995818063924,
+        "f": 0.040107418929453506
+      }
+    },
+    {
+      "name": "ncu-canonical-native64-series",
+      "metrics": {
+        "gpu__time_duration.sum": 8783904.0,
+        "launch__registers_per_thread": 162.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.63,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 85.84,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 85.84,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.58,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 738.3083610534668,
+        "dmul": 1740.1541805267334,
+        "dfma": 3873.079263687134,
+        "fadd": 72.0,
+        "fmul": 0.0,
+        "ffma": 147.1541805267334
+      },
+      "flops_per_pair": {
+        "d": 10224.621068954468,
+        "f": 366.3083610534668
+      },
+      "tflops": {
+        "d": 1.2205611835010948,
+        "f": 0.04372795467710029
+      }
+    },
+    {
+      "name": "ncu-canonical-paired",
+      "metrics": {
+        "gpu__time_duration.sum": 3014496.0,
+        "launch__registers_per_thread": 254.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.67,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 0.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 37.72,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 2.4,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 0.0,
+        "dmul": 0.0,
+        "dfma": 0.0,
+        "fadd": 47177.97996330261,
+        "fmul": 7800.999999046326,
+        "ffma": 10193.700345993042
+      },
+      "flops_per_pair": {
+        "d": 0.0,
+        "f": 75366.38065433502
+      },
+      "tflops": {
+        "d": 0.0,
+        "f": 26.2157846489098
+      }
+    },
+    {
+      "name": "ncu-mixed-native64-library",
+      "metrics": {
+        "gpu__time_duration.sum": 15823712.0,
+        "launch__registers_per_thread": 160.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.6,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 86.15,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 86.15,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.32,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 628.2458076477051,
+        "dmul": 1625.0580759048462,
+        "dfma": 3575.8531532287598,
+        "fadd": 63.044437408447266,
+        "fmul": 0.0,
+        "ffma": 123.7855863571167
+      },
+      "flops_per_pair": {
+        "d": 9405.01019001007,
+        "f": 310.61561012268066
+      },
+      "tflops": {
+        "d": 0.6232335349000285,
+        "f": 0.020583291328861397
+      }
+    },
+    {
+      "name": "ncu-mixed-native64-series",
+      "metrics": {
+        "gpu__time_duration.sum": 16701792.0,
+        "launch__registers_per_thread": 162.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.55,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 86.01,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 86.01,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.31,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 698.821533203125,
+        "dmul": 1580.0773887634277,
+        "dfma": 3559.0454063415527,
+        "fadd": 63.044437408447266,
+        "fmul": 0.0,
+        "ffma": 140.79061603546143
+      },
+      "flops_per_pair": {
+        "d": 9396.989734649658,
+        "f": 344.6256694793701
+      },
+      "tflops": {
+        "d": 0.5899641133119129,
+        "f": 0.021636373270604737
+      }
+    },
+    {
+      "name": "ncu-mixed-paired",
+      "metrics": {
+        "gpu__time_duration.sum": 4556384.0,
+        "launch__registers_per_thread": 254.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.67,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 0.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 43.45,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 1.12,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 0.0,
+        "dmul": 0.0,
+        "dfma": 0.0,
+        "fadd": 42267.797028541565,
+        "fmul": 6981.217933654785,
+        "ffma": 9257.189009666443
+      },
+      "flops_per_pair": {
+        "d": 0.0,
+        "f": 67763.39298152924
+      },
+      "tflops": {
+        "d": 0.0,
+        "f": 15.594617916093114
+      }
+    }
+  ],
+  "runs": {
+    "round1-canonical": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "mixed": false,
+      "block_dim": 256,
+      "accuracy": [],
+      "rows": [
+        {
+          "variant": "paired",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 254,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 0.0,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 2.970494329929352,
+            "samples_ms": [
+              3.0927378684282303,
+              2.9739411547780037,
+              2.970494329929352,
+              2.9629403725266457,
+              2.9640747234225273,
+              2.9561221599578857,
+              3.7247566506266594
+            ],
+            "cuda_event_median_ms": 2.967360019683838
+          },
+          "graph": {
+            "median_ms": 2.955307252705097,
+            "samples_ms": [
+              3.137115389108658,
+              3.72245442122221,
+              2.955307252705097,
+              2.9543228447437286,
+              2.956039272248745,
+              2.954050898551941,
+              2.949727699160576
+            ],
+            "cuda_event_median_ms": 2.9512319564819336
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-series",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 162,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 2.0070890384839253e-07,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 8.912238292396069,
+            "samples_ms": [
+              8.82805697619915,
+              9.570681490004063,
+              8.762180805206299,
+              8.76860786229372,
+              9.357285685837269,
+              9.474008344113827,
+              8.912238292396069
+            ],
+            "cuda_event_median_ms": 8.771967887878418
+          },
+          "graph": {
+            "median_ms": 8.805274963378906,
+            "samples_ms": [
+              8.805274963378906,
+              8.77946987748146,
+              9.506595320999622,
+              9.505674242973328,
+              8.780279196798801,
+              9.593791328370571,
+              8.780775591731071
+            ],
+            "cuda_event_median_ms": 8.801823616027832
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-library",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 160,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 2.0070890384839253e-07,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 8.79611261188984,
+            "samples_ms": [
+              9.66538954526186,
+              9.609915316104889,
+              8.793465793132782,
+              9.608455933630466,
+              8.791811764240265,
+              8.794582448899746,
+              8.79611261188984
+            ],
+            "cuda_event_median_ms": 8.792767524719238
+          },
+          "graph": {
+            "median_ms": 9.323285892605782,
+            "samples_ms": [
+              9.323285892605782,
+              9.585174731910229,
+              8.782224729657173,
+              8.782736957073212,
+              9.596485644578934,
+              9.594853036105633,
+              8.780797943472862
+            ],
+            "cuda_event_median_ms": 9.022303581237793
+          },
+          "graph_bitwise_equal": true
+        }
+      ],
+      "scope": "Same split-fp32 geometry, fp32 queries/supports, fp32 final accumulators/output and shared buffers; only the protected scalar core/seed implementation changes",
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision.py": "37098e952e97b59d9e3238a6dd6fca394dd0958a9e97d36616c7640a0f78b1bc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_perf.py": "527c49f7ab68ebe192d1ccd5bd444761d397145a0c2b574352b4cff1c70eb6dc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_study.py": "ca9d5934864c03125c088868b1b913cc2eabb9bef6c24a1120a5e0f72df84df3",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability.py": "548b42478a93f7d548cc2751afbee67c30ef1fc024f943d52867f289dd013209",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_perf.py": "44573351c7943ea45580059f3cacda57eae134adad12eb1bfc3562f007a1e418",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair_study.py": "fd8ef2e321f214eab71b36dd1bdb9b9390a839c086c861ba649385c6f97b3b8a",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity.py": "7390e9a6498c6d6e9635199a7da9b450801ec622c56e30526f849e4329fc8a84",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity_study.py": "d0d4552391c29b3c1bc8db2922f2881293a8fb6ad7f85ffcdfe8c61a9674a869",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_study.py": "a1097b91a9935d8f058927f35da5ca89211d5a239d913a67160e72c476078025",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair.py": "efb0eac6c78a1035000da7cd54861a706e36171588155aba4d1e0700f471c979",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8",
+        "/home/lu26029/dev/curvatureBoundaries/docs/work/fluxbridge-full-reference-20261026.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2"
+      }
+    },
+    "round1-mixed": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "mixed": true,
+      "block_dim": 256,
+      "accuracy": [],
+      "rows": [
+        {
+          "variant": "paired",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 254,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 0.0,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 4.530696198344231,
+            "samples_ms": [
+              5.612111650407314,
+              4.530696198344231,
+              5.262185819447041,
+              4.5227594673633575,
+              4.522132687270641,
+              4.519885405898094,
+              4.742012359201908
+            ],
+            "cuda_event_median_ms": 4.52729606628418
+          },
+          "graph": {
+            "median_ms": 4.514160566031933,
+            "samples_ms": [
+              5.293390713632107,
+              4.652704112231731,
+              4.513252526521683,
+              4.5164283365011215,
+              4.514160566031933,
+              4.511084407567978,
+              4.514139145612717
+            ],
+            "cuda_event_median_ms": 4.510848045349121
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-series",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 162,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 4.176511583214238e-06,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 17.51587074249983,
+            "samples_ms": [
+              16.7147945612669,
+              18.35343148559332,
+              17.520020715892315,
+              16.713958233594894,
+              17.524479888379574,
+              17.51482952386141,
+              17.51587074249983
+            ],
+            "cuda_event_median_ms": 17.5119686126709
+          },
+          "graph": {
+            "median_ms": 17.5012294203043,
+            "samples_ms": [
+              17.523360438644886,
+              17.50658918172121,
+              16.694001853466034,
+              18.307704478502274,
+              16.692383214831352,
+              17.5012294203043,
+              17.499362118542194
+            ],
+            "cuda_event_median_ms": 17.496992111206055
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-library",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 160,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 4.176511583214238e-06,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 16.406018286943436,
+            "samples_ms": [
+              15.89667983353138,
+              16.406018286943436,
+              15.955331735312939,
+              16.64368063211441,
+              16.63737092167139,
+              16.64570439606905,
+              15.837130136787891
+            ],
+            "cuda_event_median_ms": 16.401023864746094
+          },
+          "graph": {
+            "median_ms": 16.624883748590946,
+            "samples_ms": [
+              16.654761508107185,
+              16.533897258341312,
+              16.624883748590946,
+              16.622504219412804,
+              16.630401834845543,
+              15.819510444998741,
+              16.632594168186188
+            ],
+            "cuda_event_median_ms": 16.620447158813477
+          },
+          "graph_bitwise_equal": true
+        }
+      ],
+      "scope": "Same split-fp32 geometry, fp32 queries/supports, fp32 final accumulators/output and shared buffers; only the protected scalar core/seed implementation changes",
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision.py": "37098e952e97b59d9e3238a6dd6fca394dd0958a9e97d36616c7640a0f78b1bc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_perf.py": "527c49f7ab68ebe192d1ccd5bd444761d397145a0c2b574352b4cff1c70eb6dc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_study.py": "ca9d5934864c03125c088868b1b913cc2eabb9bef6c24a1120a5e0f72df84df3",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability.py": "548b42478a93f7d548cc2751afbee67c30ef1fc024f943d52867f289dd013209",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_perf.py": "44573351c7943ea45580059f3cacda57eae134adad12eb1bfc3562f007a1e418",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair_study.py": "fd8ef2e321f214eab71b36dd1bdb9b9390a839c086c861ba649385c6f97b3b8a",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity.py": "7390e9a6498c6d6e9635199a7da9b450801ec622c56e30526f849e4329fc8a84",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity_study.py": "d0d4552391c29b3c1bc8db2922f2881293a8fb6ad7f85ffcdfe8c61a9674a869",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_study.py": "a1097b91a9935d8f058927f35da5ca89211d5a239d913a67160e72c476078025",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair.py": "efb0eac6c78a1035000da7cd54861a706e36171588155aba4d1e0700f471c979",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8",
+        "/home/lu26029/dev/curvatureBoundaries/docs/work/fluxbridge-full-reference-20261026.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2"
+      }
+    },
+    "round2-canonical": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "mixed": false,
+      "block_dim": 256,
+      "accuracy": [],
+      "rows": [
+        {
+          "variant": "paired",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 254,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 0.0,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 2.9691606760025024,
+            "samples_ms": [
+              3.0994797125458717,
+              2.9823062941432,
+              2.978087402880192,
+              2.9691606760025024,
+              2.963378094136715,
+              2.9625780880451202,
+              2.9632914811372757
+            ],
+            "cuda_event_median_ms": 2.9655039310455322
+          },
+          "graph": {
+            "median_ms": 3.1267888844013214,
+            "samples_ms": [
+              3.146565519273281,
+              3.552643582224846,
+              3.12206894159317,
+              2.952774055302143,
+              3.5455627366900444,
+              3.1267888844013214,
+              2.953815273940563
+            ],
+            "cuda_event_median_ms": 2.9581120014190674
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-series",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 162,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 2.0070890384839253e-07,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 8.828324265778065,
+            "samples_ms": [
+              8.828324265778065,
+              8.767038583755493,
+              9.800315834581852,
+              8.793424814939499,
+              8.794836699962616,
+              9.61172766983509,
+              9.603150188922882
+            ],
+            "cuda_event_median_ms": 8.791135787963867
+          },
+          "graph": {
+            "median_ms": 8.913830853998661,
+            "samples_ms": [
+              8.802929893136024,
+              9.34148021042347,
+              8.913830853998661,
+              8.779626339673996,
+              8.779037743806839,
+              9.593982249498367,
+              9.589284658432007
+            ],
+            "cuda_event_median_ms": 8.800576210021973
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-library",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 160,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 2.0070890384839253e-07,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 8.85989423841238,
+            "samples_ms": [
+              8.85989423841238,
+              9.578054770827293,
+              9.73617471754551,
+              8.799192495644093,
+              8.797277696430683,
+              8.79429467022419,
+              9.510286152362823
+            ],
+            "cuda_event_median_ms": 8.795424461364746
+          },
+          "graph": {
+            "median_ms": 9.587065316736698,
+            "samples_ms": [
+              9.616508148610592,
+              8.781326934695244,
+              9.59436222910881,
+              8.782840333878994,
+              8.78158863633871,
+              9.594062343239784,
+              9.587065316736698
+            ],
+            "cuda_event_median_ms": 9.583359718322754
+          },
+          "graph_bitwise_equal": true
+        }
+      ],
+      "scope": "Same split-fp32 geometry, fp32 queries/supports, fp32 final accumulators/output and shared buffers; only the protected scalar core/seed implementation changes",
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision.py": "37098e952e97b59d9e3238a6dd6fca394dd0958a9e97d36616c7640a0f78b1bc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_perf.py": "527c49f7ab68ebe192d1ccd5bd444761d397145a0c2b574352b4cff1c70eb6dc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_study.py": "ca9d5934864c03125c088868b1b913cc2eabb9bef6c24a1120a5e0f72df84df3",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability.py": "548b42478a93f7d548cc2751afbee67c30ef1fc024f943d52867f289dd013209",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_perf.py": "44573351c7943ea45580059f3cacda57eae134adad12eb1bfc3562f007a1e418",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair_study.py": "fd8ef2e321f214eab71b36dd1bdb9b9390a839c086c861ba649385c6f97b3b8a",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity.py": "7390e9a6498c6d6e9635199a7da9b450801ec622c56e30526f849e4329fc8a84",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity_study.py": "d0d4552391c29b3c1bc8db2922f2881293a8fb6ad7f85ffcdfe8c61a9674a869",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_study.py": "a1097b91a9935d8f058927f35da5ca89211d5a239d913a67160e72c476078025",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair.py": "efb0eac6c78a1035000da7cd54861a706e36171588155aba4d1e0700f471c979",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8",
+        "/home/lu26029/dev/curvatureBoundaries/docs/work/fluxbridge-full-reference-20261026.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2"
+      }
+    },
+    "round2-mixed": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "mixed": true,
+      "block_dim": 256,
+      "accuracy": [],
+      "rows": [
+        {
+          "variant": "paired",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 254,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 0.0,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 4.5268964022397995,
+            "samples_ms": [
+              4.653962329030037,
+              5.127573385834694,
+              4.6552931889891624,
+              4.5268964022397995,
+              4.524652846157551,
+              4.521830007433891,
+              4.525677300989628
+            ],
+            "cuda_event_median_ms": 4.522336006164551
+          },
+          "graph": {
+            "median_ms": 4.522873088717461,
+            "samples_ms": [
+              5.56709710508585,
+              4.522873088717461,
+              5.399805493652821,
+              4.516288638114929,
+              4.515905864536762,
+              4.521497525274754,
+              5.108805373311043
+            ],
+            "cuda_event_median_ms": 4.519680023193359
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-series",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 162,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 4.176511583214238e-06,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 17.520060762763023,
+            "samples_ms": [
+              17.584833316504955,
+              17.528454773128033,
+              16.703748144209385,
+              18.21682881563902,
+              17.520060762763023,
+              16.711028292775154,
+              17.51553174108267
+            ],
+            "cuda_event_median_ms": 17.5118408203125
+          },
+          "graph": {
+            "median_ms": 17.453626729547977,
+            "samples_ms": [
+              17.204463481903076,
+              17.453626729547977,
+              17.651577480137348,
+              17.501818016171455,
+              16.693654470145702,
+              18.69701687246561,
+              16.694667749106884
+            ],
+            "cuda_event_median_ms": 17.44972801208496
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-library",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 160,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 4.176511583214238e-06,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 16.648471355438232,
+            "samples_ms": [
+              16.68507605791092,
+              16.651063226163387,
+              15.839658677577972,
+              17.35008880496025,
+              15.837383456528187,
+              16.648471355438232,
+              15.839824452996254
+            ],
+            "cuda_event_median_ms": 16.616960525512695
+          },
+          "graph": {
+            "median_ms": 16.396776773035526,
+            "samples_ms": [
+              16.655834391713142,
+              15.82344900816679,
+              16.396776773035526,
+              15.963940881192684,
+              16.640345565974712,
+              15.821416862308979,
+              16.635771840810776
+            ],
+            "cuda_event_median_ms": 16.393024444580078
+          },
+          "graph_bitwise_equal": true
+        }
+      ],
+      "scope": "Same split-fp32 geometry, fp32 queries/supports, fp32 final accumulators/output and shared buffers; only the protected scalar core/seed implementation changes",
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision.py": "37098e952e97b59d9e3238a6dd6fca394dd0958a9e97d36616c7640a0f78b1bc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_perf.py": "527c49f7ab68ebe192d1ccd5bd444761d397145a0c2b574352b4cff1c70eb6dc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_study.py": "ca9d5934864c03125c088868b1b913cc2eabb9bef6c24a1120a5e0f72df84df3",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability.py": "548b42478a93f7d548cc2751afbee67c30ef1fc024f943d52867f289dd013209",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_perf.py": "44573351c7943ea45580059f3cacda57eae134adad12eb1bfc3562f007a1e418",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair_study.py": "fd8ef2e321f214eab71b36dd1bdb9b9390a839c086c861ba649385c6f97b3b8a",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity.py": "7390e9a6498c6d6e9635199a7da9b450801ec622c56e30526f849e4329fc8a84",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity_study.py": "d0d4552391c29b3c1bc8db2922f2881293a8fb6ad7f85ffcdfe8c61a9674a869",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_study.py": "a1097b91a9935d8f058927f35da5ca89211d5a239d913a67160e72c476078025",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair.py": "efb0eac6c78a1035000da7cd54861a706e36171588155aba4d1e0700f471c979",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8",
+        "/home/lu26029/dev/curvatureBoundaries/docs/work/fluxbridge-full-reference-20261026.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2"
+      }
+    },
+    "round3-canonical": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "mixed": false,
+      "block_dim": 256,
+      "accuracy": [],
+      "rows": [
+        {
+          "variant": "paired",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 254,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 0.0,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 3.1055863946676254,
+            "samples_ms": [
+              3.1055863946676254,
+              3.7298165261745453,
+              2.974419854581356,
+              2.9735788702964783,
+              3.674563020467758,
+              3.1200405210256577,
+              2.9669879004359245
+            ],
+            "cuda_event_median_ms": 2.970911979675293
+          },
+          "graph": {
+            "median_ms": 2.9570329934358597,
+            "samples_ms": [
+              3.1458763405680656,
+              2.9570329934358597,
+              2.956753596663475,
+              2.9539884999394417,
+              2.955763600766659,
+              3.5421792417764664,
+              3.1249653548002243
+            ],
+            "cuda_event_median_ms": 2.953439950942993
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-series",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 162,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 2.0070890384839253e-07,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 9.182393550872803,
+            "samples_ms": [
+              8.859269320964813,
+              9.613310918211937,
+              9.191633202135563,
+              9.182393550872803,
+              8.80037248134613,
+              9.602369740605354,
+              8.795569650828838
+            ],
+            "cuda_event_median_ms": 9.178336143493652
+          },
+          "graph": {
+            "median_ms": 8.780170232057571,
+            "samples_ms": [
+              8.803007192909718,
+              9.591431356966496,
+              8.778179995715618,
+              8.779202587902546,
+              8.77815205603838,
+              9.79712326079607,
+              8.780170232057571
+            ],
+            "cuda_event_median_ms": 8.776127815246582
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-library",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 160,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 2.0070890384839253e-07,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 8.808521553874016,
+            "samples_ms": [
+              9.882130660116673,
+              8.808521553874016,
+              8.798067457973957,
+              8.798325434327126,
+              9.357064962387085,
+              8.913242258131504,
+              8.791332133114338
+            ],
+            "cuda_event_median_ms": 8.794367790222168
+          },
+          "graph": {
+            "median_ms": 9.29984264075756,
+            "samples_ms": [
+              9.368482045829296,
+              9.477481245994568,
+              9.29984264075756,
+              8.781606331467628,
+              9.59152914583683,
+              8.78183450549841,
+              8.78132414072752
+            ],
+            "cuda_event_median_ms": 9.158143997192383
+          },
+          "graph_bitwise_equal": true
+        }
+      ],
+      "scope": "Same split-fp32 geometry, fp32 queries/supports, fp32 final accumulators/output and shared buffers; only the protected scalar core/seed implementation changes",
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision.py": "37098e952e97b59d9e3238a6dd6fca394dd0958a9e97d36616c7640a0f78b1bc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_perf.py": "527c49f7ab68ebe192d1ccd5bd444761d397145a0c2b574352b4cff1c70eb6dc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_study.py": "ca9d5934864c03125c088868b1b913cc2eabb9bef6c24a1120a5e0f72df84df3",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability.py": "548b42478a93f7d548cc2751afbee67c30ef1fc024f943d52867f289dd013209",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_perf.py": "44573351c7943ea45580059f3cacda57eae134adad12eb1bfc3562f007a1e418",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair_study.py": "fd8ef2e321f214eab71b36dd1bdb9b9390a839c086c861ba649385c6f97b3b8a",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity.py": "7390e9a6498c6d6e9635199a7da9b450801ec622c56e30526f849e4329fc8a84",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity_study.py": "d0d4552391c29b3c1bc8db2922f2881293a8fb6ad7f85ffcdfe8c61a9674a869",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_study.py": "a1097b91a9935d8f058927f35da5ca89211d5a239d913a67160e72c476078025",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair.py": "efb0eac6c78a1035000da7cd54861a706e36171588155aba4d1e0700f471c979",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8",
+        "/home/lu26029/dev/curvatureBoundaries/docs/work/fluxbridge-full-reference-20261026.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2"
+      }
+    },
+    "round3-mixed": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "mixed": true,
+      "block_dim": 256,
+      "accuracy": [],
+      "rows": [
+        {
+          "variant": "paired",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 254,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 0.0,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 4.552261903882027,
+            "samples_ms": [
+              4.6715326607227325,
+              4.552261903882027,
+              4.53256256878376,
+              5.406705662608147,
+              4.5332591980695724,
+              5.391828715801239,
+              4.534108564257622
+            ],
+            "cuda_event_median_ms": 4.550367832183838
+          },
+          "graph": {
+            "median_ms": 4.6697501093149185,
+            "samples_ms": [
+              4.704935476183891,
+              4.526716656982899,
+              4.524923861026764,
+              4.5302677899599075,
+              5.304903723299503,
+              5.115990526974201,
+              4.6697501093149185
+            ],
+            "cuda_event_median_ms": 4.526112079620361
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-series",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 162,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 4.176511583214238e-06,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 17.509779892861843,
+            "samples_ms": [
+              18.37195549160242,
+              16.715744510293007,
+              18.076376989483833,
+              16.841567121446133,
+              17.416080459952354,
+              17.520355060696602,
+              17.509779892861843
+            ],
+            "cuda_event_median_ms": 17.50592041015625
+          },
+          "graph": {
+            "median_ms": 17.49681681394577,
+            "samples_ms": [
+              16.7183643206954,
+              18.31347495317459,
+              17.49713532626629,
+              16.694696620106697,
+              17.50935986638069,
+              17.49681681394577,
+              17.271376214921474
+            ],
+            "cuda_event_median_ms": 17.492319107055664
+          },
+          "graph_bitwise_equal": true
+        },
+        {
+          "variant": "native64-library",
+          "pairs": 1048576,
+          "input_output_bytes": 138412032,
+          "kernel_properties": {
+            "register_count": 160,
+            "local_memory_size": 0
+          },
+          "finite": true,
+          "worst_difference_vs_first": 4.176511583214238e-06,
+          "failed_outputs_vs_first": 0,
+          "warm": {
+            "median_ms": 16.403832472860813,
+            "samples_ms": [
+              15.896898694336414,
+              16.66164305061102,
+              16.653308644890785,
+              15.840317122638226,
+              17.45039504021406,
+              16.403832472860813,
+              15.971549786627293
+            ],
+            "cuda_event_median_ms": 16.399808883666992
+          },
+          "graph": {
+            "median_ms": 16.62052609026432,
+            "samples_ms": [
+              16.65005087852478,
+              16.62052609026432,
+              15.821577049791813,
+              17.428317107260227,
+              16.388983465731144,
+              15.969986096024513,
+              16.632776707410812
+            ],
+            "cuda_event_median_ms": 16.616735458374023
+          },
+          "graph_bitwise_equal": true
+        }
+      ],
+      "scope": "Same split-fp32 geometry, fp32 queries/supports, fp32 final accumulators/output and shared buffers; only the protected scalar core/seed implementation changes",
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision.py": "37098e952e97b59d9e3238a6dd6fca394dd0958a9e97d36616c7640a0f78b1bc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_perf.py": "527c49f7ab68ebe192d1ccd5bd444761d397145a0c2b574352b4cff1c70eb6dc",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_study.py": "ca9d5934864c03125c088868b1b913cc2eabb9bef6c24a1120a5e0f72df84df3",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability.py": "548b42478a93f7d548cc2751afbee67c30ef1fc024f943d52867f289dd013209",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_perf.py": "44573351c7943ea45580059f3cacda57eae134adad12eb1bfc3562f007a1e418",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair_study.py": "fd8ef2e321f214eab71b36dd1bdb9b9390a839c086c861ba649385c6f97b3b8a",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity.py": "7390e9a6498c6d6e9635199a7da9b450801ec622c56e30526f849e4329fc8a84",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity_study.py": "d0d4552391c29b3c1bc8db2922f2881293a8fb6ad7f85ffcdfe8c61a9674a869",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_study.py": "a1097b91a9935d8f058927f35da5ca89211d5a239d913a67160e72c476078025",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair.py": "efb0eac6c78a1035000da7cd54861a706e36171588155aba4d1e0700f471c979",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8",
+        "/home/lu26029/dev/curvatureBoundaries/docs/work/fluxbridge-full-reference-20261026.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2"
+      }
+    }
+  },
+  "telemetry_csv": "timestamp, pstate, utilization.gpu [%], utilization.memory [%], clocks.current.sm [MHz], clocks.current.memory [MHz], temperature.gpu, power.draw [W]\n2026/10/26 18:43:32.417, P0, 6 %, 6 %, 540 MHz, 14001 MHz, 33, 55.02 W\n2026/10/26 18:43:32.622, P3, 2 %, 0 %, 405 MHz, 7001 MHz, 33, 55.53 W\n2026/10/26 18:43:32.822, P3, 2 %, 0 %, 405 MHz, 7001 MHz, 33, 55.53 W\n2026/10/26 18:43:33.022, P5, 3 %, 1 %, 435 MHz, 810 MHz, 33, 57.22 W\n2026/10/26 18:43:33.223, P5, 3 %, 1 %, 435 MHz, 810 MHz, 33, 57.22 W\n2026/10/26 18:43:33.423, P5, 3 %, 1 %, 435 MHz, 810 MHz, 33, 57.22 W\n2026/10/26 18:43:33.623, P5, 3 %, 3 %, 495 MHz, 810 MHz, 33, 55.27 W\n2026/10/26 18:43:33.823, P5, 3 %, 3 %, 495 MHz, 810 MHz, 33, 55.27 W\n2026/10/26 18:43:34.023, P0, 6 %, 6 %, 532 MHz, 14001 MHz, 33, 54.44 W\n2026/10/26 18:43:34.224, P0, 6 %, 6 %, 532 MHz, 14001 MHz, 33, 54.44 W\n2026/10/26 18:43:34.424, P0, 6 %, 6 %, 532 MHz, 14001 MHz, 33, 54.44 W\n2026/10/26 18:43:34.624, P0, 3 %, 1 %, 480 MHz, 14001 MHz, 33, 58.25 W\n2026/10/26 18:43:34.824, P0, 3 %, 1 %, 480 MHz, 14001 MHz, 33, 58.25 W\n2026/10/26 18:43:35.024, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 79.47 W\n2026/10/26 18:43:35.224, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 79.47 W\n2026/10/26 18:43:35.424, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 79.47 W\n2026/10/26 18:43:35.625, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 33, 95.04 W\n2026/10/26 18:43:35.825, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 33, 95.04 W\n2026/10/26 18:43:36.025, P1, 49 %, 3 %, 2655 MHz, 13365 MHz, 36, 108.20 W\n2026/10/26 18:43:36.225, P1, 49 %, 3 %, 2655 MHz, 13365 MHz, 36, 108.20 W\n2026/10/26 18:43:36.425, P1, 49 %, 3 %, 2655 MHz, 13365 MHz, 36, 108.20 W\n2026/10/26 18:43:36.625, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 108.06 W\n2026/10/26 18:43:36.826, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 108.06 W\n2026/10/26 18:43:37.026, P1, 2 %, 0 %, 2632 MHz, 13365 MHz, 34, 108.21 W\n2026/10/26 18:43:37.226, P1, 2 %, 0 %, 2632 MHz, 13365 MHz, 34, 108.21 W\n2026/10/26 18:43:37.426, P1, 2 %, 0 %, 2632 MHz, 13365 MHz, 34, 108.21 W\n2026/10/26 18:43:37.626, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 90.62 W\n2026/10/26 18:43:37.826, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 90.62 W\n2026/10/26 18:43:38.027, P1, 2 %, 0 %, 2835 MHz, 13365 MHz, 34, 113.87 W\n2026/10/26 18:43:38.227, P1, 2 %, 0 %, 2835 MHz, 13365 MHz, 34, 113.87 W\n2026/10/26 18:43:38.427, P1, 2 %, 0 %, 2835 MHz, 13365 MHz, 34, 113.87 W\n2026/10/26 18:43:38.627, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 34, 117.82 W\n2026/10/26 18:43:38.827, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 34, 117.82 W\n2026/10/26 18:43:39.027, P1, 82 %, 2 %, 2865 MHz, 13365 MHz, 37, 113.34 W\n2026/10/26 18:43:39.228, P1, 82 %, 2 %, 2865 MHz, 13365 MHz, 37, 113.34 W\n2026/10/26 18:43:39.428, P1, 82 %, 2 %, 2865 MHz, 13365 MHz, 37, 113.34 W\n2026/10/26 18:43:39.628, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 34, 121.75 W\n2026/10/26 18:43:39.828, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 34, 121.75 W\n2026/10/26 18:43:40.029, P0, 4 %, 1 %, 2872 MHz, 14001 MHz, 35, 121.93 W\n2026/10/26 18:43:40.229, P0, 4 %, 1 %, 2872 MHz, 14001 MHz, 35, 121.93 W\n2026/10/26 18:43:40.429, P0, 4 %, 1 %, 2872 MHz, 14001 MHz, 35, 121.93 W\n2026/10/26 18:43:40.629, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 34, 106.35 W\n2026/10/26 18:43:40.829, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 34, 106.35 W\n2026/10/26 18:43:41.030, P0, 2 %, 0 %, 2760 MHz, 14001 MHz, 34, 103.26 W\n2026/10/26 18:43:41.230, P0, 2 %, 0 %, 2760 MHz, 14001 MHz, 34, 103.26 W\n2026/10/26 18:43:41.430, P0, 2 %, 0 %, 2760 MHz, 14001 MHz, 34, 103.26 W\n2026/10/26 18:43:41.630, P0, 1 %, 0 %, 1222 MHz, 14001 MHz, 33, 88.51 W\n2026/10/26 18:43:41.831, P0, 1 %, 0 %, 1222 MHz, 14001 MHz, 33, 88.51 W\n2026/10/26 18:43:42.031, P0, 4 %, 1 %, 1560 MHz, 14001 MHz, 34, 78.08 W\n2026/10/26 18:43:42.231, P0, 4 %, 1 %, 1560 MHz, 14001 MHz, 34, 78.08 W\n2026/10/26 18:43:42.431, P0, 4 %, 1 %, 1560 MHz, 14001 MHz, 34, 78.08 W\n2026/10/26 18:43:42.631, P1, 1 %, 0 %, 2640 MHz, 13365 MHz, 34, 86.13 W\n2026/10/26 18:43:42.831, P1, 1 %, 0 %, 2640 MHz, 13365 MHz, 34, 86.13 W\n2026/10/26 18:43:43.031, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 94.37 W\n2026/10/26 18:43:43.232, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 94.37 W\n2026/10/26 18:43:43.432, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 94.37 W\n2026/10/26 18:43:43.632, P1, 54 %, 2 %, 2670 MHz, 13365 MHz, 36, 114.80 W\n2026/10/26 18:43:43.832, P1, 54 %, 2 %, 2670 MHz, 13365 MHz, 36, 114.80 W\n2026/10/26 18:43:44.032, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 115.65 W\n2026/10/26 18:43:44.232, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 115.65 W\n2026/10/26 18:43:44.432, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 115.65 W\n2026/10/26 18:43:44.633, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 112.41 W\n2026/10/26 18:43:44.833, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 112.41 W\n2026/10/26 18:43:45.033, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 91.32 W\n2026/10/26 18:43:45.233, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 91.32 W\n2026/10/26 18:43:45.434, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 34, 91.32 W\n2026/10/26 18:43:45.634, P1, 1 %, 0 %, 2865 MHz, 13365 MHz, 35, 130.34 W\n2026/10/26 18:43:45.834, P1, 1 %, 0 %, 2865 MHz, 13365 MHz, 35, 130.34 W\n2026/10/26 18:43:46.034, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 35, 136.66 W\n2026/10/26 18:43:46.234, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 35, 136.66 W\n2026/10/26 18:43:46.435, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 35, 136.66 W\n2026/10/26 18:43:46.635, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 104.99 W\n2026/10/26 18:43:46.835, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 104.99 W\n2026/10/26 18:43:47.035, P1, 2 %, 0 %, 2865 MHz, 13365 MHz, 35, 134.29 W\n2026/10/26 18:43:47.236, P1, 2 %, 0 %, 2865 MHz, 13365 MHz, 35, 134.29 W\n2026/10/26 18:43:47.436, P1, 2 %, 0 %, 2865 MHz, 13365 MHz, 35, 134.29 W\n2026/10/26 18:43:47.636, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 134.22 W\n2026/10/26 18:43:47.836, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 134.22 W\n2026/10/26 18:43:48.036, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 35, 107.27 W\n2026/10/26 18:43:48.236, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 35, 107.27 W\n2026/10/26 18:43:48.437, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 35, 107.27 W\n2026/10/26 18:43:48.637, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 35, 107.57 W\n2026/10/26 18:43:48.837, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 35, 107.57 W\n2026/10/26 18:43:49.037, P0, 2 %, 0 %, 2640 MHz, 14001 MHz, 35, 100.66 W\n2026/10/26 18:43:49.237, P0, 2 %, 0 %, 2640 MHz, 14001 MHz, 35, 100.66 W\n2026/10/26 18:43:49.438, P0, 2 %, 0 %, 2640 MHz, 14001 MHz, 35, 100.66 W\n2026/10/26 18:43:49.638, P0, 1 %, 0 %, 1132 MHz, 14001 MHz, 34, 83.43 W\n2026/10/26 18:43:49.838, P0, 1 %, 0 %, 1132 MHz, 14001 MHz, 34, 83.43 W\n2026/10/26 18:43:50.038, P1, 5 %, 0 %, 2662 MHz, 13365 MHz, 35, 86.39 W\n2026/10/26 18:43:50.238, P1, 5 %, 0 %, 2662 MHz, 13365 MHz, 35, 86.39 W\n2026/10/26 18:43:50.438, P1, 5 %, 0 %, 2662 MHz, 13365 MHz, 35, 86.39 W\n2026/10/26 18:43:50.639, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 91.26 W\n2026/10/26 18:43:50.839, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 91.26 W\n2026/10/26 18:43:51.039, P1, 44 %, 3 %, 2632 MHz, 13365 MHz, 41, 106.90 W\n2026/10/26 18:43:51.239, P1, 44 %, 3 %, 2632 MHz, 13365 MHz, 41, 106.90 W\n2026/10/26 18:43:51.439, P1, 44 %, 3 %, 2632 MHz, 13365 MHz, 41, 106.90 W\n2026/10/26 18:43:51.640, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 111.59 W\n2026/10/26 18:43:51.840, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 111.59 W\n2026/10/26 18:43:52.040, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 35, 109.32 W\n2026/10/26 18:43:52.240, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 35, 109.32 W\n2026/10/26 18:43:52.440, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 35, 109.32 W\n2026/10/26 18:43:52.640, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 91.10 W\n2026/10/26 18:43:52.841, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 34, 91.10 W\n2026/10/26 18:43:53.041, P1, 2 %, 0 %, 2790 MHz, 13365 MHz, 35, 114.36 W\n2026/10/26 18:43:53.241, P1, 2 %, 0 %, 2790 MHz, 13365 MHz, 35, 114.36 W\n2026/10/26 18:43:53.441, P1, 2 %, 0 %, 2790 MHz, 13365 MHz, 35, 114.36 W\n2026/10/26 18:43:53.641, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 120.99 W\n2026/10/26 18:43:53.841, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 120.99 W\n2026/10/26 18:43:54.041, P1, 35 %, 1 %, 2872 MHz, 13365 MHz, 37, 107.87 W\n2026/10/26 18:43:54.242, P1, 35 %, 1 %, 2872 MHz, 13365 MHz, 37, 107.87 W\n2026/10/26 18:43:54.442, P1, 35 %, 1 %, 2872 MHz, 13365 MHz, 37, 107.87 W\n2026/10/26 18:43:54.642, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 122.07 W\n2026/10/26 18:43:54.842, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 35, 122.07 W\n2026/10/26 18:43:55.043, P0, 4 %, 1 %, 2872 MHz, 14001 MHz, 36, 122.42 W\n2026/10/26 18:43:55.243, P0, 4 %, 1 %, 2872 MHz, 14001 MHz, 36, 122.42 W\n2026/10/26 18:43:55.443, P0, 4 %, 1 %, 2872 MHz, 14001 MHz, 36, 122.42 W\n2026/10/26 18:43:55.643, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 35, 106.87 W\n2026/10/26 18:43:55.843, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 35, 106.87 W\n2026/10/26 18:43:56.043, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 35, 105.90 W\n2026/10/26 18:43:56.244, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 35, 105.90 W\n2026/10/26 18:43:56.444, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 35, 105.90 W\n2026/10/26 18:43:56.644, P0, 1 %, 0 %, 1132 MHz, 14001 MHz, 34, 91.13 W\n2026/10/26 18:43:56.844, P0, 1 %, 0 %, 1132 MHz, 14001 MHz, 34, 91.13 W\n2026/10/26 18:43:57.045, P0, 4 %, 1 %, 915 MHz, 14001 MHz, 35, 77.20 W\n2026/10/26 18:43:57.245, P0, 4 %, 1 %, 915 MHz, 14001 MHz, 35, 77.20 W\n2026/10/26 18:43:57.445, P0, 4 %, 1 %, 915 MHz, 14001 MHz, 35, 77.20 W\n2026/10/26 18:43:57.645, P1, 1 %, 0 %, 2647 MHz, 13365 MHz, 35, 84.18 W\n2026/10/26 18:43:57.846, P1, 1 %, 0 %, 2647 MHz, 13365 MHz, 35, 84.18 W\n2026/10/26 18:43:58.046, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 35, 97.46 W\n2026/10/26 18:43:58.246, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 35, 97.46 W\n2026/10/26 18:43:58.446, P1, 2 %, 0 %, 2640 MHz, 13365 MHz, 35, 97.46 W\n2026/10/26 18:43:58.647, P1, 23 %, 1 %, 2700 MHz, 13365 MHz, 36, 119.00 W\n2026/10/26 18:43:58.847, P1, 23 %, 1 %, 2700 MHz, 13365 MHz, 36, 119.00 W\n2026/10/26 18:43:59.047, P1, 2 %, 0 %, 2632 MHz, 13365 MHz, 35, 119.32 W\n2026/10/26 18:43:59.247, P1, 2 %, 0 %, 2632 MHz, 13365 MHz, 35, 119.32 W\n2026/10/26 18:43:59.447, P1, 2 %, 0 %, 2632 MHz, 13365 MHz, 35, 119.32 W\n2026/10/26 18:43:59.648, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 92.99 W\n2026/10/26 18:43:59.848, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 92.99 W\n2026/10/26 18:44:00.048, P1, 100 %, 2 %, 2685 MHz, 13365 MHz, 39, 110.99 W\n2026/10/26 18:44:00.248, P1, 100 %, 2 %, 2685 MHz, 13365 MHz, 39, 110.99 W\n2026/10/26 18:44:00.448, P1, 100 %, 2 %, 2685 MHz, 13365 MHz, 39, 110.99 W\n2026/10/26 18:44:00.649, P1, 1 %, 0 %, 2865 MHz, 13365 MHz, 35, 137.36 W\n2026/10/26 18:44:00.849, P1, 1 %, 0 %, 2865 MHz, 13365 MHz, 35, 137.36 W\n2026/10/26 18:44:01.049, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 35, 136.40 W\n2026/10/26 18:44:01.249, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 35, 136.40 W\n2026/10/26 18:44:01.449, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 35, 136.40 W\n2026/10/26 18:44:01.649, P1, 100 %, 1 %, 2865 MHz, 13365 MHz, 39, 128.11 W\n2026/10/26 18:44:01.850, P1, 100 %, 1 %, 2865 MHz, 13365 MHz, 39, 128.11 W\n2026/10/26 18:44:02.050, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 36, 138.31 W\n2026/10/26 18:44:02.250, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 36, 138.31 W\n2026/10/26 18:44:02.450, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 36, 138.31 W\n2026/10/26 18:44:02.650, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 36, 128.76 W\n2026/10/26 18:44:02.850, P0, 1 %, 0 %, 2872 MHz, 14001 MHz, 36, 128.76 W\n2026/10/26 18:44:03.051, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 36, 108.18 W\n2026/10/26 18:44:03.251, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 36, 108.18 W\n2026/10/26 18:44:03.451, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 36, 108.18 W\n2026/10/26 18:44:03.651, P0, 1 %, 0 %, 2850 MHz, 14001 MHz, 35, 106.16 W\n2026/10/26 18:44:03.852, P0, 1 %, 0 %, 2850 MHz, 14001 MHz, 35, 106.16 W\n2026/10/26 18:44:04.052, P0, 2 %, 0 %, 2640 MHz, 14001 MHz, 35, 98.59 W\n2026/10/26 18:44:04.252, P0, 2 %, 0 %, 2640 MHz, 14001 MHz, 35, 98.59 W\n2026/10/26 18:44:04.452, P0, 2 %, 0 %, 2640 MHz, 14001 MHz, 35, 98.59 W\n2026/10/26 18:44:04.652, P0, 1 %, 0 %, 1125 MHz, 14001 MHz, 35, 85.83 W\n2026/10/26 18:44:04.853, P0, 1 %, 0 %, 1125 MHz, 14001 MHz, 35, 85.83 W\n2026/10/26 18:44:05.053, P1, 2 %, 0 %, 2655 MHz, 13365 MHz, 35, 90.41 W\n2026/10/26 18:44:05.253, P1, 2 %, 0 %, 2655 MHz, 13365 MHz, 35, 90.41 W\n2026/10/26 18:44:05.453, P1, 2 %, 0 %, 2655 MHz, 13365 MHz, 35, 90.41 W\n2026/10/26 18:44:05.653, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 97.80 W\n2026/10/26 18:44:05.853, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 97.80 W\n2026/10/26 18:44:06.053, P1, 40 %, 2 %, 2670 MHz, 13365 MHz, 37, 111.08 W\n2026/10/26 18:44:06.254, P1, 40 %, 2 %, 2670 MHz, 13365 MHz, 37, 111.08 W\n2026/10/26 18:44:06.454, P1, 40 %, 2 %, 2670 MHz, 13365 MHz, 37, 111.08 W\n2026/10/26 18:44:06.654, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 110.28 W\n2026/10/26 18:44:06.854, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 110.28 W\n2026/10/26 18:44:07.054, P1, 3 %, 0 %, 2647 MHz, 13365 MHz, 35, 106.71 W\n2026/10/26 18:44:07.255, P1, 3 %, 0 %, 2647 MHz, 13365 MHz, 35, 106.71 W\n2026/10/26 18:44:07.455, P1, 3 %, 0 %, 2647 MHz, 13365 MHz, 35, 106.71 W\n2026/10/26 18:44:07.655, P1, 57 %, 1 %, 2640 MHz, 13365 MHz, 38, 99.90 W\n2026/10/26 18:44:07.855, P1, 57 %, 1 %, 2640 MHz, 13365 MHz, 38, 99.90 W\n2026/10/26 18:44:08.055, P1, 3 %, 0 %, 2865 MHz, 13365 MHz, 36, 119.06 W\n2026/10/26 18:44:08.255, P1, 3 %, 0 %, 2865 MHz, 13365 MHz, 36, 119.06 W\n2026/10/26 18:44:08.456, P1, 3 %, 0 %, 2865 MHz, 13365 MHz, 36, 119.06 W\n2026/10/26 18:44:08.656, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 36, 118.72 W\n2026/10/26 18:44:08.856, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 36, 118.72 W\n2026/10/26 18:44:09.056, P1, 3 %, 0 %, 2865 MHz, 13365 MHz, 36, 124.63 W\n2026/10/26 18:44:09.256, P1, 3 %, 0 %, 2865 MHz, 13365 MHz, 36, 124.63 W\n2026/10/26 18:44:09.457, P1, 3 %, 0 %, 2865 MHz, 13365 MHz, 36, 124.63 W\n2026/10/26 18:44:09.657, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 36, 125.31 W\n2026/10/26 18:44:09.857, P1, 2 %, 0 %, 2872 MHz, 13365 MHz, 36, 125.31 W\n2026/10/26 18:44:10.057, P0, 3 %, 0 %, 2872 MHz, 14001 MHz, 36, 109.11 W\n2026/10/26 18:44:10.258, P0, 3 %, 0 %, 2872 MHz, 14001 MHz, 36, 109.11 W\n2026/10/26 18:44:10.458, P0, 3 %, 0 %, 2872 MHz, 14001 MHz, 36, 109.11 W\n2026/10/26 18:44:10.658, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 36, 109.38 W\n2026/10/26 18:44:10.858, P0, 2 %, 0 %, 2872 MHz, 14001 MHz, 36, 109.38 W\n2026/10/26 18:44:11.058, P0, 3 %, 0 %, 2640 MHz, 14001 MHz, 35, 102.82 W\n2026/10/26 18:44:11.259, P0, 3 %, 0 %, 2640 MHz, 14001 MHz, 35, 102.82 W\n2026/10/26 18:44:11.459, P0, 3 %, 0 %, 2640 MHz, 14001 MHz, 35, 102.82 W\n2026/10/26 18:44:11.659, P0, 2 %, 0 %, 1147 MHz, 14001 MHz, 35, 88.97 W\n2026/10/26 18:44:11.859, P0, 2 %, 0 %, 1147 MHz, 14001 MHz, 35, 88.97 W\n2026/10/26 18:44:12.059, P1, 3 %, 0 %, 2655 MHz, 13365 MHz, 35, 92.71 W\n2026/10/26 18:44:12.260, P1, 3 %, 0 %, 2655 MHz, 13365 MHz, 35, 92.71 W\n2026/10/26 18:44:12.460, P1, 3 %, 0 %, 2655 MHz, 13365 MHz, 35, 92.71 W\n2026/10/26 18:44:12.660, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 99.02 W\n2026/10/26 18:44:12.860, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 99.02 W\n2026/10/26 18:44:13.060, P1, 42 %, 2 %, 2677 MHz, 13365 MHz, 37, 117.34 W\n2026/10/26 18:44:13.260, P1, 42 %, 2 %, 2677 MHz, 13365 MHz, 37, 117.34 W\n2026/10/26 18:44:13.460, P1, 42 %, 2 %, 2677 MHz, 13365 MHz, 37, 117.34 W\n2026/10/26 18:44:13.661, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 117.45 W\n2026/10/26 18:44:13.861, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 117.45 W\n2026/10/26 18:44:14.061, P1, 3 %, 0 %, 2632 MHz, 13365 MHz, 35, 95.95 W\n2026/10/26 18:44:14.261, P1, 3 %, 0 %, 2632 MHz, 13365 MHz, 35, 95.95 W\n2026/10/26 18:44:14.461, P1, 3 %, 0 %, 2632 MHz, 13365 MHz, 35, 95.95 W\n2026/10/26 18:44:14.662, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 92.94 W\n2026/10/26 18:44:14.862, P1, 1 %, 0 %, 2632 MHz, 13365 MHz, 35, 92.94 W\n2026/10/26 18:44:15.062, P1, 46 %, 1 %, 2850 MHz, 13365 MHz, 37, 128.07 W\n2026/10/26 18:44:15.262, P1, 46 %, 1 %, 2850 MHz, 13365 MHz, 37, 128.07 W\n2026/10/26 18:44:15.462, P1, 46 %, 1 %, 2850 MHz, 13365 MHz, 37, 128.07 W\n2026/10/26 18:44:15.662, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 36, 136.09 W\n2026/10/26 18:44:15.863, P1, 1 %, 0 %, 2872 MHz, 13365 MHz, 36, 136.09 W\n2026/10/26 18:44:16.063, P1, 46 %, 1 %, 2872 MHz, 13365 MHz, 38, 114.13 W\n2026/10/26 18:44:16.263, P1, 46 %, 1 %, 2872 MHz, 13365 MHz, 38, 114.13 W\n2026/10/26 18:44:16.463, P1, 46 %, 1 %, 2872 MHz, 13365 MHz, 38, 114.13 W\n2026/10/26 18:44:16.663, P1, 1 %, 0 %, 2865 MHz, 13365 MHz, 36, 139.31 W\n2026/10/26 18:44:16.863, P1, 1 %, 0 %, 2865 MHz, 13365 MHz, 36, 139.31 W\n2026/10/26 18:44:17.064, P1, 3 %, 0 %, 2872 MHz, 13365 MHz, 36, 136.85 W\n",
+  "events": [
+    {
+      "name": "round1-canonical",
+      "start_unix": 1793040212.4023216,
+      "end_unix": 1793040219.8702226,
+      "returncode": 0
+    },
+    {
+      "name": "round1-mixed",
+      "start_unix": 1793040219.8704824,
+      "end_unix": 1793040227.6047602,
+      "returncode": 0
+    },
+    {
+      "name": "round2-canonical",
+      "start_unix": 1793040227.6050954,
+      "end_unix": 1793040234.9055586,
+      "returncode": 0
+    },
+    {
+      "name": "round2-mixed",
+      "start_unix": 1793040234.9058638,
+      "end_unix": 1793040242.4560318,
+      "returncode": 0
+    },
+    {
+      "name": "round3-canonical",
+      "start_unix": 1793040242.4563034,
+      "end_unix": 1793040249.5320685,
+      "returncode": 0
+    },
+    {
+      "name": "round3-mixed",
+      "start_unix": 1793040249.532332,
+      "end_unix": 1793040257.0773747,
+      "returncode": 0
+    }
+  ],
+  "post_gpu_status": "name, pstate, utilization.gpu [%], utilization.memory [%], clocks.current.sm [MHz], clocks.current.memory [MHz], temperature.gpu, power.draw [W]\nNVIDIA RTX PRO 6000 Blackwell Workstation Edition, P5, 4 %, 4 %, 472 MHz, 810 MHz, 35, 55.88 W\npid, process_name, used_gpu_memory [MiB]\n",
+  "preservation": {
+    "source_sha256": {
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision.py": "37098e952e97b59d9e3238a6dd6fca394dd0958a9e97d36616c7640a0f78b1bc",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_perf.py": "527c49f7ab68ebe192d1ccd5bd444761d397145a0c2b574352b4cff1c70eb6dc",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability_study.py": "ca9d5934864c03125c088868b1b913cc2eabb9bef6c24a1120a5e0f72df84df3",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_stability.py": "548b42478a93f7d548cc2751afbee67c30ef1fc024f943d52867f289dd013209",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_perf.py": "44573351c7943ea45580059f3cacda57eae134adad12eb1bfc3562f007a1e418",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair_study.py": "fd8ef2e321f214eab71b36dd1bdb9b9390a839c086c861ba649385c6f97b3b8a",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity.py": "7390e9a6498c6d6e9635199a7da9b450801ec622c56e30526f849e4329fc8a84",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_fp64_sanity_study.py": "d0d4552391c29b3c1bc8db2922f2881293a8fb6ad7f85ffcdfe8c61a9674a869",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_precision_study.py": "a1097b91a9935d8f058927f35da5ca89211d5a239d913a67160e72c476078025",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_floatpair.py": "efb0eac6c78a1035000da7cd54861a706e36171588155aba4d1e0700f471c979",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+    },
+    "sources_unchanged": true,
+    "dirty_patch_preserved": true,
+    "prior_plan_preserved": true
+  },
+  "raw_evidence_directory": "/tmp/fluxbridge-fp64-rerun-20261026",
+  "limitations": [
+    "Kernel-only, preallocated 28-output particle/tetrahedron interaction; excludes preparation, search, assembly and transfer",
+    "Final tensor accumulation/output remains fp32 for all three controls",
+    "No numerical source changed; prior independent accuracy checks were not repeated; million-pair finite/agreement/graph checks repeated in every run",
+    "No exclusive GPU reservation or clock locking; desktop activity remains possible. Ranges reflect observed repeatability, not ideal hardware limits",
+    "Nsight replay timings are separate from ordinary warm/graph event timings"
+  ],
+  "conclusion": "Mixed paired throughput improves to 231.6 million pairs/s; native fp64 remains approximately 2.96x slower canonical and 3.87x slower mixed for identical seed formulas. Whole-core native fp64 replacement is not a speed shortcut on this device."
+}

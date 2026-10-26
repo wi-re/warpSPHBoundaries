@@ -4588,3 +4588,406 @@ resort candidate after these fp32 alternatives; none was added here. Production
 promotion and the native compact boundary regression fix remain separate gates.
 Existing 2D solid/fibre and browser implementations, warpSPH/Core/Integrator and
 Stage 5 integration remain untouched.
+
+## Quick native-fp64 sanity check of the paired core (2026-10-26)
+
+Before further fp32 reformulation, the user requested a sanity check of the
+paired code using fp64. Added isolated `fluxbridge_shared_jk_fp64_sanity.py`
+and `_fp64_sanity_study.py`. **The two-word arithmetic is collapsed to native
+double operations**, preserving the same split-fp32 geometry, fp32 queries and
+supports, fp32 final tensor accumulation/output, identical device buffers and
+28-output contract. This isolates the arithmetic core instead of conflating it
+with a different geometry, output footprint or provider. The frozen paired and
+accepted fp64 implementations remain unchanged.
+
+Two controls distinguish the arithmetic representation from elementary seeds:
+`native64-series` retains the same log/atan range reductions, polynomial degrees
+and collapsed high/low coefficients; `native64-library` uses standard fp64
+log/atan2. The former unpacks an IEEE-double mantissa instead of a two-float
+mantissa for log range reduction. Neither is a paired-double/double-double test.
+
+Actual CUDA, 1,048,576 pairs, 256-thread blocks, seven-sample warm event medians:
+
+| Core | Canonical (ms) | Mixed (ms) | Registers/thread |
+|---|---:|---:|---:|
+| Paired fp32 control | **2.978784** | **5.425056** | 254 |
+| Native fp64, same seed formulas | 8.763968 | 18.806463 | 162 |
+| Native fp64, standard math | 10.495168 | 17.796448 | 160 |
+
+The same-seed native-fp64 replacement is **2.94x / 3.47x slower**. All variants
+pass the unchanged 116 independent CPU/CUDA cases at 1e-5. Million-pair outputs
+agree with the paired control within **2.008e-7 canonical / 4.177e-6 mixed**;
+all graph replays are bitwise stable. Final fp32 accumulation/output is retained,
+so these checks do not certify a double-output 1e-10 contract.
+
+Canonical Nsight captures confirm **zero local LD/ST sectors** for both native
+fp64 variants, about **16.6% achieved occupancy**, and **85.8–86.0% fp64 pipeline
+activity**. Executed fp64 arithmetic is **10,225 FLOPs/pair** for the same-series
+variant and 10,306 for library math (FMA=2), versus the paired core's approximately
+75,366 fp32 arithmetic FLOPs/pair. Thus fewer registers and substantially fewer
+arithmetic instructions still do not compensate for this device's fp64 compute
+throughput. The canonical profile captures are 8.781/8.788 ms; the standard-math
+warm timings fluctuate, so no strong ranking between the two fp64 seed choices
+is inferred. Clocks/caches/desktop activity remain uncontrolled and GPU runs
+serialized. All timings exclude preparation, search, assembly and transfers.
+
+**Result:** replacing the whole paired core with native fp64 is not a speed
+shortcut here. This does not rule out a few carefully selected fp64 operations
+later, and does not establish which individual paired operation dominates.
+The next precision gate remains narrowing/reformulating the cancellation-prone
+radial reductions. No production precision policy or dispatch changed.
+
+Evidence: `docs/work/fluxbridge-fp64-sanity-20261026.json`, with exact generated
+native bodies, logs and profiles under `/tmp/fluxbridge-fp64-sanity-20261026/`.
+All previous source hashes, unrelated tracked changes and preceding plan content
+verify preserved; warpSPH/Core/Integrator and Stage 5 remain untouched.
+
+## Paired/native-fp64 rerun after reported GPU contention (2026-10-26)
+
+The user reported contention during the preceding measurements. **The timing
+and utilization evidence in this checkpoint supersedes the preceding sanity
+check's measurements.** Kernels, source hashes, geometry, seeds, buffers,
+1,048,576-pair workloads and 256-thread blocks are unchanged. No precision or
+production dispatch changes were made.
+
+Ran three serialized rounds, canonical then mixed, with seven ordinary-launch
+CUDA-event samples and seven graph samples per variant per round. The table
+uses the median of the three ordinary-launch medians; parentheses give their
+observed range. Timings exclude preparation, search, assembly and transfers.
+
+| Core | Canonical ms (range) | Mixed ms (range) | Canonical / mixed million pairs/s |
+|---|---:|---:|---:|
+| Paired fp32 | **2.967 (2.966–2.971)** | **4.527 (4.522–4.550)** | **353.4 / 231.6** |
+| Native fp64, same seed formulas | 8.791 (8.772–9.178) | 17.512 (17.506–17.512) | 119.3 / 59.9 |
+| Native fp64, standard math | 8.794 (8.793–8.795) | 16.401 (16.400–16.617) | 119.2 / 63.9 |
+
+Graph medians of round medians are respectively 2.953/4.520 ms,
+8.801/17.492 ms and 9.158/16.617 ms canonical/mixed. Paired mixed throughput
+improves from the preceding 193.3 to **231.6 million pairs/s**; the canonical
+paired result is essentially unchanged. Same-seed native fp64 is now
+**2.96x / 3.87x slower** than paired, so the wholesale replacement conclusion
+still holds. The standard-math graph measurements vary more than ordinary
+launches; retain both rather than selecting whichever is faster.
+
+Six new Nsight captures, taken only after timing runs exited, confirm:
+
+- Paired canonical/mixed: 254 registers/thread, 16.67% achieved occupancy,
+  zero fp64 arithmetic, zero local LD/ST sectors; 75,366/67,763 executed fp32
+  FLOPs/pair and **26.22/15.59 TFLOP/s** in the separate profiler captures.
+- Same-seed native fp64: 162 registers/thread, 16.63%/16.55% occupancy,
+  **85.84%/86.01% fp64 pipeline activity**, zero local LD/ST sectors;
+  10,225/9,397 fp64 FLOPs/pair and **1.221/0.590 TFLOP/s** in the captures.
+- Library native fp64: 160 registers/thread, 16.65%/16.60% occupancy,
+  86.04%/86.15% fp64 pipeline activity and zero local LD/ST sectors.
+
+FMA counts as two FLOPs; these counts do not assign FLOP equivalents to
+transcendentals, integer/control operations or division. Nsight replay durations
+remain separate from the event timings. No active compute processes appeared
+in the pre/post GPU checks; 200 ms GPU telemetry is saved. There was no exclusive
+GPU reservation or clock locking, and desktop activity remains possible.
+
+Every million-pair run repeats finite-output, paired-output agreement at 1e-5
+and bitwise graph-stability checks; all pass. The prior independent accuracy
+suite is retained without rerunning unchanged numerical code. All source hashes
+and the entire pre-existing dirty patch verified unchanged before appending
+this checkpoint. Evidence: `docs/work/fluxbridge-fp64-rerun-20261026.json`;
+raw logs, event samples, telemetry, generated bodies and six profiles:
+`/tmp/fluxbridge-fp64-rerun-20261026/`.
+
+**Next executable step remains unchanged:** reformulate the cancellation-prone
+radial reductions and narrow protected precision, using this paired core as the
+control. Do not promote a whole-core native-fp64 replacement or enter Stage 5.
+
+## Shorter protected fp32 elementary seeds (2026-10-26)
+
+Implemented four new seed candidates in
+`scripts/studies/fluxbridge_shared_jk_shortmath.py`, with reproducible accuracy,
+additional stress and sustained graph-batch drivers (`_shortmath_study.py`,
+`_shortmath_stress.py`, `_shortmath_batch.py`). These are isolated study kernels;
+production dispatch and the frozen paired reference remain unchanged.
+
+The existing range reductions bound atan(t)/t to z=t^2 in
+[0,(sqrt(2)-1)^2], and atanh(u)/u to z=u^2 in
+[0,((sqrt(2)-1)/(sqrt(2)+1))^2]. Generated Chebyshev interpolants with mpmath
+at 80 decimal digits and froze their coefficients as paired-fp32 constants.
+The evidence includes the generator, full high-precision coefficients, estimated
+approximation errors and 10,001-point high-precision grids for each polynomial;
+these are numerical checks, not rigorous uniform-error certificates.
+
+- `strict`: atan/log use 9/6 coefficients instead of the original 17/10.
+  Device elementary mixed errors are at most 8.1e-15 on the 8,192 seed samples.
+- `balanced`: 8/5 coefficients. Worst seed errors are 1.05e-12 for log and
+  1.91e-13 for atan. This candidate also passes the interaction gates.
+- `short` and `minimal`: 7/4 and 6/4 coefficients. Both pass the original
+  116 independent cases, but **fail** the broad mixed sample at actual fp32
+  input values: 3/6 failing outputs, worst 2.385e-5/2.132e-5. They are rejected
+  and excluded from performance comparisons. Passing only the fixtures would
+  have missed these regressions.
+
+Both accepted candidates and the unchanged control pass CPU and actual CUDA:
+116 independent cases, worst mixed error **1.674e-6** at the unchanged 1e-5
+budget, plus the 4,096 canonical and 4,096 mixed samples using references at
+actual fp32 query/support values. The existing ten failures when comparing the
+mixed sample to *unrounded* input values remain input-representation error;
+no such failure occurs against the actual-input reference.
+
+An additional deterministic seed (28491) supplies **65,536 random + 16,384
+near-face interactions** on the 256 transformed tetrahedra. All 28 channels
+pass against the analytic fp64 reference at actual fp32 inputs, worst **2.347e-6**.
+Independently checked the worst random and near-face cases using signed-cone
+volume integration with exact long-double radial integration and successive
+96/192/384-point face rules. Convergence is **3.147e-13 / 1.492e-12**;
+all three kernels pass 1e-5 against those independent values.
+
+Ordinary seven-sample launches were measured in three serialized processes per
+workload, but varied enough to warrant a sustained comparison. The additional
+protocol captures **32 sequential launches per graph**, warms every graph, then
+rotates variant order through three rounds of seven CUDA-event batch timings.
+The following are median per-launch times of the three round medians, at
+1,048,576 interactions, 256-thread blocks and identical preallocated buffers:
+
+| Seed core | Canonical ms | Mixed ms | Canonical / mixed million pairs/s |
+|---|---:|---:|---:|
+| Frozen paired control | 3.311 | 5.053 | 316.7 / 207.5 |
+| Strict shorter seeds | 3.075 | 4.530 | 341.0 / 231.5 |
+| Balanced shorter seeds | **3.048** | **4.432** | **344.0 / 236.6** |
+
+Balanced throughput increases **8.63% / 14.01%** against the matched control.
+Its round-median ranges are 3.020–3.051 / 4.409–4.436 ms; control ranges are
+3.300–3.318 / 5.038–5.087 ms. These sustained batches are a different timing
+protocol from the preceding individual-launch rerun; retain the matched control
+and do not infer a speedup by mixing absolute rates across protocols. Clocks,
+power and desktop activity remain uncontrolled. Every ordinary run repeats
+finite/output-agreement checks at 1e-5; all ordinary and batch graph outputs are
+bitwise stable. Preparation, search, assembly and transfers are excluded.
+
+Six serialized Nsight captures confirm zero fp64 arithmetic and zero local
+LD/ST sectors for all three variants. Balanced reduces executed fp32 arithmetic
+from **75,366 to 67,932 FLOPs/pair canonical**, and **67,763 to 61,061 mixed**
+(about 9.9%); strict uses 68,814/61,851. FMA counts as two, with no FLOP equivalents
+assigned to transcendentals, division or integer/control work. Balanced profiler
+throughput is 25.70/15.94 TFLOP/s, with SM throughput 37.31%/42.20%.
+**Registers remain 254/thread and achieved occupancy 16.67%**: this does not
+solve register pressure or establish a generally accurate raw-fp32 analytic path.
+
+The final counter captures followed a corrected temporary diagnostic helper:
+`profile.py` accidentally shadowed Python's standard-library module and spawned
+two stalled profiler trees during independent-oracle startup. Only those owned
+jobs were stopped; renaming the helper to `collect_counters.py` restored normal
+operation. No interrupted capture is used. All final GPU measurement jobs ran
+serially under the existing GPU lock.
+
+Evidence: `docs/work/fluxbridge-shortmath-20261026.json`; raw arrays, generated
+native bodies, ordinary and sustained timing samples, independent checks and
+profiles: `/tmp/fluxbridge-shortmath-20261026/`. All previously existing source
+hashes, the pre-existing dirty patch and earlier plan content verify preserved.
+No warpSPH/Core/Integrator, ordinary solid/fibre application or browser code
+changed; Stage 5 remains deferred.
+
+**Next executable precision step:** isolate the Hessian R face reduction before
+changing all five radial reductions. Its polynomial is R(r)=phi(r)-1, with
+phi(r)=(1-r)^8(32r^3+25r^2+8r+1) and
+phi'(r)=-22r(1-r)^7(16r^2+7r+1). Use this factorization to derive a conditioned
+divided-difference/shifted-basis form for the same analytic edge reduction,
+first as a local fp32 precision probe, then inside the shared six-edge kernel.
+The short/strict seed controls bound the elementary-function contribution;
+retain independent and broad actual-input gates before narrowing more paired
+arithmetic. Selected fp64 operations remain a last resort.
+
+## Register pressure, occupancy and lifetime experiments (2026-10-26)
+
+The user requested continued investigation, explicitly questioning the paired
+core's register count and occupancy. **Yes: 254 registers/thread exceeds the
+160–162 registers in the matched native-fp64 controls** (the earlier full-fp64
+body uses 188). Registers are counted as 32-bit words; native double takes two
+words, but paired arithmetic also carries correction/normalization temporaries.
+The baseline native-fp64 and paired kernels nevertheless occupy the same block
+allocation step at the previously used launch size.
+
+Nsight's measured hardware/launch limits resolve this: **65,536 registers,
+1,536 threads / 48 warps per SM**. Paired 254 registers round to 256 allocated,
+while native-fp64-series 162 rounds to 168. At 256-thread blocks both permit
+only one resident block: 8/48 warps = **16.67% theoretical occupancy**. Lowering
+register use from 254 to 192 alone at that launch size does not add a block.
+With 128-thread blocks the fp64 control reaches **24.59% achieved occupancy**
+instead of 16.63%, but its canonical profile remains 8.787/8.784 ms: the fp64
+pipeline is already the limiting resource. More occupancy is not universally
+useful across the arithmetic implementations.
+
+Added isolated experiments in `fluxbridge_shared_jk_lifetime.py` and accuracy,
+launch-sweep, sustained-batch and stress drivers. Every variant starts from the
+accepted `balanced` paired seed body; no device-fp64 arithmetic is introduced.
+
+- `serial`: consume one incident face at a time. The log seed is shared, while
+  the algebraic edge stream/potentials may be recomputed. This shortens face-state
+  lifetimes; it retains all 28 final channels and the exact edge-line limit.
+  **Zero-w faces must still consume compact edge potentials**: pruning their
+  whole contribution is incorrect, as the initial prototype's fixtures exposed.
+  The corrected implementation consumes both faces.
+- `staged`: place the 26 raw tensor accumulators in the existing caller-output
+  buffer through volatile references, then snapshot before writing final channel
+  layout/scaling. No extra scratch array is allocated. This lowers some register
+  lifetimes but loses performance; the combined serial/staged variant also loses
+  to moderate-cap controls. Neither is recommended for dispatch.
+- Explicit caps on the unchanged paired body: 192, 160, 128, 96, 80 and 64
+  registers. The cap changes compiler allocation/scheduling, not precision.
+  Tested selected serial/staged caps as additional controls.
+
+Four distinct mathematical bodies pass the unchanged CPU gates. Actual CUDA
+validates **14 body/cap combinations** against the 116 independent cases and
+both 4,096-case actual-input samples, with no failures at 1e-5. The original
+unrounded-input mixed discrepancies remain separately reported. Selected
+control, serial and 160/128/96/64-cap bodies also pass **81,920 extra random and
+near-face cases**, worst actual-input error 2.347e-6. Their two worst-case inputs
+match the earlier independently converged signed-cone oracle inputs exactly;
+reused those oracle values and confirmed every selected body passes, without
+repeating completed quadrature. Million-pair launch sweeps check finite output,
+1e-5 agreement with control, bitwise stability across block sizes, and bitwise
+graph replay. All checks pass. The 128-register body is bitwise identical to
+control in the million-pair sweeps.
+
+Swept 32/64/128/256-thread blocks, 12 initial configurations and three lower caps,
+serially, for both million-pair workloads. Then warmed 32-launch graphs and
+rotated four configurations through three rounds of seven CUDA-event batches.
+Times below are medians of round medians, **per full-28 interaction launch at
+1,048,576 pairs**, with identical preallocated buffers:
+
+| Configuration | Registers | Block | Canonical ms / million pairs/s | Mixed ms / million pairs/s |
+|---|---:|---:|---:|---:|
+| Balanced paired control | 254 | 256 | 2.854 / 367.4 | 4.150 / 252.7 |
+| Same body, cap 160 | 160 | 32 | 1.924 / 545.0 | **2.924 / 358.6** |
+| Same body, cap 128 | 128 | 256 | **1.591 / 658.9** | 3.016 / 347.7 |
+| Serial faces, uncapped | 239 | 256 | 2.112 / 496.4 | 3.826 / 274.1 |
+
+The 128-register cap gives **1.79x canonical / 1.38x mixed** sustained throughput;
+cap 160 gives 1.48x / 1.42x. Mixed timing varies: control round medians span
+4.142–4.776 ms, cap 128 2.892–3.187 ms, cap 160 2.920–3.452 ms. Matched-round
+speedups retain the gain (cap 128 1.38–1.50x mixed; cap 160 1.38–1.42x mixed).
+Do not mix absolute rates from different runs or timing protocols. Clocks,
+power and desktop activity are uncontrolled. No automatic cap/launch dispatch
+or production precision policy changed.
+
+Fourteen new Nsight captures quantify the occupancy/spill tradeoff. The table
+uses canonical captures; mixed occupancy is similar:
+
+| Paired configuration | Achieved occupancy | Local allocation bytes/thread | Local L1 sector bytes/pair (LD+ST) | fp32 TFLOP/s | SM issue utilization |
+|---|---:|---:|---:|---:|---:|
+| Control, block 256 | 16.67% | 0 | 0 | 25.55 | 37.21% |
+| Cap 160, block 32 | 24.89% | 40 | 72 | 37.83 | 54.99% |
+| Cap 128, block 256 | **32.99%** | 160 | 1,508 | **46.34** | **68.24%** |
+| Cap 96, block 128 | 39.75% | 344 | 4,349 | 41.86 | 64.78% |
+| Cap 64, block 256 | 60.64% | 784 | 13,885 | 19.87 | 30.71% |
+
+Local allocation metadata is **not** transferred bytes/pair; local L1 request
+sectors are **not** DRAM bytes. Cap 128's measured DRAM throughput is only 4.18%
+of peak canonical, versus 68.37% for cap 64. The latter is slower than control
+despite its much higher occupancy. Eligible warps/scheduler rise from **0.50 to
+1.71** with cap 128; active issue utilization rises from 38.59% to 70.88% on the
+per-scheduler active-cycle metric. Cap 128's executed arithmetic barely changes:
+**67,932 to 67,938 fp32 FLOPs/pair** canonical, 61,061 to 61,066 mixed; FMA=2.
+No fp64 instructions execute. This directly demonstrates a latency-hiding gain
+with moderate cached spill traffic, rather than a reduction in numerical work.
+Serial faces use 239 registers and 16 bytes local allocation, remain at 16.66%
+occupancy and improve canonical throughput despite almost unchanged executed
+FLOPs (68,187/pair); shorter live ranges/scheduling also matter.
+
+A five-size sweep (8,192 to 1,048,576 pairs, fixed block 256) checks applicability.
+At 8k–32k, cap 128 is about 1% slower than control; it has no useful occupancy
+advantage on the underfilled grid. Graph speedup at 131k is **1.38x canonical /
+1.24x mixed**, growing to **1.84x / 1.46x at 1M** in that separate sweep. Doubling
+524k to 1M multiplies time by about 1.83–1.97 across control/capped workloads,
+consistent with the expected large-grid linear work. Serial faces are the
+faster tested choice at the two small sizes. These measurements motivate a
+future workload-aware choice, not an unconditional cap default.
+
+Evidence: `docs/work/fluxbridge-register-lifetime-20261026.json`, preserving all
+round samples, scaling, 14 selected profiles, precision results, independent
+hard-case rechecks and exact source versions. Raw evidence:
+`/tmp/fluxbridge-registers-20261026/`. The initial cap-list extension and a batch
+metadata initialization fix changed only study-source versions; the earlier
+successful versions are archived and hash-checked. Initial failed prototype
+logs are retained separately and are excluded from accepted results. All
+pre-existing source hashes, earlier plan content and unrelated dirty work verify
+preserved. warpSPH/Core/Integrator, browser and ordinary solid/fibre applications
+remain unchanged; no Stage 5 work was performed.
+
+**Next executable step:** use the 128/160-register capped controls as performance
+baselines while conditioning the Hessian R face reduction identified above.
+Narrow protected radial state at the same 1e-5 independent/actual-input gates,
+then check whether the source reformulation retains the added active warps with
+less spill traffic. Keep serial faces as a small-grid/lifetime control; do not
+pursue output staging or lower caps simply to maximize occupancy.
+
+## Priority adjustment: ordinary solid-boundary kernel set (2026-10-26)
+
+The user asked about fp64/fp32 triangle/tetrahedron kernels limited to ordinary
+warpSPH boundary applications. A read-only consumer audit confirms this is a
+better next specialization target than carrying all 15/28 FluxBridge outputs
+through ordinary walls. **No new kernel implementation or timing is claimed by
+this contract audit.** Existing precision/dispatch and solver sources are intact.
+
+Actual sources: warpSPH `boundary/provider.py`,
+`modules/analyticBoundary/wallTerms.py`, `modules/iisph/boundaryIntegrals.py`,
+and this repository's `scene/provider.py`, `scene/fused.py`, `edge/precision.py`
+and `edge/warpfused.py`. The wired solver provider is currently **2D**; 3D
+particle/tetrahedron kernels are the matching independent-library extension,
+not an already wired 3D solver provider. Here triangles mean 2D area elements
+and tetrahedra mean 3D volume elements; 3D surface triangles have a separate
+surface-integral contract.
+
+The current analytic wall provider uses **Wendland C2/C4**, rather than the W6
+profile used for the recent full-28 performance/precision research. Its existing
+`lean=True` contract supplies lambda, G and Cov. Cov's full interface duplicates
+symmetric entries; its independent content is only three scalars in 2D or six
+in 3D. The core bundles should be explicit:
+
+| Bundle | Quantities | Independent 2D / 3D scalars |
+|---|---|---:|
+| Density | lambda = integral_solid W | 1 / 1 |
+| Constant-field pressure/continuity | lambda, G = integral_solid grad_x W | 3 / 4 |
+| Lean solid wall | lambda, G, Cov = integral_solid (y-x) tensor grad_x W | **6 / 10** |
+| Optional first value moment | m1 = integral_solid (y-x) W | +2 / +3 |
+
+Keep query-relative coordinates, physical support scaling, solid orientation,
+normal sign, complement/background terms, exact edge/vertex limits and the
+current provider conventions explicit. Reconstruct duplicate Cov entries only
+at the legacy interface. Hydrostatic/linear-gradient extrapolation contracts
+with Cov; it does not require a new general FEM/second-value-moment/Hessian
+basis. Optional m1 remains available for the existing XSPH request. Normalized
+versus physical units must be cross-checked against the current provider, rather
+than inferred from similarly named channels.
+
+The full WCSPH provider additionally requests **separate radial groups** for
+wall-viscosity weight, cover vector and tensile/shifting gradient. These remain
+explicit opt-in kernels/bundles, not mandatory pressure/continuity work. The
+wall-viscosity weight must not be replaced by a generic kernel-Hessian trace.
+No porosity, resistance/material fields, degree-nine products or solver state
+belongs in this set.
+
+Existing foundations: the production 2D fused provider already selects a lean
+group and its fp32 route uses stable Chebyshev plans; monomial fp32 is explicitly
+rejected. The experimental `fluxbridge_shared_jk_gradient.py` already provides
+the 10-independent-scalar 3D W6 family in fp64. Neither fact certifies a new
+raw-fp32 C2/C4 lean kernel, nor transfers the recent full-28 timings to it.
+
+**Next executable implementation priority:** explicit dtype factories for
+C2 first, then C4, producing the density and lean solid bundles for 2D triangles
+and 3D tetrahedra. Keep fp64 analytic reference kernels and fp32 conditioned
+paths independently testable without changing Core's process-global types.
+Generate only the selected radial reductions, recurrence degrees and local
+accumulators. Share edge geometry/J-K seeds within each requested bundle and
+avoid the general term interpreter and per-pair primitive scratch. Try ordinary
+fp32 at the unchanged actual-input error gate; use the accepted conditioned
+numerical route or narrowly protected arithmetic where required. Do not assume
+that fewer outputs alone cures monomial cancellation.
+
+Validate CPU/CUDA, fp32/fp64, random/rotated/sliver and support/edge/vertex limits,
+physical scaling and legacy-provider agreement. Benchmark each bundle against
+the existing triangle/tet paths with matched buffers, static preparation and
+end-to-end costs, then register/launch sweeps and actual Nsight counters. Retain
+ordinary solid disk/cylinder and periodic-fibre regressions. Defer optional WCSPH
+radial groups until the lean set is independently correct and measured. Further
+general full-28 tuning is secondary to this application-specific gate.
+warpSPH/Core/Integrator and Stage 5 pressure/porosity integration stay untouched.
+
+Audit evidence/source hashes: `docs/work/fluxbridge-solid-contract-20261026.json`.

@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-26",
+  "scope": "Read-only audit of actual ordinary-solid boundary consumers; prospective specialized library contract, not solver integration",
+  "source_sha256": {
+    "/home/lu26029/dev/warpSPH/src/warpSPH/boundary/provider.py": "00d53234700e3d83389e95afd669098a2bf73e9f3db339cdf61b8ab3e5f371d0",
+    "/home/lu26029/dev/warpSPH/src/warpSPH/modules/analyticBoundary/wallTerms.py": "9b24762aba4ad87a96a85e73e90a77868a7292526d73a305c49e45cc0f69473e",
+    "/home/lu26029/dev/warpSPH/src/warpSPH/modules/iisph/boundaryIntegrals.py": "2056d38623332f2f6d5edcf4d6bb7c3cc6e9b58a36644ed21f9c4d0087b4bdbc",
+    "src/warpSPHBoundaries/scene/provider.py": "ebc8c94b124ccce87cec1bb6245a969ebecc9a39731b89bdba4121af85790753",
+    "src/warpSPHBoundaries/edge/precision.py": "d53f1227255cb35729adeb6285a162ab08eff0098a5a2c79ec4df3b51f82f9b7",
+    "src/warpSPHBoundaries/edge/warpfused.py": "6ec965591ade44c05a3aa73f818bcb182df7b996c18f8d6f29584aeb71310990",
+    "scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70"
+  },
+  "findings": {
+    "current_solver_provider_dimension": 2,
+    "current_wall_kernel_families": [
+      "Wendland C2",
+      "Wendland C4"
+    ],
+    "lean_outputs": [
+      "lambda",
+      "G",
+      "Cov"
+    ],
+    "independent_lean_scalars": {
+      "2D": 6,
+      "3D": 10
+    },
+    "full_matrix_interface_scalars": {
+      "2D": 7,
+      "3D": 13
+    },
+    "optional_terms": [
+      "m1 for XSPH/weighted interpolation",
+      "wall-viscosity radial weight",
+      "cover vector",
+      "tensile/shifting radial gradient"
+    ],
+    "existing_work": [
+      "2D fused provider has lean selection and native-fp32 stable Chebyshev routing",
+      "3D 10-scalar W6 fp64 experimental lean kernel exists",
+      "Recent paired precision/register-cap experiments concern full-28 W6 and do not certify raw-fp32 W2/C4 lean kernels"
+    ]
+  },
+  "priority": "Specialize W2 then W4, 2D triangles and 3D tetrahedra, for density and lean solid pressure bundles before further general full-28 tuning; optional WCSPH groups remain explicit",
+  "limitations": [
+    "The current warpSPH analytic provider is 2D; a 3D tet provider is a library extension, not existing wired solver usage",
+    "The wall-viscosity radial weight is a separate contract and must not be substituted with the kernel Hessian trace",
+    "No new specialized kernel, speed measurement or fp32 accuracy result is claimed by this contract audit",
+    "No warpSPH, Core/Integrator, provider dispatch or existing production file changed"
+  ],
+  "raw_preservation_directory": "/tmp/fluxbridge-solid-contract-20261026-9hzu72bu"
+}
