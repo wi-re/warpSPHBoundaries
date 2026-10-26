@@ -122,5 +122,53 @@ The 2D implementation includes polygon moments, triangular FEM weights,
 disk/box tables, sampled SDF models with polygon fallbacks, and scene operations.
 The adversarial audit documents unresolved numerical and model-validity failures;
 uniform few-eps accuracy is not established. Current priorities are remaining representation/moment coverage,
-higher-order model errors, and per-moment accuracy/fallback decisions. 3D planar and spherical formulas exist; general 3D mesh
-and tetrahedral boundary tiers and general curved-tube solutions remain deferred.
+higher-order model errors, and per-moment accuracy/fallback decisions.
+
+The experimental `warpSPHBoundaries.mesh3d` reference evaluates analytic
+tetrahedral meshes, closed triangular boundaries, and standalone triangle
+area integrals, with polynomial moments, kernel derivatives and P0–P3 FEM
+weights. It uses arbitrary precision; conditioned float32/float64 and GPU
+backends remain open. See the [tetrahedral derivation](docs/derivations/tet-face-edge-chain.md)
+and [triangle surface contract](docs/derivations/tri-mesh-surfaces-3d.md).
+Sphere/tetrahedron overlap comparisons and plane-slice plots are reproducible
+with `scripts/studies/mesh3d_overlap.py` and `mesh3d_slices.py`.
+General curved-tube solutions remain deferred.
+
+## Interactive boundary laboratory
+
+Compare triangle meshes, exact polygons/rectangles, distance-only SDFs, curvature
+models, and circle references in linked browser viewports:
+
+```bash
+python -m warpSPHBoundaries.visualizer
+# Open http://127.0.0.1:8765
+```
+
+Geometry sliders, kernel/support/grid controls, twelve moment channels, shared
+colormaps, difference plots, probes, and cross-sections run directly in the browser.
+The optional Python provider retains closed-form polygon evaluation; browser
+polygons use split Gauss quadrature, labeled separately from geometry-model error.
+The 2D tab now defaults to WebGPU fp32, with an explicit float64 worker option
+and automatic fallback; all fields and models retain the same quadrature rules.
+[Open the live laboratory](https://fluids.dev/warpSPHBoundaries/volume.html) or
+[the 2D interface](https://fluids.dev/warpSPHBoundaries/index.html?2d=1).
+See the [visualizer guide](docs/visualizer.md) for models, accuracy limits, and
+static hosting. The **3D volumes** tab now computes 30 moment/derivative selections
+directly in the browser, with equations and validity notes alongside the plots.
+It includes sphere/plane integrals, curvature orders 0–2, small-ball orders
+0/2/4, and approximate cubature of sphere/box/tetrahedron solids. WebGPU compute
+and a float64 JavaScript worker enable live static-site experiments without a
+local Python or warpSPH installation. The local Python voxel-FFT provider remains
+available. WebGPU ray casting, transfer functions and XY/XZ/YZ slices share the
+computed grids. See the [new 3D derivations](docs/derivations/radial-terms-3d.md).
+
+### Dedicated solid-simplex Warp bundles
+
+`warpSPHBoundaries.fluxbridge.solid_functions` supplies C2/C4 triangle/tet
+`density`, `pressure`, `lean`, `wcsph` and `wcsph_extended` device/batch kernels
+in native fp64 or protected all-fp32. `SolidEvaluator` adds conservative
+whole-element search, periodic images and deterministic CSR assembly.
+See [the solid WCSPH trial handoff](docs/handoffs/solid-simplex-wcsph.md) for
+physical units, the viscosity conversion and the remaining solver adapter.
+These standalone kernels do not require porous coupling; no fluid-solver
+dispatch changes automatically when they are imported.

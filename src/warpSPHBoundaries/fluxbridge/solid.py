@@ -2,7 +2,10 @@
 
 No solver, porous field or general moment interpreter is involved. Outputs are
 [channel,pair], in physical support units: lambda, G=int grad_x W, and symmetric
-Cov=int (y-x) tensor grad_x W. The default fp32 path uses protected two-float arithmetic, with no device fp64.
+Cov=int (y-x) tensor grad_x W. ``wcsph`` appends the physical
+int Laplacian(W), and ``wcsph_extended`` additionally appends m1=int (y-x)W
+and cover=int unit(x-y) over the support. Tensile shifting is not included.
+The default fp32 path uses protected two-float arithmetic, with no device fp64.
 Explicit conditioning="raw" exposes native-fp32 diagnostics: both profiles fail
 the broad 1e-5 gate on some inputs. Provider dispatch is unchanged.
 """
@@ -12,7 +15,7 @@ import numpy as np
 import warp as wp
 from . import _solid_code as codegen
 
-BUNDLES=('density','pressure','lean')
+BUNDLES=('density','pressure','lean','wcsph','wcsph_extended')
 LABELS={2:('lambda','Gx','Gy','Covxx','Covxy','Covyy'),
         3:('lambda','Gx','Gy','Gz','Covxx','Covxy','Covxz','Covyy','Covyz','Covzz')}
 EDGES=tuple((i,j,*[k for k in range(4) if k not in (i,j)]) for i in range(4) for j in range(i+1,4))
@@ -50,11 +53,12 @@ def solid_source(dimension,kernel='w2',precision='float64',bundle='lean',conditi
         import re
         from . import _solid_pair as pair
         code=pair.transform(code,accurate_math=True,fast=True,force_inline=True)
-        loader='''auto geo=[&](int col){auto hi=LD(g.data,tet,col),lo=LD(g.data_low,tet,col);
+        # Pass geometry loads by value rather than capturing the struct.
+        loader='''auto cvpair=[](auto hi,auto lo){
  return V{T(hi[0],lo[0]),T(hi[1],lo[1]),T(hi[2],lo[2])};};
 '''
         code=code.replace('T h_pair=T(h);',loader+'T h_pair=T(h);')
-        code=re.sub(r'cv\(LD\(g.data,tet,([^\n]+?)\)\)',r'geo(\1)',code)
+        code=re.sub(r'cv\(LD\(g.data,tet,([^\n]+?)\)\)',r'cvpair(LD(g.data,tet,\1),LD(g.data_low,tet,\1))',code)
     return code
 
 
@@ -65,7 +69,10 @@ def solid_functions(dimension,kernel='w2',precision='float64',bundle='lean',regi
     Inputs: vec3 positions (z=0 in 2D), positive supports, element indices,
     prepared geometry and caller-owned [channels,pairs] output. No allocations
     occur inside either device entry point. Register caps are explicit CUDA
-    experiments, not implicit precision or dispatch changes. Default conditioning
+    experiments, not implicit precision or dispatch changes. WCSPH lap is the
+    physical integral (units length^-2), not the legacy provider's normalized
+    auxiliary-kernel channel; do not apply lap_factor a second time. Cover has
+    units length^dimension and has no wall particle number-density multiplier. Default conditioning
     is native fp64 or protected two-float fp32; conditioning="raw" is the
     explicit, currently unaccepted native-fp32 accuracy/performance probe.
     """
@@ -73,9 +80,27 @@ def solid_functions(dimension,kernel='w2',precision='float64',bundle='lean',regi
     conditioning=('protected' if precision=='float32' else 'raw') if conditioning is None else conditioning
     real,vec,Geometry=_types(precision,conditioning)
     source=solid_source(dimension,kernel,precision,bundle,conditioning)
-    labels=LABELS[dimension][:(1 if bundle=='density' else dimension+1)] if bundle!='lean' else LABELS[dimension]
-    @wp.func_native(source)
-    def element(x:vec,h:real,tet:int,output:wp.array2d(dtype=real),row:int,g:Geometry)->real: ...
+    labels=LABELS[dimension][:(1 if bundle=='density' else dimension+1)] if bundle in ('density','pressure') else LABELS[dimension]
+    if bundle in ('wcsph','wcsph_extended'):labels+=('lap',)
+    if bundle=='wcsph_extended':labels+=tuple('m1'+a for a in 'xyz'[:dimension])+tuple('cover'+a for a in 'xyz'[:dimension])
+    # Passing the 176-byte protected Geometry struct directly to the native
+    # function triggers an invalid .param -> .local conversion in NVRTC 12.9
+    # for some extended bodies. Separate array arguments avoid that lowering.
+    native_source=source.replace('g.data_low','geometry_low').replace('g.data','geometry_data').replace('g.edges','geometry_edges')
+    if conditioning=='protected':
+        @wp.func_native(native_source)
+        def native(x:vec,h:real,tet:int,output:wp.array2d(dtype=real),row:int,
+                   geometry_data:wp.array2d(dtype=vec),geometry_low:wp.array2d(dtype=vec),geometry_edges:wp.array(dtype=wp.vec4i))->real: ...
+        @wp.func
+        def element(x:vec,h:real,tet:int,output:wp.array2d(dtype=real),row:int,g:Geometry)->real:
+            return native(x,h,tet,output,row,g.data,g.data_low,g.edges)
+    else:
+        @wp.func_native(native_source)
+        def native(x:vec,h:real,tet:int,output:wp.array2d(dtype=real),row:int,
+                   geometry_data:wp.array2d(dtype=vec),geometry_edges:wp.array(dtype=wp.vec4i))->real: ...
+        @wp.func
+        def element(x:vec,h:real,tet:int,output:wp.array2d(dtype=real),row:int,g:Geometry)->real:
+            return native(x,h,tet,output,row,g.data,g.edges)
     @wp.kernel(module='unique',cuda_max_registers=registers,module_options={'enable_backward':False,'fuse_fp':True,'max_unroll':1})
     def evaluate(positions:wp.array(dtype=vec),supports:wp.array(dtype=real),
                  indices:wp.array(dtype=int),geometry:Geometry,output:wp.array2d(dtype=real)):

@@ -1,0 +1,2 @@
+import {compute2d} from './browser-compute2d.js?v=20261022-7';
+onmessage=event=>{const {id,config,diskTable}=event.data;try{postMessage({id,result:compute2d(config,progress=>postMessage({id,progress}),diskTable)});}catch(error){postMessage({id,error:error.message});}};

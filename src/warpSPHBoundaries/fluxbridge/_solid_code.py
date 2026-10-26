@@ -124,40 +124,59 @@ auto log_one_plus=[](T z){{T y=T(1)+z;return y==T(1)?z:log{suffix}(y)*(z/(y-T(1)
 '''
 
 
+def auxiliary(phi):
+    # ell'(r)=r phi(r); ell(1)=0.  lap is phi'(r)/r.
+    ell={n+2:c/F(n+2) for n,c in phi.items()}
+    ell[0]=-sum(ell.values())
+    lap={n-2:n*c for n,c in phi.items() if n>=2}
+    return {'lap':lap,'first':ell,'cover':{0:F(-1),1:F(1)}}
+
+
 def outputs(dimension,bundle,C):
     values=['C*m0']
     if bundle!='density':values += ['-C*ih*G.'+a for a in 'xyz'[:dimension]]
-    if bundle=='lean':
+    if bundle in ('lean','wcsph','wcsph_extended'):
         values += ['C*(m0-vxx)','-C*vxy']
         if dimension==2:values+=['C*(m0-vyy)']
         else:values+=['-C*vxz','C*(m0-vyy)','-C*vyz','C*(m0-vzz)']
+    if bundle in ('wcsph','wcsph_extended'):values+=['C*ih*ih*lap']
+    if bundle=='wcsph_extended':
+        values+=['C*h*first.'+a for a in 'xyz'[:dimension]]
+        values+=['-'+('*'.join(['h']*dimension))+'*cover.'+a for a in 'xyz'[:dimension]]
     return f'T C={literal(C)};\n'+''.join(f'LD(output,{i},row)={v};\n' for i,v in enumerate(values))+'#undef LD\nreturn T(0);\n'
 
 
 def tetrahedron(kernel,bundle,precision):
-    phi=polynomial(kernel);last=max(phi)+2
+    phi=polynomial(kernel)
+    aux=auxiliary(phi) if bundle=='wcsph_extended' else ({'lap':auxiliary(phi)['lap']} if bundle=='wcsph' else {})
+    coeff={name:{n+2:c/F(n+2) for n,c in profile.items()} for name,profile in aux.items()}
+    last=max([max(phi)+2]+[max(c) for c in coeff.values()])
     p={n+2:c/F((n+3)*(n+2)) for n,c in phi.items()}
     S={n+2:c/F(n+2) for n,c in phi.items()}
     A0=sum(c/F(n+3) for n,c in phi.items());A1=sum(S.values())
     code=TET_TEMPLATE.replace('SCALAR','float' if precision=='float32' else 'double').replace('SUFFIX','f' if precision=='float32' else '')
     acc='T m0=0;'
     if bundle!='density':acc+='V G{0,0,0};'
-    if bundle=='lean':acc+='T vxx=0,vxy=0,vxz=0,vyy=0,vyz=0,vzz=0;'
+    if bundle in ('lean','wcsph','wcsph_extended'):acc+='T vxx=0,vxy=0,vxz=0,vyy=0,vyz=0,vzz=0;'
+    for name in aux:acc+=('T lap=0;' if name=='lap' else f'V {name}{{0,0,0}};')
     code=code.replace('ACCUMULATORS',acc)
-    code=code.replace('FACE_STRUCT','struct Face {T d,a,a2,w,outside,apow,c_even,c_odd,p'+(',S' if bundle!='density' else '')+';};')
+    code=code.replace('FACE_STRUCT','struct Face {T d,a,a2,w,outside,apow,c_even,c_odd,p'+(',S' if bundle!='density' else '')+''.join(','+n for n in aux)+';};')
     code=code.replace('A0',literal(A0));consumer='';consume=''
     if bundle!='density':
-        consumer='''auto consume=[&](int face,int incidence,T d,T S,T L){
+        consumer='''auto consume=[&](int face,int incidence,T d,T S,T L AUXARGS){
  V n=cv(LD(g.data,tet,4+face));G=add(G,mul(n,S));
 '''
-        if bundle=='lean':consumer+='''V mu=cv(LD(g.data,tet,14+incidence));V U=add(mul(n,d*S),mul(mu,L));
+        if bundle in ('lean','wcsph','wcsph_extended'):consumer+='''V mu=cv(LD(g.data,tet,14+incidence));V U=add(mul(n,d*S),mul(mu,L));
  vxx+=U.x*n.x;vyy+=U.y*n.y;vzz+=U.z*n.z;
  vxy+=T(.5)*(U.x*n.y+U.y*n.x);vxz+=T(.5)*(U.x*n.z+U.z*n.x);vyz+=T(.5)*(U.y*n.z+U.z*n.y);
 '''
+        consumer=consumer.replace(' AUXARGS',''.join(',T '+n+'_value' for n in aux))
+        for name in aux:
+            consumer+=('lap+=d*lap_value;\n' if name=='lap' else f'{name}=add({name},mul(n,{name}_value));\n')
         consumer+='};\n'
-        consume='\n'.join(f'consume(ids[{2+i}],2*edge+{i},f{i}.d,f{i}.w*f{i}.S,'+('L' if bundle=='lean' else 'T(0)')+');' for i in (0,1))
+        consume='\n'.join(f'consume(ids[{2+i}],2*edge+{i},f{i}.d,f{i}.w*f{i}.S,'+('L' if bundle in ('lean','wcsph','wcsph_extended') else 'T(0)')+''.join(f',f{i}.w*f{i}.{n}' for n in aux)+');' for i in (0,1))
     code=code.replace('CONSUMER',consumer).replace('CONSUME',consume)
-    if bundle=='lean':
+    if bundle in ('lean','wcsph','wcsph_extended'):
         singular='''if(c2==T(0)){
  T lo=s0>T(-1)?s0:T(-1),hi=s1<T(1)?s1:T(1);
  if(hi>lo){T L=-'''+literal(A1)+'''*(hi-lo);T pl=1,pu=1;
@@ -165,10 +184,10 @@ def tetrahedron(kernel,bundle,precision):
         for m in range(1,last+1):
             singular+='pl*=fabs'+('f' if precision=='float32' else '')+'(lo);pu*=fabs'+('f' if precision=='float32' else '')+'(hi);\n'
             if m in S:singular+='L+='+literal(S[m]/F(m+1))+'*(hi*pu-lo*pl);\n'
-        singular+='consume(ids[2],2*edge,0,0,L);consume(ids[3],2*edge+1,0,0,L);}\ncontinue;} '
+        singular+='consume(ids[2],2*edge,0,0,L'+',0'*len(aux)+');consume(ids[3],2*edge+1,0,0,L'+',0'*len(aux)+');}\ncontinue;} '
     else:singular='if(c2==T(0))continue;'
     code=code.replace('SINGULAR',singular)
-    code=code.replace('POTENTIAL','T L=-'+literal(A1)+'*j_even;' if bundle=='lean' else '')
+    code=code.replace('POTENTIAL','T L=-'+literal(A1)+'*j_even;' if bundle in ('lean','wcsph','wcsph_extended') else '')
     steps=[]
     for m in range(1,last+1):
         parity='odd' if m%2 else 'even';steps.append('{T jm2=j_'+parity+';')
@@ -177,15 +196,19 @@ def tetrahedron(kernel,bundle,precision):
             steps.append(f'f{f}.c_{parity}={recurrence};f{f}.apow*=f{f}.a;T t{f}=f{f}.c_{parity}+(T(1)-f{f}.apow)*f{f}.outside;')
             if m in p:steps.append(f'f{f}.p+={literal(p[m])}*t{f};')
             if bundle!='density' and m in S:steps.append(f'f{f}.S+={literal(S[m])}*t{f};')
-        if m<last or bundle=='lean':
+            for name,c in coeff.items():
+                if m in c:steps.append(f'f{f}.{name}+={literal(c[m])}*t{f};')
+        if m<last or bundle in ('lean','wcsph','wcsph_extended'):
             steps.append(f'rlpow*=rl;rupow*=ru;j_{parity}=(u*rupow-l*rlpow+T({m})*c2*jm2)*{literal(F(1,m+1))};')
-        if bundle=='lean' and m in S:steps.append(f'L+={literal(S[m])}*j_{parity};')
+        if bundle in ('lean','wcsph','wcsph_extended') and m in S:steps.append(f'L+={literal(S[m])}*j_{parity};')
         steps.append('}')
     return code.replace('STEPS','\n'.join(steps))+outputs(3,bundle,normalizer(3,phi))
 
 
 def triangle(kernel,bundle,precision):
-    phi=polynomial(kernel);suffix='f' if precision=='float32' else '';last=max(phi)
+    phi=polynomial(kernel);suffix='f' if precision=='float32' else ''
+    aux=auxiliary(phi) if bundle=='wcsph_extended' else ({'lap':auxiliary(phi)['lap']} if bundle=='wcsph' else {})
+    last=max([max(phi)]+[max(c) for c in aux.values()])
     code=common(precision)+'''T ih=T(1)/h,m0=0;
  V G{0,0,0};T vxx=0,vxy=0,vyy=0;
  for(int edge=0;edge<3;++edge){
@@ -201,13 +224,17 @@ def triangle(kernel,bundle,precision):
  if(inside){
   if(c2==T(0)){
 '''
+    code=code.replace('for(int edge=0;', ''.join('T lap=0;' if n=='lap' else f'V {n}{{0,0,0}};' for n in aux)+'for(int edge=0;')
+    code=code.replace('T E=0,F=0,B=0;', 'T E=0,F=0,B=0;'+''.join(f'T E_{n}=0;' for n in aux))
     code+='T pl0=1,pu0=1;\n'
     for n in range(last+1):
         if n:code+='pl0*=ABS(l);pu0*=ABS(u);\n'
-        if n not in phi:continue
         j=f'(u*pu0-l*pl0)*{literal(F(1,n+1))}'
-        if bundle!='density':code+=f'E+={literal(phi[n])}*{j};\n'
-        code+=f'F+={literal(phi[n]/F(n+2))}*{j};\n'
+        if n in phi:
+            if bundle!='density':code+=f'E+={literal(phi[n])}*{j};\n'
+            code+=f'F+={literal(phi[n]/F(n+2))}*{j};\n'
+        for name,c in aux.items():
+            if n in c:code+=f'E_{name}+={literal(c[n])}*{j};\n'
     code+='''}else{
  T j_even=u-l,j_odd=0,c=SQRT(c2);
  if(l>=T(0))j_odd=log_one_plus(((u-l)+(u-l)*(u+l)/(ru+rl))/(l+rl));
@@ -223,8 +250,10 @@ def triangle(kernel,bundle,precision):
         if m in phi:
             if bundle!='density':code+=f'E+={literal(phi[m])}*j_{parity};\n'
             code+=f'F+={literal(phi[m]/F(m+2))}*j_{parity};\n'
+        for name,c in aux.items():
+            if m in c:code+=f'E_{name}+={literal(c[m])}*j_{parity};\n'
     code+='}\n'
-    if bundle=='lean':
+    if bundle in ('lean','wcsph','wcsph_extended'):
         code+='T bl=rl,bu=ru;\n'
         for m in range(2,last+3):
             code+='bl*=rl;bu*=ru;\n'
@@ -237,9 +266,11 @@ def triangle(kernel,bundle,precision):
  }
 '''
     if bundle!='density':code+='G=add(G,mul(n,E));\n'
-    if bundle=='lean':code+='''V U=add(mul(n,w*E),mul(t,B));
+    if bundle in ('lean','wcsph','wcsph_extended'):code+='''V U=add(mul(n,w*E),mul(t,B));
  vxx+=U.x*n.x;vyy+=U.y*n.y;vxy+=T(.5)*(U.x*n.y+U.y*n.x);
 '''
+    for name in aux:
+        code+=('lap+=w*E_lap;\n' if name=='lap' else f'{name}=add({name},mul(n,E_{name}));\n')
     code+='}\n'
     for name,fun in [('SQRT','sqrt'),('ABS','fabs'),('ATAN2','atan2'),('POW','pow')]:code=code.replace(name,fun+suffix)
     return code+outputs(2,bundle,normalizer(2,phi))

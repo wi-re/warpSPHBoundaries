@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore SPH boundary integrals directly in your browser, with optional Python computation.">
+  <title>Boundary laboratory</title><link rel="stylesheet" href="./style.css?v=20261022-7">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 24V9l11-5 11 5v15l-11 5Z M5 9l11 6 11-6M16 15v14M5 24l11-6 11 6"/></svg><div>Boundary laboratory<small>SPH INTEGRAL EXPLORER</small></div></div>
+    <nav class="header-mid" aria-label="Dimension"><a class="tag active" href="./index.html?2d=1">2D fields</a><a class="tag" href="./volume.html">3D volumes ↗</a><a class="tag" href="./wall.html">Mixed wall</a></nav>
+    <div class="header-actions"><span id="connection" class="connection">Connecting…</span><button id="import" class="button">Open result</button><button id="export" class="button" disabled>Export result ↓</button><input id="file" type="file" accept="application/json,.json" hidden></div>
+  </header>
+  <div class="workspace">
+    <aside class="left">
+      <div class="panel-title">EXPERIMENT <span>01</span></div>
+      <section><label class="field">Compute provider<select id="compute-provider"><option value="browser">Automatic · WebGPU fp32 / float64 fallback</option><option value="gpu">WebGPU · fp32</option><option value="worker">Browser · JavaScript float64</option><option value="python">Local Python service</option></select></label><p class="hint">WebGPU uses fp32, with compensated arithmetic for analytic edges and disk series. The worker uses float64. Methods include analytic edges, boundary quadrature, disk lookup and local expansions; their errors are described below each view.</p></section>
+      <section><label for="preset" class="eyebrow">STARTING POINT</label><select id="preset"><option value="square">Square · two triangles</option><option value="rectangle">Thin rectangle · corner interaction</option><option value="triangle">Triangle · editable vertices</option><option value="circle">Disk · reference / lookup / curvature</option><option value="small-disk">Small disk · mean-value orders</option></select><p id="preset-note" class="hint">One square, three ways to evaluate the solid integral.</p></section>
+      <section><h2><span class="section-icon">◇</span> Boundary geometry</h2><label class="field">Geometry<select id="geometry"><option value="rectangle">Rectangle</option><option value="triangle">Triangle</option><option value="circle">Circle / constant curvature</option></select></label><div id="geometry-controls"></div><div id="vertex-controls"></div></section>
+      <section><h2><span class="section-icon">∫</span> Kernel & sampling</h2><label class="field">Kernel function<select id="kernel"><option value="w4">Wendland C4</option><option value="w2">Wendland C2</option><option value="w6">Wendland C6</option><option value="cubic">Cubic spline</option></select></label><div id="sampling-controls"></div><p class="hint">h is the compact support radius; q = r / h.</p></section>
+      <details><summary>SDF & reference settings</summary><label class="field">Distance source<select id="sdf_source"><option value="analytic">Analytic signed distance</option><option value="sampled">Sampled lattice · bilinear</option></select></label><label class="field">Curvature order<select id="curvature_order"><option value="0">0 · local plane</option><option value="1">1 · linear curvature</option><option value="2" selected>2 · quadratic curvature</option></select></label><label class="field">Small-disk order<select id="series_order"><option value="0">0 · centre value</option><option value="2">2 · + a²ΔF/8</option><option value="4" selected>4 · + a⁴Δ²F/192</option></select></label><div id="sdf-controls"></div><p class="hint">Lattice derivatives recover normals and curvature. Circle reference uses angular Gauss quadrature.</p></details>
+      <details class="method-catalogue"><summary>Available browser methods</summary><div id="method-catalogue"></div></details><div class="run-panel"><label class="check"><input id="auto" type="checkbox" checked> Recompute on change</label><button id="compute" class="button primary">Evaluate integrals <span>↗</span></button><div id="compute-note" class="hint">Browser computation · WebGPU fp32 / float64</div></div>
+    </aside>
+    <main>
+      <div class="main-heading"><div><div class="eyebrow">COMPARISON WORKSPACE</div><h1>One boundary. Multiple models.</h1></div><button id="share" class="button" title="Copy a link containing this experiment's configuration">Copy setup link ↗</button></div>
+      <div class="toolbar"><label>Quantity <select id="field"><option value="m00">λ · kernel mass</option><option value="Gx">h ∂λ/∂x</option><option value="Gy">h ∂λ/∂y</option><option value="grad_norm">|h ∇λ|</option><option value="m10">m₁₀ / h</option><option value="m01">m₀₁ / h</option><option value="m20">m₂₀ / h²</option><option value="m11">m₁₁ / h²</option><option value="m02">m₀₂ / h²</option><option value="g1xx">g₁,xx</option><option value="g1xy">g₁,xy</option><option value="g1yx">g₁,yx</option><option value="g1yy">g₁,yy</option></select></label><label>Colormap <select id="colormap"><option value="viridis">Viridis</option><option value="magma">Magma</option><option value="inferno">Inferno</option><option value="coolwarm">Coolwarm</option><option value="cividis">Cividis</option></select></label><label>Display <select id="display"><option value="value">Integral value</option><option value="difference">Signed difference to view 1</option><option value="absolute">Absolute difference to view 1</option></select></label></div>
+      <div id="message" role="status" aria-live="polite" hidden></div>
+      <div id="viewports" class="viewports"></div>
+      <div class="legend-row"><span id="scale-min">0.00</span><div id="colorbar"></div><span id="scale-max">1.00</span><span class="legend-caption"><span id="reference-hint">Shared color scale</span> <span id="scale-kind">· λ</span></span></div>
+      <div class="plot-hint"><span><i class="solid-line"></i> Boundary <i class="dash-line"></i> d = ±h</span><span>Click to probe · dashed line is the shared cross-section</span></div>
+      <section class="cross-section"><div class="plot-heading"><div><h2>Cross-section</h2><span id="slice-label" class="hint">Horizontal cut through the probe</span></div><label>Direction <select id="cut"><option value="horizontal">Horizontal · x</option><option value="vertical">Vertical · y</option></select></label></div><canvas id="cross" aria-label="Integral cross-section for all models"></canvas><div id="line-legend" class="line-legend"></div></section>
+      <div class="formula"><span>λ(x) = ∫<sub>Ωᵦ</sub> W(‖x − x′‖, h) dx′</span><span>Solid interior: d &lt; 0 <b>·</b> Fluid exterior: d &gt; 0</span></div>
+      <section id="term-equations" aria-label="Equations and validity of the selected 2D term"></section>
+    </main>
+    <aside class="right">
+      <div class="panel-title">VIEWPORTS <button id="add" title="Add a comparison viewport" aria-label="Add comparison viewport">＋</button></div><div id="model-controls"></div>
+      <section><h2>Display layers</h2><label class="check"><input id="boundary" type="checkbox" checked> Boundary geometry</label><label class="check"><input id="mesh" type="checkbox" checked> Triangle edges in mesh view</label><label class="check"><input id="band" type="checkbox" checked> Support band · ±h</label><label class="check"><input id="grid" type="checkbox"> Coordinate grid</label><label class="check"><input id="onlyband" type="checkbox"> Show only |d| ≤ h</label><label class="check"><input id="smooth" type="checkbox"> Smooth field image</label><label class="field">Color scale<select id="scale"><option value="shared">Shared · automatic</option><option value="fixed">Fixed · custom limits</option></select></label><div id="limits" class="limits" hidden><label>Min<input id="vmin" type="number" value="0" step="0.1"></label><label>Max<input id="vmax" type="number" value="1" step="0.1"></label></div></section>
+      <section><h2><span class="probe-dot"></span> Linked probe</h2><div id="probe-coordinates" class="mono muted">Click a viewport</div><div id="probe-values"></div><p class="hint">Values use bilinear interpolation of the computed grid; missing samples stay unavailable.</p></section>
+      <section class="notes"><h2>Model notes</h2><div id="model-notes" class="hint">Choose models and evaluate to inspect their assumptions.</div></section>
+    </aside>
+  </div>
+  <footer><span><span class="status-dot"></span><span id="status">Ready</span></span><span id="footer-grid">Shared coordinates · support-normalized channels</span><span>warpSPHBoundaries <b>/</b> laboratory</span></footer>
+</div>
+<script type="module" src="./app.js?v=20261022-7"></script>
+</body></html>

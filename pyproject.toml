@@ -26,6 +26,9 @@ dependencies = ["numpy", "scipy", "mpmath", "torch", "warp-lang", "warpSPHCore>=
 scripts = ["matplotlib", "markdown-it-py"]
 test = ["pytest"]
 
+[project.scripts]
+boundary-lab = "warpSPHBoundaries.visualizer.__main__:main"
+
 [project.urls]
 Repository = "https://github.com/wi-re/warpSPHBoundaries"
 Issues = "https://github.com/wi-re/warpSPHBoundaries/issues"
@@ -35,7 +38,7 @@ where = ["src"]
 include = ["warpSPHBoundaries*"]
 
 [tool.setuptools.package-data]
-warpSPHBoundaries = ["data/tables/*.npz", "data/symbolic/*.txt"]
+warpSPHBoundaries = ["data/tables/*.npz", "data/symbolic/*.txt", "visualizer/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

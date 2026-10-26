@@ -1,6 +1,6 @@
 """warpSPHBoundaries -- exact 2D SPH boundary integrals via divergence-theorem edge reductions.
 
-Sub-packages: `curvbound` (closed forms and quadrature oracles of the PLAN track), `edge` (the edge machinery), `scene` (bodies, boundary operations, wall operators, the boundary provider); `paths`.  The DFSPH / delta+-SPH reference solvers (`sim`) were retired into warpSPH on 2026-10-11 (git tag oracle-solvers-2026-10-11).
+Sub-packages: `curvbound` (closed forms and quadrature oracles of the PLAN track), `edge` (the edge machinery), `mesh3d` (analytic tetrahedral/surface reference), `scene` (bodies, boundary operations, wall operators, the boundary provider); `paths`.  The DFSPH / delta+-SPH reference solvers (`sim`) were retired into warpSPH on 2026-10-11 (git tag oracle-solvers-2026-10-11).
 Derivations: docs/derivations/*.md.  The 2D edge reductions (`edge`) and the PLAN-track closed forms (`curvbound`) are separate tracks that share the kernels.
 """
 __version__ = "0.1.5"          # keep equal to pyproject.toml (scripts/publish_pypi.sh checks it)

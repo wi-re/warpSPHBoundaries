@@ -5128,3 +5128,146 @@ and independent gates. Apply the already motivated 128/160-register experiment
 to the new 3D protected family as a separate performance control. Provider
 agreement/assembly and optional m1, wall-viscosity, cover and tensile bundles
 remain explicit subsequent gates; solver wiring stays deferred.
+
+## Solid WCSPH bundles and first-trial bridge (2026-10-26)
+
+**Completed this checkpoint:** dedicated C2/C4 `wcsph` (7/11 scalars) and
+`wcsph_extended` (11/17 scalars) factories for 2D volume triangles / 3D tets,
+native fp64 and protected all-fp32. `wcsph` fuses lambda, G, symmetric Cov and
+physical integral Laplacian(W). Extended additionally fuses m1 and the
+unnormalized wall-cover vector. Their low-degree radial reductions share the
+same J/C stream and prepared geometry; there is no quadrature, FEM payload,
+general moment interpreter or device-fp64 arithmetic in these fp32 kernels.
+The previously accepted raw-fp32 limitation is unchanged.
+
+`SolidEvaluator` now prepares frozen conservative whole-element adjacencies,
+executes these bundles and deterministically assembles CSR pair values on the
+selected device. Both host and existing Warp BVH search, explicit periodic
+images, stale-snapshot checks and exhaustive comparisons are exercised. Static
+geometry/BVH is reusable. Overlapping volumes sum rather than form a union.
+No ordinary Scene disk/cylinder/fibre dispatch or solver installation changed.
+
+The physical viscosity convention is audited against the legacy route:
+`lap = integral Delta W`, with units length^-2. The old provider's normalized
+auxiliary-kernel channel becomes physical only after `lap_factor`; adapters
+must not apply that factor twice. This is the existing integrated-Laplacian
+viscosity operator, not a Morris operator. Full support inside a closed volume
+has lambda=1, Cov=I and zero G/lap/m1/cover. The corresponding mesh cancellation
+checks pass. m1 scales as length and cover as length^d; number-density and wall
+closure multipliers remain caller responsibilities.
+
+### Validation
+
+- Final actual-CUDA invocation: **187 passed** in 23.42 s for solid / WCSPH /
+  adjacency / layering plus the pre-existing curvature/SDF tests being included
+  in the requested whole-repository checkpoint. This includes the four new
+  physical-scaling / bundle-prefix tests added after the first 93-test pass.
+- Broader CPU invocation for pre-existing dirty mesh3d, curvature/SDF and web
+  work: **290 passed / 14 skipped** in 116.97 s. Optional/environment-dependent
+  GPU/browser cases were not promoted from skips to passes.
+- Three Node test-file suites for adapter policy, term engine and volume math
+  pass. `git diff --check` passes.
+- Independent frozen moments supply lambda/G/Cov, Laplacian from Hessian trace,
+  and m1 for 6 triangles / 26 tets per C2/C4 profile, fp64/fp32 CPU/CUDA.
+  Separate numerical edge/face integration checks lap/m1/cover, clipped support,
+  exact vertices and exterior queries in both dimensions. Physical-scaling,
+  full-support cancellation, periodicity, empty batches, invalid supports,
+  exhaustive-pair agreement and host/BVH parity are covered.
+- 8,192 mixed/canonical actual-input comparisons per bundle/profile/dtype/dim
+  accompany the million-pair timings; protected errors are below **5.4e-8**
+  mixed error, against analytic fp64 at the actual fp32 inputs. All million-pair
+  outputs are finite. The budgets remain 1e-10 fp64 / 1e-5 fp32; independent
+  surface quadrature uses a separately stated 2e-9 fp64 oracle budget.
+- CUDA caught a reproducible NVRTC 12.9 invalid parameter-space-to-local-space
+  load of the protected geometry struct in the extended triangle body. Native
+  calls now receive individual arrays through the public composable device
+  wrapper. The failing cases and the complete acceptance run pass after this
+  correction. No precision fallback or CPU substitution was used.
+
+Reproduction (using the Warp environment, serialized GPU access):
+
+```bash
+OPENBLAS_NUM_THREADS=1 XDG_CACHE_HOME=/tmp/fluxbridge-cache flock /tmp/fluxbridge-gpu.lock /home/lu26029/miniconda3/envs/warp/bin/python -m pytest tests/fluxbridge/test_solid.py tests/fluxbridge/test_solid_wcsph.py tests/fluxbridge/test_solid_evaluate.py tests/test_package_layering.py tests/scene/test_curvature_warp.py tests/scene/test_sdf_warp.py -q
+OPENBLAS_NUM_THREADS=1 XDG_CACHE_HOME=/tmp/fluxbridge-cache /home/lu26029/miniconda3/envs/warp/bin/python scripts/studies/fluxbridge_solid_wcsph.py --output /tmp/fluxbridge-solid-wcsph-repeat.json
+```
+
+### CUDA performance and preparation limits
+
+Evidence: `docs/work/fluxbridge-solid-wcsph-20261026.json`, 48 matched prepared
+kernel measurements, 1,048,576 pairs each, 256-thread blocks, seven-sample warm
+CUDA-event medians on the RTX PRO 6000 Blackwell. Rates are **million complete
+particle/simplex interactions per second**. Clocks and desktop activity are
+uncontrolled; the rates exclude preparation, search, assembly and readback.
+
+| Profile / arithmetic / bundle | 2D canonical | 2D mixed | 3D canonical | 3D mixed |
+|---|---:|---:|---:|---:|
+| C2 fp64 WCSPH | 1,224 | 554 | 170 | 71 |
+| C2 protected fp32 WCSPH | 6,405 | 3,184 | 517 | 267 |
+| C4 fp64 WCSPH | 1,117 | 520 | 158 | 70 |
+| C4 protected fp32 WCSPH | 5,809 | 2,977 | 410 | 255 |
+| C2 protected fp32 extended | 5,763 | 2,961 | 414 | 257 |
+| C4 protected fp32 extended | 5,216 | 2,750 | 352 | 236 |
+
+The new protected WCSPH kernels use 92/96 registers in 2D and 182/184 in 3D
+(C2/C4); extended uses 96 in 2D and 235/249 in 3D. All report zero local-memory
+size. These are kernel resource properties, **not new Nsight achieved-occupancy
+or executed-FLOP captures**; prior lean counters must not be presented as these
+bundles' measurements. Register-cap tuning remains useful, particularly for
+extended 3D. Scalar outputs are caller-owned: fp32 WCSPH input/output storage is
+48 bytes per 2D pair / 64 per 3D pair, plus shared geometry and CSR. Prepared
+protected geometry is 216 bytes per triangle / 624 per tet, plus common edge
+records. No per-pair geometry duplication is required by the device API.
+
+The convenience bridge was measured on fixed regular simplex meshes while
+increasing queries from 4,096 to 16,384 to 65,536. The GPU evaluation+CSR times
+are approximately linear in retained pairs; this does not establish scaling
+with increasing mesh complexity. The device-search route still performs host
+CSR readback and pair-array upload:
+
+| Dimension / queries | Retained pairs | Query prepare/search/upload | GPU evaluate + assemble | Readback | Owned batch arrays |
+|---|---:|---:|---:|---:|---:|
+| 2D / 4,096 | 63,590 | 5.37 ms | 0.035 ms | 0.046 ms | 3.20 MB |
+| 2D / 16,384 | 253,222 | 7.10 ms | 0.097 ms | 0.096 ms | 12.74 MB |
+| 2D / 65,536 | 1,013,162 | 27.99 ms | 0.330 ms | 0.210 ms | 50.99 MB |
+| 3D / 4,096 | 327,756 | 10.07 ms | 1.157 ms | 0.065 ms | 21.19 MB |
+| 3D / 16,384 | 1,301,934 | 43.42 ms | 4.984 ms | 0.127 ms | 84.18 MB |
+| 3D / 65,536 | 5,237,688 | **1,388.17 ms** | 20.304 ms | 0.310 ms | 338.62 MB |
+
+Static preparation/upload is separately recorded (roughly 11–14 ms 2D /
+77–81 ms 3D for the device-search samples). Owned batch capacity excludes
+static geometry, BVH internals, temporary search arrays and driver/allocator
+caches; it is not a peak-driver-memory claim. At the largest 3D sample search
+query arrays add about 425 MB and host CSR about 168 MB. The large preparation
+jump is retained as measured; neither a linear preparation claim nor a
+production GPU-resident pipeline is warranted. Host-search preparation is
+slower still (up to 20.61 s at that 3D size). These end-to-end costs are the next
+practical bottleneck, independent of the much faster prepared kernels.
+
+### Fluid-trial readiness and next executable step
+
+The math and standalone adjacency/assembly are ready for an **opt-in static
+impermeable-wall trial**, with no porous prerequisites. They are not yet a
+replacement BoundaryProvider: the consuming solver still needs the adapter,
+physical viscosity conversion, particle-adjacency refresh and actual fluid
+validation. The current provider contract is 2D; 3D also needs the consumer's
+3D boundary data/kinematics contract. No hydrostatic/Couette/Poiseuille claim is
+made by the integral tests alone.
+
+The new bundles omit optional tensile shifting (W^4 grad W), geometric
+free-surface cone/extreme queries, complement regions and moving-body/reaction
+adapters. The conditioned 2D Scene tensile implementation can be retained or
+shifting disabled for the first trial; expanding its degree-25/40 profile
+naively into the new recurrence is not accepted. See
+`docs/handoffs/solid-simplex-wcsph.md` for exact contracts and a runnable static
+wall example.
+
+**Next executable step:** implement the opt-in ordinary-solid provider adapter
+in the later authorized consuming-solver worktree, then run static hydrostatic
+rest followed by no-slip Couette/Poiseuille and periodic-channel checks against
+the existing provider. In this library, the next performance step is device-only
+pair gathering/CSR reuse to remove the host round trip, followed by 128/160
+register-cap experiments on the 3D protected bundles. Do not change warpSPH or
+shared Core/Integrator in this checkpoint and do not enter porous Stage 5.
+Böttcher et al. (2025), arXiv:2504.07739v2 remains the principal porous reference;
+ordinary disk/cylinder/fibre applications and transverse-versus-longitudinal
+flow distinctions remain intact.

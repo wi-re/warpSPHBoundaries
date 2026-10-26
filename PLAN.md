@@ -2,6 +2,14 @@
 
 ## Project status
 
+The [Flux boundary Warp operators and porous material coupling plan](docs/plan-porous-coupling.md)
+sets out the independent device/operator work in this repository and the later
+handoff to warpSPH. It includes the 2025 implicit incompressible porous-flow
+paper. The main warpSPH repository continues its incompressible solver work;
+this plan does not modify or duplicate those solvers during operator development.
+Its later solver handoff includes ordinary solid disk/cylinder and fibre-array
+cases before porous flow, with a resolved-to-effective permeability comparison.
+
 The current 2D accuracy improvement plan and component acceptance matrix are in
 [external 2D acceptance matrix](../warpSPHDevelopment/curvatureBoundaries/progress/plan-2d-accuracy.md). Historical status entries below
 describe their original validation scope; use that matrix and its fresh

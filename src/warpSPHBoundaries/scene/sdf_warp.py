@@ -9,68 +9,16 @@ from functools import lru_cache
 import torch
 import warp as wp
 
+from .curvature.wp_func import CurvatureTable, CANONICAL, channel_mask, _moment_function
+
 wp.set_module_options({'enable_backward': False, 'enable_fma': False})
 wf = wp.float64
-v12 = wp.types.vector(length=12, dtype=wf)
-CANONICAL = (0, 1, 2, 6, 7, 8, 9, 10, 11, 3, 4, 5)
-
-
-def channel_mask(channels):
-    requested = set(range(12)) if channels is None else set(map(int, channels))
-    if not requested <= set(range(12)):
-        raise ValueError('SDF moment channels must be in 0..11')
-    return sum(1 << CANONICAL[c] for c in requested)
-
-
-@wp.func
-def _spline(k: int, a: wf, i: int, q: wp.array(dtype=wf),
-            f: wp.array2d(dtype=wf), df: wp.array2d(dtype=wf), derivative: bool):
-    z = wp.clamp(a, q[0], wf(1.0))
-    h = q[i+1]-q[i]
-    t = (z-q[i])/h
-    t2, t3 = t*t, t*t*t
-    s0, s1 = df[k, i]*h, df[k, i+1]*h
-    value = (wf(2.0)*t3-wf(3.0)*t2+wf(1.0))*f[k, i]+(t3-wf(2.0)*t2+t)*s0
-    value += (-wf(2.0)*t3+wf(3.0)*t2)*f[k, i+1]+(t3-t2)*s1
-    slope = wf(0.0)
-    if derivative:
-        slope = ((wf(6.0)*t2-wf(6.0)*t)*f[k, i]+(wf(3.0)*t2-wf(4.0)*t+wf(1.0))*s0
-                 +(-wf(6.0)*t2+wf(6.0)*t)*f[k, i+1]+(wf(3.0)*t2-wf(2.0)*t)*s1)/h
-    if a < q[0]:
-        value = f[k, 0]+df[k, 0]*(a-q[0])
-        slope = df[k, 0]
-    return wp.vec2d(value, slope)
-
-
-@wp.func
-def _integral(k: int, power: int, a: wf, i: int, q: wp.array(dtype=wf),
-              f: wp.array2d(dtype=wf), df: wp.array2d(dtype=wf),
-              coefficients: wp.array3d(dtype=wf), cumulative: wp.array3d(dtype=wf)):
-    z = wp.clamp(a, q[0], wf(1.0))
-    left, h = q[i], q[i+1]-q[i]
-    t = (z-left)/h
-    result = cumulative[power, k, i+1]
-    tpower = t
-    for j in range(4):
-        weight = (wf(1.0)-tpower)/wf(j+1)
-        if power == 1:
-            weight = left*weight+h*(wf(1.0)-tpower*t)/wf(j+2)
-        result += h*coefficients[j, k, i]*weight
-        tpower *= t
-    gap = wp.max(q[0]-a, wf(0.0))
-    if power == 0:
-        result += f[k, 0]*gap-df[k, 0]*gap*gap/wf(2.0)
-    else:
-        result += f[k, 0]*(q[0]*gap-gap*gap/wf(2.0))+df[k, 0]*(-q[0]*gap*gap/wf(2.0)+gap*gap*gap/wf(3.0))
-    return result
 
 
 @lru_cache(None)
 def _kernel(mask):
-    want_first = bool(mask & 6)
-    want_second = bool(mask & 56)
-    want_gradient = bool(mask & 192)
-    want_cov = bool(mask & 3840)
+    # Mass is required internally by the posterior even when not requested.
+    model = _moment_function(mask | 1)
 
     @wp.kernel
     def evaluate(positions: wp.array2d(dtype=wf), supports: wp.array(dtype=wf),
@@ -163,65 +111,16 @@ def _kernel(mask):
                        wp.min(limits[offset+i0*stride+j1], limits[offset+i1*stride+j1]))
         if not (h <= bound):
             return
-        signed_d = d/h
-        a = wp.abs(signed_d)
-        value = v12(wf(0.0))
-        # Same empty/full convention as Tier3.curvature_moments at |q|>=1.
-        if signed_d <= wf(-1.0):
-            value[0] = wf(1.0)
-            value[3] = variance
-            value[5] = variance
-            value[8] = wf(1.0)
-            value[11] = wf(1.0)
-        elif signed_d < wf(1.0):
-            z = wp.max(a, q[0])
-            lo, hi = int(1), q.shape[0]-1
-            while lo < hi:
-                mid = (lo+hi)//2
-                if q[mid] < z:
-                    lo = mid+1
-                else:
-                    hi = mid
-            index = lo-1
-            f0 = _spline(0, a, index, q, f, df, wp.static(want_gradient or want_cov))
-            f1 = _spline(1, a, index, q, f, df, False)[0]
-            B0, B2, B4 = -f0[1], -wf(2.0)*f1, wf(0.0)
-            plane = f0[0]
-            if signed_d < wf(0.0):
-                plane = wf(1.0)-plane
-            value[0] = plane-k*B2/wf(2.0)+wf(3.0)*signed_d*k*k*B2/wf(8.0)
-            tangent_x, tangent_y = -nyn, nxn
-            if wp.static(want_first or want_second):
-                B4 = -wf(6.0)*_integral(1, 1, a, index, q, f, df, coefficients, cumulative)
-            if wp.static(want_first):
-                mt = -beta*B4/wf(6.0)
-                mn = -B2+k*signed_d*B2/wf(2.0)+k*k*(B4-wf(3.0)*signed_d*signed_d*B2)/wf(8.0)
-                value[1] = mt*tangent_x+mn*nxn
-                value[2] = mt*tangent_y+mn*nyn
-            if wp.static(want_second):
-                T = -wf(2.0)*_integral(1, 0, a, index, q, f, df, coefficients, cumulative)
-                N = a*a*f0[0]+wf(2.0)*_integral(0, 1, a, index, q, f, df, coefficients, cumulative)
-                if signed_d < wf(0.0):
-                    T, N = variance-T, variance-N
-                stt = T-k*B4/wf(2.0)+wf(5.0)*signed_d*k*k*B4/wf(8.0)
-                stn = beta*signed_d*B4/wf(6.0)
-                snn = N-k*signed_d*signed_d*B2/wf(2.0)+k*k*(-wf(2.0)*signed_d*B4+wf(3.0)*signed_d*signed_d*signed_d*B2)/wf(8.0)
-                value[3] = stt*tangent_x*tangent_x+stn*(wf(2.0)*tangent_x*nxn)+snn*nxn*nxn
-                value[4] = stt*tangent_x*tangent_y+stn*(tangent_x*nyn+nxn*tangent_y)+snn*nxn*nyn
-                value[5] = stt*tangent_y*tangent_y+stn*(wf(2.0)*tangent_y*nyn)+snn*nyn*nyn
-            if wp.static(want_gradient):
-                gt = -beta*B2/wf(2.0)
-                gn = -B0+k*signed_d*B0/wf(2.0)+wf(3.0)*k*k*(B2-signed_d*signed_d*B0)/wf(8.0)
-                value[6] = (gt*tangent_x+gn*nxn)/h
-                value[7] = (gt*tangent_y+gn*nyn)/h
-            if wp.static(want_cov):
-                ctt = plane-wf(3.0)*k*B2/wf(2.0)+wf(15.0)*signed_d*k*k*B2/wf(8.0)
-                ctn = beta*signed_d*B2/wf(2.0)
-                cnn = plane+signed_d*B0-k*signed_d*signed_d*B0/wf(2.0)+k*k*(-wf(6.0)*signed_d*B2+wf(3.0)*signed_d*signed_d*signed_d*B0)/wf(8.0)
-                value[8] = ctt*tangent_x*tangent_x+ctn*(wf(2.0)*tangent_x*nxn)+cnn*nxn*nxn
-                value[9] = ctt*tangent_x*tangent_y+ctn*(tangent_x*nyn+nxn*tangent_y)+cnn*nxn*nyn
-                value[10] = value[9]
-                value[11] = ctt*tangent_y*tangent_y+ctn*(wf(2.0)*tangent_y*nyn)+cnn*nyn*nyn
+        table = CurvatureTable()
+        table.q = q
+        table.f = f
+        table.df = df
+        table.coefficients = coefficients
+        table.cumulative = cumulative
+        table.variance = variance
+        value = model(d/h, wp.vec2d(nxn, nyn), k, beta, table)
+        value[6] = value[6]/h
+        value[7] = value[7]/h
         eps = wf(1.4210854715202004e-14)
         if not wp.isfinite(value[0]) or value[0] < -eps or value[0] > wf(1.0)+eps:
             return

@@ -85,6 +85,31 @@ Numerically (w4, $d=0.3$, boundary $y=-\frac\kappa2x^2-\frac{\kappa'}6x^3$, \pat
 the parabola with $\kappa'=\kappa^2$ is reproduced by $F_0+\kappa F_1+\kappa^2F_2$ with error falling by $8.0$ per halving of $\kappa$; the tangential gradient at $(\kappa,\kappa')=(\frac18,\frac1{64})$ is
 $-2.840\cdot10^{-4}$ against $-3.123\cdot10^{-4}$ for $\kappa'F_1$ alone and $-2.830\cdot10^{-4}$ with the correction.
 \end{remark}
+
+\subsection{Three-dimensional graph terms}
+At a closest point with outward normal $+z$, write the solid locally as
+$z\le-d-Q_2/2$, $Q_2=\kappa_1u^2+\kappa_2v^2$. Expanding the integration
+limit for each moment or kernel-derivative integrand $F$ gives
+\[
+ I[F]\simeq I_{\rm plane}[F]-\frac12\int Q_2F(u,v,-d)\,\dd u\dd v
+       +\frac18\int Q_2^2\partial_zF(u,v,-d)\,\dd u\dd v.
+\]
+For mass, define $J(d)=\int_{|d|}^1r(r^2-d^2)W(r)\,\dd r$,
+$H=(\kappa_1+\kappa_2)/2$, and $K=\kappa_1\kappa_2$. Angular integration and
+integration by parts yield
+\[
+ \lambda\simeq F_0(d)-\pi HJ(d)+\frac{\pi d}{2}(3H^2-K)J(d).
+\]
+For a sphere of radius $a$ whose far side is outside support, the exact cap
+formula gives $\lambda=F_0-\pi J/(a+d)$; expanding the denominator verifies
+both coefficients and signs. Applying the graph expansion to each polynomial
+moment and derivative integrand supplies the complete family, rather than
+differentiating only the scalar mass approximation. The umbilic implementation
+is checked against exact spherical moments; its remainder decreases cubically
+in $1/a$ in the finite tested cases. General varying geometric jets and a
+global error guarantee remain open. Symbolic checks are in
+\path{maple/23_radial_terms_3d.mpl}; details and numerical limits are in
+\path{docs/derivations/radial-terms-3d.md}. \status{M,N}
 \begin{remark}[Validity]
 The expansion is asymptotic in $\kappa h$ (usable for $\kappa h\lesssim\frac14$ at $10^{-5}$), requires reach $\ge h$ on the solid side, a single
 boundary sheet in the support, and $R>h-d$ so the support does not engulf the disk; the limit $d\to0$ needs the limit form of the negative-power primitives.

@@ -29,10 +29,10 @@ def imports(path):
     return out
 
 
-@pytest.mark.parametrize("layer,forbidden", [("edge", ("warpSPHBoundaries.scene", "warpSPH.", "warpSPH")), ("scene", ("warpSPH.", "warpSPH"))])
+@pytest.mark.parametrize("layer,forbidden", [("edge", ("warpSPHBoundaries.scene", "warpSPH.", "warpSPH")), ("scene", ("warpSPH.", "warpSPH")), ("mesh3d", ("warpSPHBoundaries.scene", "warpSPHBoundaries.fluxbridge", "warpSPH.", "warpSPH")), ("fluxbridge", ("warpSPHBoundaries.scene", "warpSPH.", "warpSPH"))])
 def test_no_upward_imports(layer, forbidden):
     bad = []
-    for f in sorted((SRC / layer).glob("*.py")):
+    for f in sorted((SRC / layer).rglob("*.py")):
         for m in imports(f):
             if m == "warpSPH" or m.startswith("warpSPH.") or any(m == fb.rstrip(".") or m.startswith(fb.rstrip(".") + ".") for fb in forbidden if fb.startswith("warpSPHBoundaries")):
                 bad.append((f.name, m))

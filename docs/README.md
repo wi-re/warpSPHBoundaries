@@ -7,6 +7,8 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | file | content | status |
 |---|---|---|
 | [validation.md](validation.md) | accuracy scope, limitations, external evidence storage and reproduction commands | development progress and generated artifacts are outside the repo |
+| [plan-porous-coupling.md](plan-porous-coupling.md) | flux boundary Warp operators, solid disk/cylinder cases, resolved fibre to effective permeability comparisons and later porous coupling; includes Böttcher et al. 2025 | [P] main warpSPH integration deferred until incompressible interfaces settle |
+| [handoffs/solid-simplex-wcsph.md](handoffs/solid-simplex-wcsph.md) | dedicated C2/C4 triangle/tet solid bundles, adjacency/CSR bridge, physical viscosity conversion and first fluid-trial prerequisites | CPU/CUDA library gates passed; solver adapter pending |
 | [surface-moments.md](surface-moments.md) | twelve-moment SurfaceRep contract, device conditioning, diagnostics and validation | CPU/CUDA finite ε32 gate passed; other representations remain partial |
 | [sdf-guard.md](sdf-guard.md) | sampled-cell interval guard, curvature-pole rejection, explicit fallback and accuracy limits | conservative domain guard; local-model integral tolerance remains open |
 | [sdf-distance-only.md](sdf-distance-only.md) | curvature-free semi-analytic half-plane reference, twelve moments and separated error budgets | reference complete; geometric bias explicitly measured |
@@ -32,7 +34,9 @@ Status tags: **[V]** verified numerically · **[D]** derived, not verified · **
 | `derivations/tier2-closed-boundary.md` | closed polylines, boundary data only, polygon→disk convergence | [V] |
 | `derivations/tier3-curvature-2d.md` | 2D curvature expansion (closest point), F0/F1/F2 closed forms | [V] |
 | `derivations/tier4-slender-series.md` | fibres: slender series (2D strip/disk [V]; 3D ball/strand [D]/[P]), circle edge identity | 2D [V] |
-| `derivations/tet-face-edge-chain.md` | 3D tetrahedra | [P] |
+| [derivations/tet-face-edge-chain.md](derivations/tet-face-edge-chain.md) | analytic 3D tetrahedral meshes: regular face/edge flux, moments, derivatives and P0–P3 FEM; independent sphere overlap comparison | [V] arbitrary-precision reference; device conditioning open |
+| [derivations/tri-mesh-surfaces-3d.md](derivations/tri-mesh-surfaces-3d.md) | closed triangular boundaries and standalone area elements, surface FEM and ambient gradients | [V] reference and finite tests; GPU backend open |
+| [derivations/radial-terms-3d.md](derivations/radial-terms-3d.md) | 3D sphere/plane moments, Hessian/Laplacian, curvature graph terms and small-ball series; browser equations and compute | [V] finite reference and browser/WGSL cases; model limits explicit |
 | `derivations/laplacian-wall.md` | wall Laplacian Δλ = ∫_solid ∇²W dA′ = 2λ[L] − tr Cov[L] (the viscosity wall term, Q1): scene route through the registered L = W′/r, ν_eff = α c0 H/(8ξ) | [V] tests |
 | `derivations/noslip-wall.md` | no-slip wall viscosity (WORK-007, Q1): the Chiron et al. 2019 Eq. 91–92 one-sided finite-difference wall flux `-2 ν_eff (v − v_w)|G|/(ρ d)`, `ν_eff = α c0 H/(8ξ)`, `d_min = 0.25 dx`, all-components relative velocity (the third `wallViscosityForm`) | [V] tests |
 | `plan-wall-evaluation.md` | **the working plan for the speed work**: adjacency / precompute / evaluation terminology, steps 0–6 with their results (idle-GPU measurements, float32 kernels, term-parallel and fused wall evaluation, `BoxRep`), the "Resume here" block, open decisions | plan, steps 0–3 done |
@@ -47,6 +51,11 @@ Rule for derivation files: each lists the checks it needs; those checks are the
 golden-fixture cases. Do not mark a file [V] until the check table is green.
 
 ## Phase 1 artefacts (HANDOFF track, 2D tier 1/2 verification)
+
+Reusable device evaluation and derivative contracts:
+[Warp boundary functions](warp-boundary-functions.md) documents the component
+folder layout, direct batches, fused-consumer calls and checked local-model
+adjoints, including the remaining sampled-SDF/Scene derivative gaps.
 
 | what | where |
 |---|---|

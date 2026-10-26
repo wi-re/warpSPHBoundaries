@@ -1,0 +1,40 @@
+{
+  "config": [
+    3,
+    3,
+    12,
+    12,
+    6,
+    3,
+    12,
+    12
+  ],
+  "channels": [
+    "mass",
+    "m1n",
+    "m2t",
+    "m2n",
+    "Gn",
+    "g1t",
+    "g1n"
+  ],
+  "source": "32-node split Gauss circle-flux quadrature; tensor Chebyshev interpolation; coefficients float32",
+  "kernels": {
+    "w2": {
+      "file": "disk-table-w2.bin",
+      "floats": 72576
+    },
+    "w4": {
+      "file": "disk-table-w4.bin",
+      "floats": 72576
+    },
+    "w6": {
+      "file": "disk-table-w6.bin",
+      "floats": 72576
+    },
+    "cubic": {
+      "file": "disk-table-cubic.bin",
+      "floats": 72576
+    }
+  }
+}

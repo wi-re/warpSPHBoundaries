@@ -23,8 +23,9 @@ Wall Laplacian Green form & M,N & identities in \texttt{20\_paper\_audit.mpl}; \
 $\nu_{\rm eff}$ from the pairwise term & M, N, A & \cref{prop:nueff}: moments in \texttt{20\_paper\_audit.mpl}, lattice in \path{paper_viscosity_limits.py}; the pairwise form \cref{eq:pairwise} is quoted from the code\\
 Free-slip wall term & A & \cref{eq:freeslip}: ghost-value argument, model\\
 No-slip coefficient & A & modelling choice\\
-3D face identity & M (div.) & divergence step only\\
-3D evaluation, curved centre line & P & open\\
+3D face/edge chain, moments and P0--P3 FEM & M,N & \texttt{22\_mesh3d.mpl}; \texttt{tests/mesh3d/}; independent overlap and simplex quadrature\\
+3D curvature, radial moments and ball series & M,N & \texttt{23\_radial\_terms\_3d.mpl}; sphere/differential checks; browser/WGSL parity\\
+3D device conditioning, curved centre line & P & open\\
 \bottomrule
 \end{tabular}
 \caption{Verification ledger.}\label{tab:ledger}
@@ -35,6 +36,7 @@ Reproduce (all Maple lines must read PASS):
 \item \texttt{make -C paper} builds the paper;
 \item \texttt{maple -q maple/20\_paper\_audit.mpl}: symbolic and 40-digit checks of this paper (110 PASS lines);
 \item \texttt{bash maple/run\_edge.sh}: the project's edge-calculus checks (61 lines at the time of writing);
+\item \texttt{maple -q maple/22\_mesh3d.mpl} and \texttt{pytest tests/mesh3d}: the 3D analytic reference;
 \item numerical checks in \texttt{scripts/derivation\_checks/} (compare with the quoted numbers):
 \begin{itemize}
 \item \texttt{paper\_ngon\_orders.py}, \texttt{paper\_curvature\_table.py} (seconds);

@@ -10,5 +10,6 @@ from .streaming import EvaluationChunk
 from .sphere_shell import SphereShellEvaluator
 from .weighted_disk import WeightedDiskEvaluator
 from .solid import solid_functions, prepare_solid_geometry
+from .solid_evaluate import SolidEvaluator
 
-__all__=["CONTRACT_VERSION","Request","baseline","monomials","Geometry","Adjacency","adjacency","DeviceSearch","Evaluator","PolynomialField","FieldEvaluator","differential","ResistanceMaterial","MaterialEvaluator","local_response","AffineResistanceMaterial","pullback_gradient","EvaluationChunk","SphereShellEvaluator","WeightedDiskEvaluator","solid_functions","prepare_solid_geometry"]
+__all__=["CONTRACT_VERSION","Request","baseline","monomials","Geometry","Adjacency","adjacency","DeviceSearch","Evaluator","PolynomialField","FieldEvaluator","differential","ResistanceMaterial","MaterialEvaluator","local_response","AffineResistanceMaterial","pullback_gradient","EvaluationChunk","SphereShellEvaluator","WeightedDiskEvaluator","solid_functions","prepare_solid_geometry","SolidEvaluator"]

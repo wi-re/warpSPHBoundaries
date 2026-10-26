@@ -39,6 +39,21 @@ polygon of \cref{sec:closed} is the fallback; no gap exists in 2D since the stri
 
 \paragraph{Ball in 3D.} For a ball of radius $\rho$ at centre distance $D$ the \emph{shell theorem} reads
 $\int_{S^2}f(|\xx-\bm c-\rho\bm\omega|)\,\dd\bm\omega=\frac{2\pi}{D\rho}\int_{|D-\rho|}^{D+\rho}r\,f(r)\,\dd r$ \status{M}, consistent with \cref{prop:sphere}.
+Integrating the Cartesian Taylor expansion over a three-dimensional ball gives
+\[
+ \int_{B_a(c)}F=\frac{4\pi a^3}{3}
+ \left[F(c)+\frac{a^2}{10}\Lap F(c)+\frac{a^4}{280}\Lap^2F(c)+O(a^6)\right].
+\]
+For polynomial radial terms,
+\[
+ \Lap(\yy^\alpha r^p)=p(p+1+2|\alpha|)\yy^\alpha r^{p-2}
+ +\sum_i\alpha_i(\alpha_i-1)\yy^{\alpha-2\ee_i}r^p.
+\]
+This closes the order-four small-ball series for moments and kernel
+derivatives. The reference and browser worker reject origin, support and
+kernel-knot crossings; finite comparisons against exact sphere integration
+cover all displayed channels. The coefficients and product identity are
+checked in \path{maple/23_radial_terms_3d.mpl}. \status{M,N}
 
 \paragraph{Curved centre line.} A first-order correction $\propto\kappa_ca^2$ is expected (the tube volume is independent of $\kappa_c$ but the kernel weighting is not
 symmetric); not derived. \status{P}
