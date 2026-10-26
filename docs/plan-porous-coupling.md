@@ -4447,3 +4447,144 @@ promotion gate remain unchanged. If analytic fp32 work resumes, the executable
 stability gate is to isolate radial-potential/face-reduction cancellation and
 rounded-geometry consistency while retaining the independent 1e-5 checks.
 No 2D solid/fibre, browser, warpSPH/Core/Integrator or Stage 5 code changed.
+
+## Precision investigation checkpoint — fp32 instructions, protected core (2026-10-26)
+
+At the user's request, **commit `b2f4cf4`** checkpoints the independent native
+FluxBridge implementation, required mesh3d reference dependency, fixtures and
+all preceding shared-edge studies/findings. See
+`docs/work/fluxbridge-checkpoint-20261026.md`. Unrelated dirty paper, scene and
+browser work remains outside the commit. Fresh CPU native/profile smoke tests
+passed **37 tests**, with one CUDA-only skip and four expected raw-fp32 failures.
+This section records the subsequent precision research; it does not promote a
+new production method or enter Stage 5.
+
+### What the fp32 ablations show
+
+Added isolated `fluxbridge_shared_jk_floatpair.py`, `_floatpair_study.py`,
+`_stability.py`, `_stability_study.py` and `_stability_perf.py`. The committed raw
+fp32 and accepted fp64 bodies remain byte-for-byte unchanged. Nine variants
+are checked on CPU/CUDA against the same 26 fixtures and 90 independent
+transformed queries, with the unchanged **1e-5 mixed-error gate**:
+
+| Variant | Failed independent outputs, CPU / CUDA | Worst mixed error, CUDA |
+|---|---:|---:|
+| Raw fp32 control | 839 / 799 | 2.103e-3 |
+| Compensated coefficient sums | 869 / 769 | 3.262e-3 |
+| Compensated products, coefficient residuals and sums | 711 / 695 | 2.066e-3 |
+| Two-float arithmetic, ordinary fp32 log/atan seeds | 96 / 90 | 2.554e-4 |
+| Two-float arithmetic and range-reduced log/atan | 31 / 31 | 1.835e-4 |
+| Above plus coherent split-float static geometry | **0 / 0** | **1.680e-6** |
+| Protected core, ordinary fp32 final tensors | **0 / 0** | **1.673e-6** |
+| Cheaper residual formulas; explicit inlining | **0 / 0** | **1.673e-6** |
+
+The final row summarizes the separately recorded `floatpair-fast` and
+`floatpair-inline` variants; both pass. Each total covers 3,248 scalar outputs
+per device. These ablations identify contributions from **recurrence/reduction
+arithmetic, elementary-function seeds, and coherence of rounded geometry**.
+Compensating only the final coefficient sums does not repair the implementation.
+
+The protected core uses about 48-bit working precision represented by **two
+fp32 words**, including generation-time coefficient residuals, error-free sum/
+product components, corrected division/square-root residuals, and range-reduced
+log/atan series. Static host-fp64 geometry is split into high/low fp32 arrays,
+so the cached edge/face frames retain their near-orthogonality. Query and support
+arrays and final 28-output tensors remain ordinary single-word fp32. The final
+moment accumulators also use ordinary fp32. **No device fp64 arithmetic is
+introduced.** This is a paired-fp32 precision experiment, not a claim that the
+original raw single-word arithmetic now passes.
+
+Pointwise arithmetic and elementary functions have separate CPU/CUDA checks:
+8,192 inputs, seven operations, three helper variants, all passing a **2e-12
+mixed-error check on the reconstructed two-word values**. Worst observed error
+is about 1.02e-13. Inputs cover varied finite normal magnitudes/quadrants; the
+log helper is private to positive normal `1+z` inputs. These helpers are not
+advertised as a generic IEEE arithmetic library or a proof over all ranges.
+
+### Distinguish arithmetic error from input information loss
+
+The two 4,096-pair samples retain both reference interpretations. Against the
+original fp64-valued queries/supports, the final variant passes the complete
+canonical sample but still exceeds 1e-5 in **10 scalar outputs on eight mixed
+pairs**, worst 2.003e-5. Those inputs were rounded when copied into the fp32
+query/support arrays; the original-input differences remain explicitly recorded.
+
+Against reference integrals at the **actual fp32 query/support values**, every
+output in both samples passes on CPU and CUDA. Worst mixed error is
+**1.797e-7 canonical / 1.400e-6 mixed** for the narrower final core. This is a
+separate diagnostic of the provided fp32 input values, not a relaxed budget or
+silent replacement of the original 116 independent fixtures. Those fixtures
+already pass against their unchanged original references.
+
+Five difficult cases at the rounded inputs also have independent signed-cone
+references, converged to the existing **2e-12 successive-order target**, including
+the worst remaining mixed arithmetic error (index 2655) and the worst original-
+input quantization error (index 1131). The independent result confirms the
+1.400e-6 arithmetic error at index 2655. Four cases use orders through 128/160;
+the difficult index 1131 required order 512. These are validation-only rules,
+not quadrature in the device implementation.
+
+### Performance and code-generation evidence
+
+All following warm timings use the **same full 28 outputs**, 1,048,576 pairs,
+256-thread blocks and seven-sample CUDA-event medians, with serialized execution:
+
+| Workload | Raw fp32, failing (ms) | Protected fp32 core (ms) | Matched fp64 (ms) | Core million pairs/s |
+|---|---:|---:|---:|---:|
+| Canonical | 0.215200 | **3.826176** | 10.114208 | **274.1** |
+| Mixed 256 tetrahedra | 0.430016 | **5.889856** | 16.818913 | **178.0** |
+
+The protected implementation is **2.64x / 2.86x faster than the matched fp64
+controls**, but **17.78x / 13.70x slower than failing raw fp32**. This is a
+precision-control baseline with a substantial remaining speed gap. At 131,072
+pairs, all variants are also measured in the evidence. Timings use unlocked
+clocks/caches and share the desktop GPU; do not compare minor differences with
+previous checkpoints as isolated speedups.
+
+A compiler issue was also isolated: grouping these large experimental native
+bodies in one Warp module changes inlining and local allocation depending on
+which other variants are loaded. Each ablation now has its own explicit unique
+kernel module and the same precision/compiler options. Explicitly inlining the
+two-float operators then gives a consistent **254 registers/thread, zero runtime
+local allocation and zero measured local LD/ST sectors**. The non-inlined fast
+variant still has 253 registers and 464 bytes runtime local allocation. Earlier
+non-isolated captures/timings remain in `/tmp` as intermediate evidence and are
+superseded by the final unique-module runs.
+
+Nsight confirms **zero executed fp64 arithmetic** in the final protected core.
+Canonical/mixed achieved occupancy is **16.67% / 16.67%**. Executed fp32
+add/mul/FMA counts are **75,366 / 67,763 FLOPs per pair** (FMA=2), compared with
+8,042 for the canonical raw-fp32 control. About 47,178 / 42,268 are float adds.
+The pair representation's arithmetic and dependency/register cost is now a
+measured limitation, even after eliminating local traffic. Profile replays take
+3.010/4.573 ms, separately from the warm medians above; their SM throughput is
+37.91%/43.45%, with FMA activity 34.31%/37.09%. No equivalence is assigned to
+transcendental, division, control or integer work in these FLOP counts.
+
+Per-pair inputs/output still occupy **132 bytes**, or 132 MiB at 1,048,576 pairs,
+with zero global integration scratch. Split static geometry uses **816 bytes
+for one tetrahedron / 184,416 bytes for 256**, equal to the fp64 geometry
+footprint. Separately measured static preparation/upload is 1.747/43.879 ms.
+Fresh allocation, input validation, upload, evaluation and readback take
+**59.733/60.560 ms** canonical/mixed; static geometry/JIT/search/reduction/material
+assembly are excluded. CUDA-graph output is bitwise identical to the ordinary
+launch for both million-pair workloads.
+
+Evidence: `docs/work/fluxbridge-fp32-stability-20261026.json`, with final CPU/CUDA
+ablations, arithmetic checks, unchanged-reference and actual-input statistics,
+five independent hard-case checks, matched timing reports, two final profiles,
+static/transfer memory and graph evidence. Exact generated native sources,
+output arrays, compiler variants and raw profiles are retained in
+`/tmp/fluxbridge-fp32-stability-20261026/`. All prior committed source hashes,
+measurement hashes, unrelated tracked changes and previous plan content verify
+preserved. The frozen analytic-fp64/numerical-fp32 production policy is unchanged.
+
+**Next executable precision gate:** replace cancellation-prone expanded radial
+potential/face divided differences with well-conditioned local or polynomial-
+basis evaluations. Use this paired implementation as a precision control,
+protect fewer live quantities, and retain the same independent 1e-5 checks and
+matched CUDA counters/timings. Selected device-fp64 operations remain a last-
+resort candidate after these fp32 alternatives; none was added here. Production
+promotion and the native compact boundary regression fix remain separate gates.
+Existing 2D solid/fibre and browser implementations, warpSPH/Core/Integrator and
+Stage 5 integration remain untouched.
