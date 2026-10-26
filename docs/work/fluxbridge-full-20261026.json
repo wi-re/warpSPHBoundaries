@@ -1,0 +1,5057 @@
+{
+  "schema": 1,
+  "date": "2026-10-26",
+  "scope": "One shared-edge analytic fp64 W6 kernel: exact 28-output baseline ordering, ten value moments, twelve first-gradient moments and six symmetric kernel-Hessian moments",
+  "runs": {
+    "cpu-final": {
+      "device": "cpu",
+      "device_name": "x86_64",
+      "precision": "float64",
+      "mixed": false,
+      "accuracy": [
+        {
+          "reference": "fixtures",
+          "family": "values",
+          "outputs": 260,
+          "finite": true,
+          "worst": 5.203667348998754e-14,
+          "label": "switch_below",
+          "channel": 0
+        },
+        {
+          "reference": "fixtures",
+          "family": "gradient",
+          "outputs": 312,
+          "finite": true,
+          "worst": 2.73166763216192e-13,
+          "label": "switch_below",
+          "channel": 11
+        },
+        {
+          "reference": "fixtures",
+          "family": "hessian",
+          "outputs": 156,
+          "finite": true,
+          "worst": 3.0982276960624483e-12,
+          "label": "slanted_face_roundoff",
+          "channel": 22
+        },
+        {
+          "reference": "fixtures",
+          "family": "full",
+          "outputs": 728,
+          "finite": true,
+          "worst": 3.0982276960624483e-12,
+          "label": "slanted_face_roundoff",
+          "channel": 22
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "values",
+          "outputs": 900,
+          "finite": true,
+          "worst": 5.5509093212707906e-14,
+          "label": [
+            14,
+            "face"
+          ],
+          "channel": 0
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "gradient",
+          "outputs": 1080,
+          "finite": true,
+          "worst": 7.112618247176261e-13,
+          "label": [
+            12,
+            "interior"
+          ],
+          "channel": 10
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "hessian",
+          "outputs": 540,
+          "finite": true,
+          "worst": 6.623655452855306e-12,
+          "label": [
+            11,
+            "face"
+          ],
+          "channel": 25
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "full",
+          "outputs": 2520,
+          "finite": true,
+          "worst": 6.623655452855306e-12,
+          "label": [
+            11,
+            "face"
+          ],
+          "channel": 25
+        }
+      ],
+      "properties": {
+        "vertex_order": 2.4037962736185744e-13,
+        "translation": 7.770070087318193e-13,
+        "units": 6.23633051380172e-14,
+        "rotation": 1.737623116638127e-12,
+        "subdivision_internal_faces": 2.6796923440916575e-16,
+        "empty_output_count": 0
+      },
+      "rows": [],
+      "requests": [
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            2,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            1,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            2,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            2
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1,
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1,
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            2,
+            2
+          ]
+        }
+      ],
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      },
+      "scope": "Exact baseline ordering: ten value moments, twelve first-gradient moments, six symmetric Hessian moments; one kernel, shared edge stream",
+      "passed": true
+    },
+    "cuda-final": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "mixed": false,
+      "accuracy": [
+        {
+          "reference": "fixtures",
+          "family": "values",
+          "outputs": 260,
+          "finite": true,
+          "worst": 6.31217426874781e-14,
+          "label": "slanted_face_roundoff",
+          "channel": 0
+        },
+        {
+          "reference": "fixtures",
+          "family": "gradient",
+          "outputs": 312,
+          "finite": true,
+          "worst": 2.12454861397407e-13,
+          "label": "near_face",
+          "channel": 11
+        },
+        {
+          "reference": "fixtures",
+          "family": "hessian",
+          "outputs": 156,
+          "finite": true,
+          "worst": 1.28222926568599e-12,
+          "label": "switch_below",
+          "channel": 22
+        },
+        {
+          "reference": "fixtures",
+          "family": "full",
+          "outputs": 728,
+          "finite": true,
+          "worst": 1.2361432971367152e-12,
+          "label": "switch_below",
+          "channel": 22
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "values",
+          "outputs": 900,
+          "finite": true,
+          "worst": 4.692719084054364e-14,
+          "label": [
+            0,
+            "face"
+          ],
+          "channel": 0
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "gradient",
+          "outputs": 1080,
+          "finite": true,
+          "worst": 4.355512288046659e-13,
+          "label": [
+            12,
+            "interior"
+          ],
+          "channel": 10
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "hessian",
+          "outputs": 540,
+          "finite": true,
+          "worst": 3.0019222138406807e-12,
+          "label": [
+            4,
+            "face"
+          ],
+          "channel": 26
+        },
+        {
+          "reference": "independent_shapes",
+          "family": "full",
+          "outputs": 2520,
+          "finite": true,
+          "worst": 3.0019222138406807e-12,
+          "label": [
+            4,
+            "face"
+          ],
+          "channel": 26
+        }
+      ],
+      "properties": {
+        "vertex_order": 3.2050188084577083e-13,
+        "translation": 6.303628264689534e-13,
+        "units": 7.414416848345802e-14,
+        "rotation": 1.6930365584858787e-13,
+        "subdivision_internal_faces": 5.35938468818153e-16,
+        "empty_output_count": 0
+      },
+      "rows": [
+        {
+          "pairs": 512,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 59392,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.4320526495575905,
+            "samples_ms": [
+              0.3941478207707405,
+              0.6918385624885559,
+              0.426512211561203,
+              0.5538016557693481,
+              0.43147895485162735,
+              0.4770476371049881,
+              0.4320526495575905
+            ],
+            "cuda_event_median_ms": 0.3007679879665375
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.4417393356561661,
+            "samples_ms": [
+              0.4417393356561661,
+              2.1355850622057915,
+              1.1393902823328972,
+              0.4237685352563858,
+              0.4371507093310356,
+              0.7081516087055206,
+              0.42880140244960785
+            ],
+            "cuda_event_median_ms": 0.3004800081253052
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.5826037377119064,
+            "samples_ms": [
+              1.0433737188577652,
+              0.5826037377119064,
+              0.4384499043226242
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 512,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 67584,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.40673650801181793,
+            "samples_ms": [
+              0.4417514428496361,
+              0.5199387669563293,
+              0.40630437433719635,
+              0.40480121970176697,
+              0.4046820104122162,
+              0.40673650801181793,
+              0.5209725350141525
+            ],
+            "cuda_event_median_ms": 0.2811200022697449
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.403047539293766,
+            "samples_ms": [
+              0.3529982641339302,
+              0.40558725595474243,
+              0.3987615928053856,
+              0.40978193283081055,
+              0.403047539293766,
+              0.40196534246206284,
+              0.40931161493062973
+            ],
+            "cuda_event_median_ms": 0.2805440127849579
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.4134206101298332,
+            "samples_ms": [
+              0.42337551712989807,
+              0.4134206101298332,
+              0.408208929002285
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 512,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 43008,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.31975843012332916,
+            "samples_ms": [
+              0.5903849378228188,
+              0.3889733925461769,
+              0.3196755424141884,
+              0.4673413932323456,
+              0.3091394901275635,
+              0.30959397554397583,
+              0.31975843012332916
+            ],
+            "cuda_event_median_ms": 0.18675200641155243
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.3774203360080719,
+            "samples_ms": [
+              0.30250754207372665,
+              0.4303855821490288,
+              0.31346362084150314,
+              0.3219805657863617,
+              0.49716047942638397,
+              0.5147671326994896,
+              0.3774203360080719
+            ],
+            "cuda_event_median_ms": 0.18643200397491455
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.32750610262155533,
+            "samples_ms": [
+              0.3663143143057823,
+              0.31733326613903046,
+              0.32750610262155533
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 512,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 133120,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.4792436957359314,
+            "samples_ms": [
+              0.5492577329277992,
+              0.4676375538110733,
+              0.4792436957359314,
+              0.4773782566189766,
+              0.5393540486693382,
+              0.5427692085504532,
+              0.46908948570489883
+            ],
+            "cuda_event_median_ms": 0.35043200850486755
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.4693465307354927,
+            "samples_ms": [
+              0.4274370148777962,
+              0.4693465307354927,
+              0.6018998101353645,
+              0.4692496731877327,
+              0.47931261360645294,
+              0.479135662317276,
+              0.468679703772068
+            ],
+            "cuda_event_median_ms": 0.35014399886131287
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.48888660967350006,
+            "samples_ms": [
+              0.49398094415664673,
+              0.48412661999464035,
+              0.48888660967350006
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 950272,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.6810789927840233,
+            "samples_ms": [
+              0.42033661156892776,
+              0.5916766822338104,
+              0.5074571818113327,
+              0.8815554901957512,
+              0.6810789927840233,
+              0.6886003538966179,
+              0.713384710252285
+            ],
+            "cuda_event_median_ms": 0.3020159900188446
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.7198788225650787,
+            "samples_ms": [
+              0.36612898111343384,
+              0.5752136930823326,
+              0.6222417578101158,
+              0.926705077290535,
+              0.7198788225650787,
+              1.0212883353233337,
+              0.8550304919481277
+            ],
+            "cuda_event_median_ms": 0.30083200335502625
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.7691541686654091,
+            "samples_ms": [
+              0.5890205502510071,
+              0.9365463629364967,
+              0.7691541686654091
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 1081344,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.6170505657792091,
+            "samples_ms": [
+              0.4886947572231293,
+              3.193463198840618,
+              0.6752917543053627,
+              0.4056748002767563,
+              0.41597243398427963,
+              0.8646994829177856,
+              0.6170505657792091
+            ],
+            "cuda_event_median_ms": 0.2826879918575287
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.4050862044095993,
+            "samples_ms": [
+              0.3603752702474594,
+              0.4053069278597832,
+              0.39986055344343185,
+              0.4016337916254997,
+              0.4085944965481758,
+              0.4050862044095993,
+              0.40587782859802246
+            ],
+            "cuda_event_median_ms": 0.2818880081176758
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.6718840450048447,
+            "samples_ms": [
+              0.5733268335461617,
+              0.6718840450048447,
+              0.8204877376556396
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 688128,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.3085397183895111,
+            "samples_ms": [
+              0.8270740509033203,
+              0.30821841210126877,
+              0.3085397183895111,
+              0.32015517354011536,
+              0.3062235191464424,
+              0.3062048926949501,
+              0.3133891150355339
+            ],
+            "cuda_event_median_ms": 0.18755200505256653
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.3114771097898483,
+            "samples_ms": [
+              0.2563484013080597,
+              0.31614024192094803,
+              0.3114771097898483,
+              0.30905846506357193,
+              0.3147069364786148,
+              0.3094533458352089,
+              0.31400658190250397
+            ],
+            "cuda_event_median_ms": 0.18774400651454926
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.42631570249795914,
+            "samples_ms": [
+              0.42631570249795914,
+              0.40189921855926514,
+              0.5837604403495789
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 2129920,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.6858259439468384,
+            "samples_ms": [
+              0.635041855275631,
+              0.715925358235836,
+              0.5367090925574303,
+              0.89289341121912,
+              0.6858259439468384,
+              0.9863767772912979,
+              0.6281621754169464
+            ],
+            "cuda_event_median_ms": 0.351936012506485
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.673515722155571,
+            "samples_ms": [
+              0.5119377747178078,
+              0.673515722155571,
+              0.9382450953125954,
+              1.1852867901325226,
+              1.339486800134182,
+              0.48157665878534317,
+              0.4928195849061012
+            ],
+            "cuda_event_median_ms": 0.3517119884490967
+          },
+          "upload_kernel_readback": {
+            "median_ms": 1.3039782643318176,
+            "samples_ms": [
+              0.956851989030838,
+              1.3113664463162422,
+              1.3039782643318176
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 15204352,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.0279444977641106,
+            "samples_ms": [
+              1.5979129821062088,
+              1.0262923315167427,
+              1.0224739089608192,
+              1.0296795517206192,
+              1.0279444977641106,
+              1.10696442425251,
+              1.0203281417489052
+            ],
+            "cuda_event_median_ms": 0.8973439931869507
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 1.4347704127430916,
+            "samples_ms": [
+              0.9629353880882263,
+              1.4582686126232147,
+              2.2199908271431923,
+              1.4570504426956177,
+              1.4347704127430916,
+              1.0290248319506645,
+              1.0232487693428993
+            ],
+            "cuda_event_median_ms": 0.8967679738998413
+          },
+          "upload_kernel_readback": {
+            "median_ms": 6.048446521162987,
+            "samples_ms": [
+              5.9485845267772675,
+              6.355735473334789,
+              6.048446521162987
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 17301504,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.9642988443374634,
+            "samples_ms": [
+              1.2402059510350227,
+              0.9638378396630287,
+              0.9585786610841751,
+              0.9672828018665314,
+              1.0103564709424973,
+              0.9642988443374634,
+              0.9555267170071602
+            ],
+            "cuda_event_median_ms": 0.8399360179901123
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.9981095790863037,
+            "samples_ms": [
+              0.9117545560002327,
+              0.9963726624846458,
+              0.9981095790863037,
+              1.1365124955773354,
+              1.6323169693350792,
+              2.1640947088599205,
+              0.9649405255913734
+            ],
+            "cuda_event_median_ms": 0.8393279910087585
+          },
+          "upload_kernel_readback": {
+            "median_ms": 6.958669982850552,
+            "samples_ms": [
+              6.958669982850552,
+              6.934146396815777,
+              7.192619144916534
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 11010048,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.7302109152078629,
+            "samples_ms": [
+              0.7302109152078629,
+              2.8114765882492065,
+              0.981316901743412,
+              0.6814757362008095,
+              0.9839534759521484,
+              0.6846459582448006,
+              0.6838236004114151
+            ],
+            "cuda_event_median_ms": 0.5576000213623047
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.853218138217926,
+            "samples_ms": [
+              0.6235912442207336,
+              0.6750551983714104,
+              0.7175086066126823,
+              0.853218138217926,
+              1.345931552350521,
+              1.5708580613136292,
+              1.4300374314188957
+            ],
+            "cuda_event_median_ms": 0.5583360195159912
+          },
+          "upload_kernel_readback": {
+            "median_ms": 3.7306640297174454,
+            "samples_ms": [
+              2.110936678946018,
+              3.7306640297174454,
+              3.8983719423413277
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 34078720,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.231643371284008,
+            "samples_ms": [
+              1.8560243770480156,
+              1.1714743450284004,
+              1.1638002470135689,
+              1.1821677908301353,
+              1.2319618836045265,
+              1.231643371284008,
+              1.3331221416592598
+            ],
+            "cuda_event_median_ms": 1.0485759973526
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 1.1754492297768593,
+            "samples_ms": [
+              1.4682542532682419,
+              1.3759415596723557,
+              1.1723041534423828,
+              1.4743097126483917,
+              1.1747879907488823,
+              1.174435019493103,
+              1.1754492297768593
+            ],
+            "cuda_event_median_ms": 1.0480639934539795
+          },
+          "upload_kernel_readback": {
+            "median_ms": 14.436065219342709,
+            "samples_ms": [
+              12.5615568831563,
+              14.64112475514412,
+              14.436065219342709
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 121634816,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 8.31528753042221,
+            "samples_ms": [
+              8.353140205144882,
+              10.269185528159142,
+              8.496586233377457,
+              8.31528753042221,
+              8.081432431936264,
+              7.737408392131329,
+              7.2852931916713715
+            ],
+            "cuda_event_median_ms": 7.960288047790527
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 7.91905727237463,
+            "samples_ms": [
+              7.6821353286504745,
+              7.91905727237463,
+              8.171345107257366,
+              9.150907397270203,
+              7.6185567304492,
+              8.478921838104725,
+              7.660165429115295
+            ],
+            "cuda_event_median_ms": 7.610688209533691
+          },
+          "upload_kernel_readback": {
+            "median_ms": 50.70609226822853,
+            "samples_ms": [
+              49.90830924361944,
+              50.70609226822853,
+              51.17449443787336
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 138412032,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 6.862301379442215,
+            "samples_ms": [
+              7.452836260199547,
+              6.84403907507658,
+              7.147275842726231,
+              7.337105460464954,
+              6.862301379442215,
+              6.841420195996761,
+              6.749889813363552
+            ],
+            "cuda_event_median_ms": 6.746528148651123
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 7.090296596288681,
+            "samples_ms": [
+              6.843305192887783,
+              7.944679819047451,
+              6.94337859749794,
+              7.090296596288681,
+              6.81255292147398,
+              7.43172038346529,
+              7.6317498460412025
+            ],
+            "cuda_event_median_ms": 6.865632057189941
+          },
+          "upload_kernel_readback": {
+            "median_ms": 57.953073643147945,
+            "samples_ms": [
+              53.72084490954876,
+              58.74976236373186,
+              57.953073643147945
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 88080384,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 4.9023861065506935,
+            "samples_ms": [
+              5.198415368795395,
+              4.9023861065506935,
+              4.551776684820652,
+              4.825280047953129,
+              4.642222076654434,
+              5.068834871053696,
+              5.03872986882925
+            ],
+            "cuda_event_median_ms": 4.578688144683838
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 4.702798090875149,
+            "samples_ms": [
+              6.542949937283993,
+              5.290099419653416,
+              5.632665939629078,
+              4.702798090875149,
+              4.498324356973171,
+              4.608659073710442,
+              4.647440277040005
+            ],
+            "cuda_event_median_ms": 4.371679782867432
+          },
+          "upload_kernel_readback": {
+            "median_ms": 34.59953889250755,
+            "samples_ms": [
+              31.607759185135365,
+              35.49063764512539,
+              34.59953889250755
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 272629760,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 9.161910973489285,
+            "samples_ms": [
+              8.663478307425976,
+              9.161910973489285,
+              9.420911781489849,
+              8.850129321217537,
+              9.326555766165257,
+              9.097376838326454,
+              9.610331617295742
+            ],
+            "cuda_event_median_ms": 9.049759864807129
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 9.434501640498638,
+            "samples_ms": [
+              8.803979493677616,
+              10.922254994511604,
+              9.753155522048473,
+              9.061510674655437,
+              12.065092101693153,
+              8.651233278214931,
+              9.434501640498638
+            ],
+            "cuda_event_median_ms": 8.831328392028809
+          },
+          "upload_kernel_readback": {
+            "median_ms": 109.25684124231339,
+            "samples_ms": [
+              102.60518081486225,
+              109.25684124231339,
+              110.0073466077447
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "requests": [
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            2,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            1,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            2,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            2
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1,
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1,
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            2,
+            2
+          ]
+        }
+      ],
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      },
+      "scope": "Exact baseline ordering: ten value moments, twelve first-gradient moments, six symmetric Hessian moments; one kernel, shared edge stream",
+      "passed": true,
+      "static_setup": {
+        "median_ms": 0.5606580525636673,
+        "samples_ms": [
+          0.5606580525636673
+        ],
+        "cuda_event_median_ms": null
+      },
+      "static_geometry_bytes": 816
+    },
+    "cuda-mixed": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "mixed": true,
+      "accuracy": [],
+      "properties": {},
+      "rows": [
+        {
+          "pairs": 512,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 59392,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.8107414469122887,
+            "samples_ms": [
+              1.000317744910717,
+              0.7284190505743027,
+              1.5664612874388695,
+              0.8389754220843315,
+              0.7481230422854424,
+              0.7464736700057983,
+              0.8107414469122887
+            ],
+            "cuda_event_median_ms": 0.6205440163612366
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.8089691400527954,
+            "samples_ms": [
+              0.6843423470854759,
+              0.9147236123681068,
+              0.95418281853199,
+              0.7488289847970009,
+              0.8145766332745552,
+              0.8089691400527954,
+              0.7421476766467094
+            ],
+            "cuda_event_median_ms": 0.6205440163612366
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.7679387927055359,
+            "samples_ms": [
+              0.9203320369124413,
+              0.7679387927055359,
+              0.7569324225187302
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 512,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 67584,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.7203090935945511,
+            "samples_ms": [
+              0.7051229476928711,
+              0.7133884355425835,
+              0.7278230041265488,
+              0.7192296907305717,
+              0.7318612188100815,
+              0.7203090935945511,
+              0.7269969210028648
+            ],
+            "cuda_event_median_ms": 0.600383996963501
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.7384112104773521,
+            "samples_ms": [
+              0.6714528426527977,
+              0.7261121645569801,
+              0.7218997925519943,
+              0.741095282137394,
+              0.7384112104773521,
+              0.8209142833948135,
+              1.2067900970578194
+            ],
+            "cuda_event_median_ms": 0.599839985370636
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.9741317480802536,
+            "samples_ms": [
+              1.719960942864418,
+              0.8649025112390518,
+              0.9741317480802536
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 512,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 43008,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.5681971088051796,
+            "samples_ms": [
+              0.47186296433210373,
+              1.3157855719327927,
+              0.7531866431236267,
+              0.4961146041750908,
+              0.5603767931461334,
+              0.6204340606927872,
+              0.5681971088051796
+            ],
+            "cuda_event_median_ms": 0.3694719970226288
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.5631214007735252,
+            "samples_ms": [
+              0.7868725806474686,
+              2.5423532351851463,
+              0.4923483356833458,
+              0.5049910396337509,
+              0.7820101454854012,
+              0.5631214007735252,
+              0.4948219284415245
+            ],
+            "cuda_event_median_ms": 0.36847999691963196
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.5315430462360382,
+            "samples_ms": [
+              0.5315430462360382,
+              0.4955567419528961,
+              0.5784956738352776
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 512,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 133120,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.8033858612179756,
+            "samples_ms": [
+              0.9529506787657738,
+              0.7944386452436447,
+              0.8056443184614182,
+              0.8033858612179756,
+              0.7945504039525986,
+              0.8144909515976906,
+              0.7941918447613716
+            ],
+            "cuda_event_median_ms": 0.6763200163841248
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.9321784600615501,
+            "samples_ms": [
+              0.7472820580005646,
+              0.9321784600615501,
+              1.5076445415616035,
+              0.9489627555012703,
+              0.8024144917726517,
+              0.84733497351408,
+              1.2846440076828003
+            ],
+            "cuda_event_median_ms": 0.6756479740142822
+          },
+          "upload_kernel_readback": {
+            "median_ms": 1.6647595912218094,
+            "samples_ms": [
+              1.1458005756139755,
+              1.6647595912218094,
+              2.0673200488090515
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 950272,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.9056488052010536,
+            "samples_ms": [
+              1.0116631165146828,
+              1.2517990544438362,
+              0.9056488052010536,
+              0.8221771568059921,
+              1.053929328918457,
+              0.8749272674322128,
+              0.746564008295536
+            ],
+            "cuda_event_median_ms": 0.6232960224151611
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 1.1606905609369278,
+            "samples_ms": [
+              1.1654654517769814,
+              0.7561380043625832,
+              1.5902211889624596,
+              1.1606905609369278,
+              1.1643106117844582,
+              0.8741794154047966,
+              0.8260216563940048
+            ],
+            "cuda_event_median_ms": 0.6220160126686096
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.8968384936451912,
+            "samples_ms": [
+              0.9249318391084671,
+              0.8809873834252357,
+              0.8968384936451912
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 1081344,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.7249591872096062,
+            "samples_ms": [
+              0.7222751155495644,
+              1.1729924008250237,
+              0.8113263174891472,
+              0.7249591872096062,
+              0.7213195785880089,
+              0.7237046957015991,
+              0.9647170081734657
+            ],
+            "cuda_event_median_ms": 0.6016640067100525
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.7888106629252434,
+            "samples_ms": [
+              0.7801810279488564,
+              1.0013440623879433,
+              0.7991669699549675,
+              0.7954621687531471,
+              0.7888106629252434,
+              0.7195482030510902,
+              0.7323827594518661
+            ],
+            "cuda_event_median_ms": 0.6007680296897888
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.9854286909103394,
+            "samples_ms": [
+              0.8958922699093819,
+              0.9854286909103394,
+              1.1290675029158592
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 688128,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.4896344617009163,
+            "samples_ms": [
+              0.5603628233075142,
+              0.4846826195716858,
+              0.4888353869318962,
+              0.5025099962949753,
+              0.4896344617009163,
+              0.48899929970502853,
+              0.4960987716913223
+            ],
+            "cuda_event_median_ms": 0.37033599615097046
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 0.4949839785695076,
+            "samples_ms": [
+              0.43488759547472,
+              0.4959050565958023,
+              0.4949839785695076,
+              0.4919636994600296,
+              0.6717536598443985,
+              0.7104994729161263,
+              0.49200188368558884
+            ],
+            "cuda_event_median_ms": 0.3699199855327606
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.5809171125292778,
+            "samples_ms": [
+              0.5979565903544426,
+              0.5809171125292778,
+              0.5740886554121971
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 8192,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 2129920,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.939544290304184,
+            "samples_ms": [
+              0.7791388779878616,
+              0.86220633238554,
+              1.333087682723999,
+              1.0313615202903748,
+              1.5294905751943588,
+              0.939544290304184,
+              0.8029211312532425
+            ],
+            "cuda_event_median_ms": 0.6774719953536987
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 1.1413739994168282,
+            "samples_ms": [
+              0.838862732052803,
+              1.6980571672320366,
+              1.9506430253386497,
+              1.3795150443911552,
+              0.8018417283892632,
+              1.1413739994168282,
+              0.797211192548275
+            ],
+            "cuda_event_median_ms": 0.6755520105361938
+          },
+          "upload_kernel_readback": {
+            "median_ms": 1.5927627682685852,
+            "samples_ms": [
+              1.0500354692339897,
+              1.6266154125332832,
+              1.5927627682685852
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 15204352,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 2.066798508167267,
+            "samples_ms": [
+              2.483544871211052,
+              1.977355219423771,
+              1.9802991300821304,
+              1.9922750070691109,
+              2.421812154352665,
+              2.066798508167267,
+              2.1649813279509544
+            ],
+            "cuda_event_median_ms": 1.8589119911193848
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 2.2316938266158104,
+            "samples_ms": [
+              1.921861432492733,
+              3.3105090260505676,
+              2.126326784491539,
+              2.596041187644005,
+              2.060248516499996,
+              2.420498989522457,
+              2.2316938266158104
+            ],
+            "cuda_event_median_ms": 1.8594880104064941
+          },
+          "upload_kernel_readback": {
+            "median_ms": 6.867745891213417,
+            "samples_ms": [
+              5.306515842676163,
+              6.867745891213417,
+              7.246656343340874
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 17301504,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 2.2155530750751495,
+            "samples_ms": [
+              2.0697293803095818,
+              2.43200920522213,
+              2.2155530750751495,
+              2.085150219500065,
+              2.0972834900021553,
+              3.3671678975224495,
+              3.5270899534225464
+            ],
+            "cuda_event_median_ms": 1.7973120212554932
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 2.0440490916371346,
+            "samples_ms": [
+              1.9252477213740349,
+              2.0440490916371346,
+              1.9254209473729134,
+              1.918775960803032,
+              2.393057569861412,
+              3.281259909272194,
+              2.4683624505996704
+            ],
+            "cuda_event_median_ms": 1.7963199615478516
+          },
+          "upload_kernel_readback": {
+            "median_ms": 7.884085178375244,
+            "samples_ms": [
+              8.173782378435135,
+              7.884085178375244,
+              7.872266694903374
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 11010048,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.4764657244086266,
+            "samples_ms": [
+              1.198786310851574,
+              1.3496344909071922,
+              1.4512985944747925,
+              1.5476727858185768,
+              1.4764657244086266,
+              1.9357167184352875,
+              2.546362578868866
+            ],
+            "cuda_event_median_ms": 1.1045119762420654
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 1.3557877391576767,
+            "samples_ms": [
+              1.185431145131588,
+              1.620713621377945,
+              1.7414521425962448,
+              1.3247542083263397,
+              1.2339940294623375,
+              1.3557877391576767,
+              1.5653036534786224
+            ],
+            "cuda_event_median_ms": 1.1036159992218018
+          },
+          "upload_kernel_readback": {
+            "median_ms": 4.234166815876961,
+            "samples_ms": [
+              2.5959303602576256,
+              4.3124910444021225,
+              4.234166815876961
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 34078720,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 2.3184819146990776,
+            "samples_ms": [
+              2.1732021123170853,
+              2.178899012506008,
+              2.3184819146990776,
+              2.995929680764675,
+              3.642681986093521,
+              2.219858579337597,
+              2.497510053217411
+            ],
+            "cuda_event_median_ms": 2.024832010269165
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 2.312065102159977,
+            "samples_ms": [
+              2.088022418320179,
+              2.8564482927322388,
+              2.212994731962681,
+              2.312065102159977,
+              2.364528365433216,
+              2.340691164135933,
+              2.2159218788146973
+            ],
+            "cuda_event_median_ms": 2.023871898651123
+          },
+          "upload_kernel_readback": {
+            "median_ms": 17.184467986226082,
+            "samples_ms": [
+              14.741182327270508,
+              17.184467986226082,
+              19.03414912521839
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "values",
+          "outputs": 10,
+          "kernel_properties": {
+            "register_count": 144,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 121634816,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 16.00213162600994,
+            "samples_ms": [
+              15.98080899566412,
+              15.840797685086727,
+              16.06753747910261,
+              15.786043368279934,
+              16.1822447553277,
+              16.284211538732052,
+              16.00213162600994
+            ],
+            "cuda_event_median_ms": 15.843839645385742
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 16.45741704851389,
+            "samples_ms": [
+              16.430812887847424,
+              16.45741704851389,
+              16.542095690965652,
+              15.795613639056683,
+              17.786148004233837,
+              15.669628977775574,
+              17.018821090459824
+            ],
+            "cuda_event_median_ms": 16.231935501098633
+          },
+          "upload_kernel_readback": {
+            "median_ms": 55.25125749409199,
+            "samples_ms": [
+              55.05909863859415,
+              55.71708455681801,
+              55.25125749409199
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "gradient",
+          "outputs": 12,
+          "kernel_properties": {
+            "register_count": 136,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 138412032,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 16.380442306399345,
+            "samples_ms": [
+              18.05715635418892,
+              17.487582750618458,
+              18.39383039623499,
+              15.951499342918396,
+              16.356421634554863,
+              15.455072745680809,
+              16.380442306399345
+            ],
+            "cuda_event_median_ms": 16.25142478942871
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 17.007228918373585,
+            "samples_ms": [
+              17.007228918373585,
+              19.649851135909557,
+              16.620738431811333,
+              15.56979026645422,
+              16.381890513002872,
+              31.384265050292015,
+              31.43093828111887
+            ],
+            "cuda_event_median_ms": 16.512191772460938
+          },
+          "upload_kernel_readback": {
+            "median_ms": 63.66465240716934,
+            "samples_ms": [
+              66.59677345305681,
+              63.064709305763245,
+              63.66465240716934
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "hessian",
+          "outputs": 6,
+          "kernel_properties": {
+            "register_count": 128,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 88080384,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 9.57422237843275,
+            "samples_ms": [
+              9.89399291574955,
+              10.249217040836811,
+              9.125844575464725,
+              10.70126611739397,
+              9.35380905866623,
+              9.57422237843275,
+              9.240055456757545
+            ],
+            "cuda_event_median_ms": 9.129183769226074
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 10.190379805862904,
+            "samples_ms": [
+              9.529662318527699,
+              11.731244623661041,
+              10.630178265273571,
+              13.243289664387703,
+              10.190379805862904,
+              10.119734331965446,
+              9.799694642424583
+            ],
+            "cuda_event_median_ms": 9.918111801147461
+          },
+          "upload_kernel_readback": {
+            "median_ms": 37.42270916700363,
+            "samples_ms": [
+              34.22931116074324,
+              37.833329290151596,
+              37.42270916700363
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "family": "full",
+          "outputs": 28,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "input_output_bytes": 272629760,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 17.790483310818672,
+            "samples_ms": [
+              19.60273552685976,
+              20.409523509442806,
+              17.790483310818672,
+              17.736812122166157,
+              17.474963329732418,
+              16.94870088249445,
+              18.79213470965624
+            ],
+            "cuda_event_median_ms": 17.664928436279297
+          },
+          "graph_bitwise_equal": true,
+          "graph": {
+            "median_ms": 18.073951825499535,
+            "samples_ms": [
+              17.440148629248142,
+              18.26346106827259,
+              17.342697829008102,
+              18.37669499218464,
+              17.478350549936295,
+              18.073951825499535,
+              18.297783099114895
+            ],
+            "cuda_event_median_ms": 17.942432403564453
+          },
+          "upload_kernel_readback": {
+            "median_ms": 117.7064310759306,
+            "samples_ms": [
+              113.07308822870255,
+              118.78035962581635,
+              117.7064310759306
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "requests": [
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            2,
+            0,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            1,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            2,
+            0
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            1
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            2
+          ],
+          "derivative": []
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            1,
+            0,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            1,
+            0
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            1
+          ],
+          "derivative": [
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            0
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            0,
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1,
+            1
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            1,
+            2
+          ]
+        },
+        {
+          "alpha": [
+            0,
+            0,
+            0
+          ],
+          "derivative": [
+            2,
+            2
+          ]
+        }
+      ],
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      },
+      "scope": "Exact baseline ordering: ten value moments, twelve first-gradient moments, six symmetric Hessian moments; one kernel, shared edge stream",
+      "static_setup": {
+        "median_ms": 43.09220891445875,
+        "samples_ms": [
+          43.09220891445875
+        ],
+        "cuda_event_median_ms": null
+      },
+      "static_geometry_bytes": 184416
+    }
+  },
+  "launch_experiments": {
+    "canonical": {
+      "mixed": false,
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "rows": [
+        {
+          "pairs": 8192,
+          "block_dim": 32,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.29345694929361343,
+            "samples_ms": [
+              0.23439060896635056,
+              0.28534140437841415,
+              0.5722641944885254,
+              0.29345694929361343,
+              0.29112305492162704,
+              0.2954527735710144,
+              0.2976777032017708
+            ],
+            "cuda_event_median_ms": 0.1679680049419403
+          },
+          "graph": {
+            "median_ms": 0.29767025262117386,
+            "samples_ms": [
+              0.435464084148407,
+              0.31845178455114365,
+              0.285896472632885,
+              0.29767025262117386,
+              0.3037750720977783,
+              0.29464345425367355,
+              0.2890313044190407
+            ],
+            "cuda_event_median_ms": 0.16764800250530243
+          }
+        },
+        {
+          "pairs": 8192,
+          "block_dim": 64,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.33327750861644745,
+            "samples_ms": [
+              0.8874712511897087,
+              1.1320682242512703,
+              0.33327750861644745,
+              0.29153842478990555,
+              0.301864929497242,
+              0.5722083151340485,
+              0.29463134706020355
+            ],
+            "cuda_event_median_ms": 0.16828800737857819
+          },
+          "graph": {
+            "median_ms": 0.29100198298692703,
+            "samples_ms": [
+              0.23367442190647125,
+              0.33904798328876495,
+              0.3185039386153221,
+              0.28872862458229065,
+              0.28718821704387665,
+              0.2945214509963989,
+              0.29100198298692703
+            ],
+            "cuda_event_median_ms": 0.16803200542926788
+          }
+        },
+        {
+          "pairs": 8192,
+          "block_dim": 128,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.3081969916820526,
+            "samples_ms": [
+              0.25268085300922394,
+              0.3003394231200218,
+              0.3152471035718918,
+              0.3071259707212448,
+              0.3081969916820526,
+              0.4832139238715172,
+              0.4513924941420555
+            ],
+            "cuda_event_median_ms": 0.18828800320625305
+          },
+          "graph": {
+            "median_ms": 0.3164149820804596,
+            "samples_ms": [
+              0.35387370735406876,
+              0.3164149820804596,
+              0.3187498077750206,
+              0.3104601055383682,
+              0.32405368983745575,
+              0.31027384102344513,
+              0.3104656934738159
+            ],
+            "cuda_event_median_ms": 0.18796800076961517
+          }
+        },
+        {
+          "pairs": 8192,
+          "block_dim": 256,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.48424117267131805,
+            "samples_ms": [
+              0.4910491406917572,
+              0.47234538942575455,
+              0.47265365719795227,
+              0.48424117267131805,
+              0.5446877330541611,
+              0.5500437691807747,
+              0.4739006981253624
+            ],
+            "cuda_event_median_ms": 0.35126399993896484
+          },
+          "graph": {
+            "median_ms": 0.47879014164209366,
+            "samples_ms": [
+              0.41977502405643463,
+              0.4696901887655258,
+              0.47865789383649826,
+              0.5135750398039818,
+              0.5965093150734901,
+              0.47879014164209366,
+              0.560099259018898
+            ],
+            "cuda_event_median_ms": 0.35040000081062317
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 32,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 1.4626700431108475,
+            "samples_ms": [
+              1.1194348335266113,
+              1.7483970150351524,
+              1.1722603812813759,
+              1.4708871021866798,
+              1.1733835563063622,
+              1.6197264194488525,
+              1.4626700431108475
+            ],
+            "cuda_event_median_ms": 1.0470720529556274
+          },
+          "graph": {
+            "median_ms": 1.565488986670971,
+            "samples_ms": [
+              1.361367292702198,
+              1.1785086244344711,
+              1.1667516082525253,
+              1.565488986670971,
+              3.2536061480641365,
+              1.6120951622724533,
+              1.6175415366888046
+            ],
+            "cuda_event_median_ms": 1.0460480451583862
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 64,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 1.3551926240324974,
+            "samples_ms": [
+              1.9993102177977562,
+              1.1671241372823715,
+              1.4705052599310875,
+              1.3551926240324974,
+              1.3898201286792755,
+              1.1778315529227257,
+              1.2921709567308426
+            ],
+            "cuda_event_median_ms": 1.047327995300293
+          },
+          "graph": {
+            "median_ms": 1.171547919511795,
+            "samples_ms": [
+              1.1146776378154755,
+              1.5449663624167442,
+              3.168574534356594,
+              1.1686673387885094,
+              1.4652153477072716,
+              1.171547919511795,
+              1.1679204180836678
+            ],
+            "cuda_event_median_ms": 1.0462080240249634
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 128,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 1.268552616238594,
+            "samples_ms": [
+              1.12150888890028,
+              1.2528849765658379,
+              1.6179857775568962,
+              1.268552616238594,
+              1.3718940317630768,
+              1.1641187593340874,
+              1.484304666519165
+            ],
+            "cuda_event_median_ms": 1.047711968421936
+          },
+          "graph": {
+            "median_ms": 1.3206228613853455,
+            "samples_ms": [
+              1.1174865067005157,
+              1.3505984097719193,
+              1.3206228613853455,
+              1.6864640638232231,
+              1.4308085665106773,
+              1.3189297169446945,
+              1.169414259493351
+            ],
+            "cuda_event_median_ms": 1.0467840433120728
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 256,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 1.2999903410673141,
+            "samples_ms": [
+              1.1200634762644768,
+              1.2177936732769012,
+              1.2095039710402489,
+              1.5155579894781113,
+              2.15766578912735,
+              2.4359822273254395,
+              1.2999903410673141
+            ],
+            "cuda_event_median_ms": 1.0490880012512207
+          },
+          "graph": {
+            "median_ms": 1.183108426630497,
+            "samples_ms": [
+              1.5253275632858276,
+              1.183108426630497,
+              1.1796727776527405,
+              1.1799288913607597,
+              1.2268191203474998,
+              1.1796671897172928,
+              1.608075574040413
+            ],
+            "cuda_event_median_ms": 1.047935962677002
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 32,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 9.553131647408009,
+            "samples_ms": [
+              8.456730283796787,
+              10.877721942961216,
+              9.553131647408009,
+              11.562387458980083,
+              9.700173512101173,
+              8.564968593418598,
+              9.548474103212357
+            ],
+            "cuda_event_median_ms": 8.987808227539062
+          },
+          "graph": {
+            "median_ms": 8.89163464307785,
+            "samples_ms": [
+              8.889292366802692,
+              8.89163464307785,
+              9.274263866245747,
+              8.78689531236887,
+              8.611038327217102,
+              9.266048669815063,
+              9.782262146472931
+            ],
+            "cuda_event_median_ms": 8.581791877746582
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 64,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 9.160981513559818,
+            "samples_ms": [
+              8.380581624805927,
+              9.816514328122139,
+              9.440063498914242,
+              9.05018113553524,
+              9.75043885409832,
+              8.794775232672691,
+              9.160981513559818
+            ],
+            "cuda_event_median_ms": 9.024640083312988
+          },
+          "graph": {
+            "median_ms": 9.250711649656296,
+            "samples_ms": [
+              8.726486004889011,
+              9.59931779652834,
+              8.613882586359978,
+              9.250711649656296,
+              9.345242753624916,
+              8.84682685136795,
+              10.631691664457321
+            ],
+            "cuda_event_median_ms": 8.65884780883789
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 128,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 9.680673480033875,
+            "samples_ms": [
+              9.351189248263836,
+              9.89911612123251,
+              11.260343715548515,
+              8.756312541663647,
+              11.519190855324268,
+              9.680673480033875,
+              9.280462749302387
+            ],
+            "cuda_event_median_ms": 9.280960083007812
+          },
+          "graph": {
+            "median_ms": 8.709127083420753,
+            "samples_ms": [
+              8.53252038359642,
+              8.709127083420753,
+              9.426879696547985,
+              8.48486740142107,
+              8.592548780143261,
+              9.240551851689816,
+              9.370563551783562
+            ],
+            "cuda_event_median_ms": 8.469056129455566
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 256,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 9.257598780095577,
+            "samples_ms": [
+              8.96961148828268,
+              9.81211569160223,
+              9.257598780095577,
+              9.46511048823595,
+              9.131849743425846,
+              8.701014332473278,
+              9.686807170510292
+            ],
+            "cuda_event_median_ms": 8.90396785736084
+          },
+          "graph": {
+            "median_ms": 9.718917310237885,
+            "samples_ms": [
+              8.753858506679535,
+              9.718917310237885,
+              8.97765252739191,
+              9.067323058843613,
+              10.705815628170967,
+              10.24509035050869,
+              11.623889207839966
+            ],
+            "cuda_event_median_ms": 8.993887901306152
+          }
+        }
+      ],
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834"
+      }
+    },
+    "mixed": {
+      "mixed": true,
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "rows": [
+        {
+          "pairs": 8192,
+          "block_dim": 32,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.5750227719545364,
+            "samples_ms": [
+              0.6224755197763443,
+              0.7311208173632622,
+              0.4504695534706116,
+              0.461038202047348,
+              0.7327180355787277,
+              0.5750227719545364,
+              0.5709799006581306
+            ],
+            "cuda_event_median_ms": 0.32393598556518555
+          },
+          "graph": {
+            "median_ms": 0.519556924700737,
+            "samples_ms": [
+              0.6277356296777725,
+              1.341826282441616,
+              0.519556924700737,
+              0.8157500997185707,
+              0.449642539024353,
+              0.4566069692373276,
+              0.4525305703282356
+            ],
+            "cuda_event_median_ms": 0.3250559866428375
+          }
+        },
+        {
+          "pairs": 8192,
+          "block_dim": 64,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.445755198597908,
+            "samples_ms": [
+              0.39126165211200714,
+              0.4447717219591141,
+              0.44558942317962646,
+              0.4538660869002342,
+              0.4541287198662758,
+              0.45359786599874496,
+              0.445755198597908
+            ],
+            "cuda_event_median_ms": 0.3240639865398407
+          },
+          "graph": {
+            "median_ms": 0.4476262256503105,
+            "samples_ms": [
+              0.3928467631340027,
+              0.49221236258745193,
+              0.9994218125939369,
+              0.4465309903025627,
+              0.4476262256503105,
+              0.4447717219591141,
+              0.6422940641641617
+            ],
+            "cuda_event_median_ms": 0.32438400387763977
+          }
+        },
+        {
+          "pairs": 8192,
+          "block_dim": 128,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.4829131066799164,
+            "samples_ms": [
+              0.4305746406316757,
+              0.4950249567627907,
+              0.48915017396211624,
+              0.48173870891332626,
+              0.4829131066799164,
+              0.4912465810775757,
+              0.48287399113178253
+            ],
+            "cuda_event_median_ms": 0.3607040047645569
+          },
+          "graph": {
+            "median_ms": 0.4910016432404518,
+            "samples_ms": [
+              0.426306389272213,
+              0.4910016432404518,
+              0.48366840928792953,
+              0.49123913049697876,
+              0.5603833124041557,
+              0.5498761311173439,
+              0.49092434346675873
+            ],
+            "cuda_event_median_ms": 0.3601599931716919
+          }
+        },
+        {
+          "pairs": 8192,
+          "block_dim": 256,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 0.8061705157160759,
+            "samples_ms": [
+              0.9345784783363342,
+              0.914333388209343,
+              0.8050696924328804,
+              0.7973480969667435,
+              0.8061705157160759,
+              0.8049523457884789,
+              0.9774500504136086
+            ],
+            "cuda_event_median_ms": 0.6768640279769897
+          },
+          "graph": {
+            "median_ms": 0.8662324398756027,
+            "samples_ms": [
+              0.9942622855305672,
+              0.8662324398756027,
+              0.8088778704404831,
+              0.7971683517098427,
+              0.8017746731638908,
+              0.9172018617391586,
+              0.9407270699739456
+            ],
+            "cuda_event_median_ms": 0.6755520105361938
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 32,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 2.4284161627292633,
+            "samples_ms": [
+              2.0940089598298073,
+              2.138572745025158,
+              2.1339179947972298,
+              2.444382756948471,
+              2.4284161627292633,
+              2.8083445504307747,
+              2.7373936027288437
+            ],
+            "cuda_event_median_ms": 2.02239990234375
+          },
+          "graph": {
+            "median_ms": 2.2743921726942062,
+            "samples_ms": [
+              2.3308834061026573,
+              2.268449403345585,
+              2.567300572991371,
+              2.4335430935025215,
+              2.22003273665905,
+              2.145489677786827,
+              2.2743921726942062
+            ],
+            "cuda_event_median_ms": 2.0215680599212646
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 64,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 2.222892828285694,
+            "samples_ms": [
+              2.15244572609663,
+              2.1429676562547684,
+              2.4482160806655884,
+              2.32489500194788,
+              2.4288883432745934,
+              2.222892828285694,
+              2.1968986839056015
+            ],
+            "cuda_event_median_ms": 2.0221760272979736
+          },
+          "graph": {
+            "median_ms": 2.561553381383419,
+            "samples_ms": [
+              2.0909300073981285,
+              4.251235164701939,
+              2.6548905298113823,
+              2.359393984079361,
+              2.561553381383419,
+              2.585221081972122,
+              2.253706566989422
+            ],
+            "cuda_event_median_ms": 2.0209920406341553
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 128,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 2.1533863618969917,
+            "samples_ms": [
+              2.09187064319849,
+              2.3420555517077446,
+              2.137814648449421,
+              2.142764627933502,
+              2.278398722410202,
+              2.3401398211717606,
+              2.1533863618969917
+            ],
+            "cuda_event_median_ms": 2.0221760272979736
+          },
+          "graph": {
+            "median_ms": 2.2205468267202377,
+            "samples_ms": [
+              2.177470363676548,
+              2.8586313128471375,
+              2.405678853392601,
+              2.14578490704298,
+              2.2205468267202377,
+              2.256925217807293,
+              2.139035612344742
+            ],
+            "cuda_event_median_ms": 2.021536111831665
+          }
+        },
+        {
+          "pairs": 131072,
+          "block_dim": 256,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 2.302432432770729,
+            "samples_ms": [
+              2.0940210670232773,
+              2.870013006031513,
+              2.284727990627289,
+              2.1454421803355217,
+              2.8174491599202156,
+              2.4889567866921425,
+              2.302432432770729
+            ],
+            "cuda_event_median_ms": 2.0245440006256104
+          },
+          "graph": {
+            "median_ms": 2.4441154673695564,
+            "samples_ms": [
+              3.287290222942829,
+              3.34382988512516,
+              2.1475525572896004,
+              2.6245135813951492,
+              2.4441154673695564,
+              2.225838601589203,
+              2.154347486793995
+            ],
+            "cuda_event_median_ms": 2.023519992828369
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 32,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 18.51748675107956,
+            "samples_ms": [
+              19.754107110202312,
+              20.793771371245384,
+              17.833443358540535,
+              17.78547279536724,
+              20.040852017700672,
+              17.42097456008196,
+              18.51748675107956
+            ],
+            "cuda_event_median_ms": 18.277599334716797
+          },
+          "graph": {
+            "median_ms": 17.440587282180786,
+            "samples_ms": [
+              17.434719018638134,
+              17.25469995290041,
+              17.88388192653656,
+              17.205909825861454,
+              17.440587282180786,
+              18.68889294564724,
+              19.81515996158123
+            ],
+            "cuda_event_median_ms": 17.36944007873535
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 64,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 17.917172983288765,
+            "samples_ms": [
+              17.63826236128807,
+              21.669987589120865,
+              17.917172983288765,
+              17.347068525850773,
+              17.886937595903873,
+              19.09063383936882,
+              18.227391876280308
+            ],
+            "cuda_event_median_ms": 17.665088653564453
+          },
+          "graph": {
+            "median_ms": 18.030403181910515,
+            "samples_ms": [
+              17.405793070793152,
+              17.42265559732914,
+              17.09431130439043,
+              18.3979831635952,
+              18.030403181910515,
+              20.806606858968735,
+              20.414073020219803
+            ],
+            "cuda_event_median_ms": 17.905088424682617
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 128,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 18.13070848584175,
+            "samples_ms": [
+              17.806624993681908,
+              17.40043144673109,
+              18.13070848584175,
+              19.50617041438818,
+              18.424673937261105,
+              19.684634171426296,
+              17.50304363667965
+            ],
+            "cuda_event_median_ms": 17.738496780395508
+          },
+          "graph": {
+            "median_ms": 17.67668128013611,
+            "samples_ms": [
+              17.67668128013611,
+              17.45317131280899,
+              18.01044587045908,
+              16.83689560741186,
+              18.24560947716236,
+              17.366444692015648,
+              18.88972334563732
+            ],
+            "cuda_event_median_ms": 17.611967086791992
+          }
+        },
+        {
+          "pairs": 1048576,
+          "block_dim": 256,
+          "kernel_properties": {
+            "register_count": 188,
+            "local_memory_size": 0
+          },
+          "bitwise_equal": true,
+          "warm": {
+            "median_ms": 17.777721397578716,
+            "samples_ms": [
+              17.257886938750744,
+              17.777721397578716,
+              17.06049870699644,
+              18.567437306046486,
+              17.452898435294628,
+              17.966441810131073,
+              20.48307377845049
+            ],
+            "cuda_event_median_ms": 17.44540786743164
+          },
+          "graph": {
+            "median_ms": 17.750858329236507,
+            "samples_ms": [
+              19.283922389149666,
+              18.403910100460052,
+              17.209350131452084,
+              17.750858329236507,
+              17.49488338828087,
+              18.22086237370968,
+              16.6395902633667
+            ],
+            "cuda_event_median_ms": 17.445280075073242
+          }
+        }
+      ],
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834"
+      }
+    }
+  },
+  "profiles": [
+    {
+      "name": "ncu-full-block64-mixed",
+      "pairs": 131072,
+      "block_dim": 64,
+      "metrics": {
+        "gpu__time_duration.sum": 2026944.0,
+        "launch__registers_per_thread": 188.0,
+        "launch__registers_per_thread_allocated": 192.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 15.67,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 79.17,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.48,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 504.72000885009766,
+        "dmul": 1570.2276992797852,
+        "dfma": 3671.8554611206055,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 123.67877197265625
+      },
+      "flops_per_pair": {
+        "d": 9418.658630371094,
+        "f": 247.3575439453125
+      },
+      "fp64_tflops": 0.6090560094408134,
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834"
+      }
+    },
+    {
+      "name": "ncu-full-block64",
+      "pairs": 131072,
+      "block_dim": 64,
+      "metrics": {
+        "gpu__time_duration.sum": 1049600.0,
+        "launch__registers_per_thread": 188.0,
+        "launch__registers_per_thread_allocated": 192.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 15.59,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 79.11,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.73,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 552.0,
+        "dmul": 1734.0,
+        "dfma": 4028.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "flops_per_pair": {
+        "d": 10342.0,
+        "f": 264.0
+      },
+      "fp64_tflops": 1.2914887804878048,
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834"
+      }
+    },
+    {
+      "name": "ncu-full-mixed",
+      "pairs": 131072,
+      "block_dim": 256,
+      "metrics": {
+        "gpu__time_duration.sum": 2027584.0,
+        "launch__registers_per_thread": 188.0,
+        "launch__registers_per_thread_allocated": 192.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.58,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 79.03,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.79,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 504.72000885009766,
+        "dmul": 1570.2276992797852,
+        "dfma": 3671.8554611206055,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 123.67877197265625
+      },
+      "flops_per_pair": {
+        "d": 9418.658630371094,
+        "f": 247.3575439453125
+      },
+      "fp64_tflops": 0.6088637629809664,
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      }
+    },
+    {
+      "name": "ncu-full",
+      "pairs": 131072,
+      "block_dim": 256,
+      "metrics": {
+        "gpu__time_duration.sum": 1054880.0,
+        "launch__registers_per_thread": 188.0,
+        "launch__registers_per_thread_allocated": 192.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.64,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 78.72,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.94,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 552.0,
+        "dmul": 1734.0,
+        "dfma": 4028.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "flops_per_pair": {
+        "d": 10342.0,
+        "f": 264.0
+      },
+      "fp64_tflops": 1.2850244805096316,
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      }
+    },
+    {
+      "name": "ncu-gradient",
+      "pairs": 131072,
+      "block_dim": 256,
+      "metrics": {
+        "gpu__time_duration.sum": 848256.0,
+        "launch__registers_per_thread": 136.0,
+        "launch__registers_per_thread_allocated": 136.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.66,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 78.24,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 1.13,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 507.0,
+        "dmul": 1390.0,
+        "dfma": 3059.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "flops_per_pair": {
+        "d": 8015.0,
+        "f": 264.0
+      },
+      "fp64_tflops": 1.238472913837332,
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      }
+    },
+    {
+      "name": "ncu-hessian",
+      "pairs": 131072,
+      "block_dim": 256,
+      "metrics": {
+        "gpu__time_duration.sum": 559840.0,
+        "launch__registers_per_thread": 128.0,
+        "launch__registers_per_thread_allocated": 128.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 28.95,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 78.56,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.57,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 387.0,
+        "dmul": 932.0,
+        "dfma": 1973.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 78.0
+      },
+      "flops_per_pair": {
+        "d": 5265.0,
+        "f": 156.0
+      },
+      "fp64_tflops": 1.2326630465847386,
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      }
+    },
+    {
+      "name": "ncu-values",
+      "pairs": 131072,
+      "block_dim": 256,
+      "metrics": {
+        "gpu__time_duration.sum": 903968.0,
+        "launch__registers_per_thread": 144.0,
+        "launch__registers_per_thread_allocated": 144.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 16.66,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 78.49,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 1.01,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 543.0,
+        "dmul": 1491.0,
+        "dfma": 3293.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "flops_per_pair": {
+        "d": 8620.0,
+        "f": 264.0
+      },
+      "fp64_tflops": 1.249867959927785,
+      "source_sha256": {
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+        "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json": "96660afdc82503b8e55806423a662d581c8ff1e199d7e4e18facf095aa12e286",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json": "786f2dd1383c6f225be0db5a9e60446db3bc594080495f8dd176352f950dd516",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json": "0ef7dacf3c88748203a220600efce82a1f894399cc28c5eb6765fdee0e8a25b1",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json": "209690c3ec247a3840ce40bbb908feb55d26babd8b4ae6525e1bd9e4533c207d",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json": "c2a57518634baa28ac5f727a005805c5fbde459bdfdcbc31655d08078ae2afec",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json": "ea476c89ffe8c055b38f7977675f6eb1b6a4bb05af4230cd3e77240c1193930b",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json": "f4bb737f8ce7711d29e0409d4577211765c645ffce62386335a89d9fe9101987",
+        "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json": "847836b21b8d19b556967401dbfcef78c001c80c09be29044b65a31d535a45d2",
+        "/tmp/fluxbridge-full-20261026/cone-reference.json": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006"
+      }
+    }
+  ],
+  "scaling": [
+    {
+      "run": "cuda-final",
+      "family": "values",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        0.8973439931869507,
+        7.960288047790527
+      ],
+      "million_pairs_per_second": [
+        146.06661547317313,
+        131.72588651374807
+      ],
+      "empirical_order": 1.0496958629683497
+    },
+    {
+      "run": "cuda-final",
+      "family": "gradient",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        0.8399360179901123,
+        6.746528148651123
+      ],
+      "million_pairs_per_second": [
+        156.04998141839772,
+        155.4245349453776
+      ],
+      "empirical_order": 1.0019313077856797
+    },
+    {
+      "run": "cuda-final",
+      "family": "hessian",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        0.5576000213623047,
+        4.578688144683838
+      ],
+      "million_pairs_per_second": [
+        235.0645534047335,
+        229.01232118581095
+      ],
+      "empirical_order": 1.0125439281783466
+    },
+    {
+      "run": "cuda-final",
+      "family": "full",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        1.0485759973526,
+        9.049759864807129
+      ],
+      "million_pairs_per_second": [
+        125.00000031559466,
+        115.86782585002298
+      ],
+      "empirical_order": 1.0364826945956576
+    },
+    {
+      "run": "cuda-mixed",
+      "family": "values",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        1.8589119911193848,
+        15.843839645385742
+      ],
+      "million_pairs_per_second": [
+        70.51006213643934,
+        66.1819371736308
+      ],
+      "empirical_order": 1.0304638771294383
+    },
+    {
+      "run": "cuda-mixed",
+      "family": "gradient",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        1.7973120212554932,
+        16.25142478942871
+      ],
+      "million_pairs_per_second": [
+        72.92668075988334,
+        64.52209659069904
+      ],
+      "empirical_order": 1.0588844710880039
+    },
+    {
+      "run": "cuda-mixed",
+      "family": "hessian",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        1.1045119762420654,
+        9.129183769226074
+      ],
+      "million_pairs_per_second": [
+        118.66960505575739,
+        114.85977569371384
+      ],
+      "empirical_order": 1.0156922713919718
+    },
+    {
+      "run": "cuda-mixed",
+      "family": "full",
+      "pairs": [
+        131072,
+        1048576
+      ],
+      "times_ms": [
+        2.024832010269165,
+        17.664928436279297
+      ],
+      "million_pairs_per_second": [
+        64.73228363402667,
+        59.35919886584369
+      ],
+      "empirical_order": 1.0416712598079105
+    }
+  ],
+  "reference": {
+    "path": "docs/work/fluxbridge-full-reference-20261026.json",
+    "sha256": "ba5112ff3847bfa7c1a37d16f03adfaa6e8510e1158dcd99e45e9e5de304c006",
+    "method": "Signed face cones; exact radial polynomials in np.longdouble; 2D Gauss face rule",
+    "worst_convergence": 1.8037146797638798e-12,
+    "target": 2e-12,
+    "fixture_worst": 9.402835065096902e-13,
+    "orders": [
+      32,
+      48,
+      64,
+      96,
+      128,
+      160,
+      192
+    ],
+    "cartesian_crosscheck": {
+      "rows": [
+        {
+          "label": [
+            0,
+            "interior"
+          ],
+          "worst": 8.258708772680276e-14,
+          "channel": 24,
+          "cartesian_convergence": 1.118392462797889e-12
+        },
+        {
+          "label": [
+            0,
+            "vertex0"
+          ],
+          "worst": 2.0978016397853367e-14,
+          "channel": 27,
+          "cartesian_convergence": 1.3022014005269398e-14
+        },
+        {
+          "label": [
+            0,
+            "vertex1"
+          ],
+          "worst": 3.501008107734646e-15,
+          "channel": 25,
+          "cartesian_convergence": 1.089779865060453e-14
+        },
+        {
+          "label": [
+            0,
+            "edge"
+          ],
+          "worst": 1.5230768122071994e-13,
+          "channel": 27,
+          "cartesian_convergence": 1.4398473870031606e-12
+        },
+        {
+          "label": [
+            0,
+            "face"
+          ],
+          "worst": 1.0143316452543973e-11,
+          "channel": 27,
+          "cartesian_convergence": 3.837944824471869e-11
+        },
+        {
+          "label": [
+            1,
+            "interior"
+          ],
+          "worst": 5.872161231257257e-14,
+          "channel": 24,
+          "cartesian_convergence": 3.924780251739999e-13
+        },
+        {
+          "label": [
+            1,
+            "vertex0"
+          ],
+          "worst": 9.253791474225092e-15,
+          "channel": 27,
+          "cartesian_convergence": 7.420276269083668e-14
+        },
+        {
+          "label": [
+            1,
+            "vertex1"
+          ],
+          "worst": 6.47174429027278e-16,
+          "channel": 27,
+          "cartesian_convergence": 6.553617693864062e-16
+        },
+        {
+          "label": [
+            1,
+            "edge"
+          ],
+          "worst": 8.840509973148633e-13,
+          "channel": 27,
+          "cartesian_convergence": 1.7012853581898745e-12
+        },
+        {
+          "label": [
+            1,
+            "face"
+          ],
+          "worst": 3.0121877663641228e-12,
+          "channel": 27,
+          "cartesian_convergence": 1.3225015180008557e-11
+        },
+        {
+          "label": [
+            2,
+            "interior"
+          ],
+          "worst": 8.137116094804971e-14,
+          "channel": 23,
+          "cartesian_convergence": 5.940205351209847e-13
+        },
+        {
+          "label": [
+            2,
+            "vertex0"
+          ],
+          "worst": 3.0797676928726606e-15,
+          "channel": 22,
+          "cartesian_convergence": 5.356117726735045e-15
+        },
+        {
+          "label": [
+            2,
+            "vertex1"
+          ],
+          "worst": 5.332983578180823e-14,
+          "channel": 27,
+          "cartesian_convergence": 1.7494146929093816e-14
+        },
+        {
+          "label": [
+            2,
+            "edge"
+          ],
+          "worst": 8.169772622660397e-13,
+          "channel": 25,
+          "cartesian_convergence": 1.4352105281470282e-12
+        },
+        {
+          "label": [
+            2,
+            "face"
+          ],
+          "worst": 2.8613155070535377e-14,
+          "channel": 26,
+          "cartesian_convergence": 1.8693679277504156e-13
+        },
+        {
+          "label": [
+            3,
+            "interior"
+          ],
+          "worst": 6.516938363240156e-14,
+          "channel": 23,
+          "cartesian_convergence": 7.918188847793947e-13
+        },
+        {
+          "label": [
+            3,
+            "vertex0"
+          ],
+          "worst": 1.1344961477080005e-13,
+          "channel": 23,
+          "cartesian_convergence": 3.4664116566148217e-13
+        },
+        {
+          "label": [
+            3,
+            "vertex1"
+          ],
+          "worst": 7.942927644395269e-16,
+          "channel": 22,
+          "cartesian_convergence": 2.3816225781019996e-15
+        },
+        {
+          "label": [
+            3,
+            "edge"
+          ],
+          "worst": 3.759993212819042e-14,
+          "channel": 23,
+          "cartesian_convergence": 5.323907248912859e-13
+        },
+        {
+          "label": [
+            3,
+            "face"
+          ],
+          "worst": 7.411653857967939e-13,
+          "channel": 25,
+          "cartesian_convergence": 3.3056052804006212e-12
+        },
+        {
+          "label": [
+            4,
+            "interior"
+          ],
+          "worst": 4.1987428979149455e-15,
+          "channel": 26,
+          "cartesian_convergence": 4.0183474495371104e-14
+        },
+        {
+          "label": [
+            4,
+            "vertex0"
+          ],
+          "worst": 1.5007249154076715e-14,
+          "channel": 24,
+          "cartesian_convergence": 2.4257025223863814e-14
+        },
+        {
+          "label": [
+            4,
+            "vertex1"
+          ],
+          "worst": 9.178009819640491e-16,
+          "channel": 27,
+          "cartesian_convergence": 1.240840770516105e-15
+        },
+        {
+          "label": [
+            4,
+            "edge"
+          ],
+          "worst": 7.092279320728598e-16,
+          "channel": 22,
+          "cartesian_convergence": 1.9204987771863794e-14
+        },
+        {
+          "label": [
+            4,
+            "face"
+          ],
+          "worst": 2.2463588760721808e-13,
+          "channel": 26,
+          "cartesian_convergence": 1.5901995675783409e-12
+        },
+        {
+          "label": [
+            5,
+            "interior"
+          ],
+          "worst": 3.0518630485602584e-14,
+          "channel": 22,
+          "cartesian_convergence": 3.868705664063171e-13
+        },
+        {
+          "label": [
+            5,
+            "vertex0"
+          ],
+          "worst": 3.2748509194095665e-13,
+          "channel": 25,
+          "cartesian_convergence": 2.9833136822207735e-13
+        },
+        {
+          "label": [
+            5,
+            "vertex1"
+          ],
+          "worst": 3.6592112576592184e-14,
+          "channel": 24,
+          "cartesian_convergence": 7.762027359971989e-13
+        },
+        {
+          "label": [
+            5,
+            "edge"
+          ],
+          "worst": 3.320071702845888e-14,
+          "channel": 27,
+          "cartesian_convergence": 3.8145619635214915e-13
+        },
+        {
+          "label": [
+            5,
+            "face"
+          ],
+          "worst": 1.2315894187790834e-13,
+          "channel": 22,
+          "cartesian_convergence": 1.2260041395551502e-12
+        },
+        {
+          "label": [
+            6,
+            "interior"
+          ],
+          "worst": 5.601441778976791e-14,
+          "channel": 25,
+          "cartesian_convergence": 6.822719632538722e-13
+        },
+        {
+          "label": [
+            6,
+            "vertex0"
+          ],
+          "worst": 2.8288963902677143e-15,
+          "channel": 27,
+          "cartesian_convergence": 5.214702204010057e-15
+        },
+        {
+          "label": [
+            6,
+            "vertex1"
+          ],
+          "worst": 4.0868834257719215e-16,
+          "channel": 25,
+          "cartesian_convergence": 3.3716788262618337e-15
+        },
+        {
+          "label": [
+            6,
+            "edge"
+          ],
+          "worst": 1.0036674418171916e-12,
+          "channel": 25,
+          "cartesian_convergence": 1.4974473841404893e-12
+        },
+        {
+          "label": [
+            6,
+            "face"
+          ],
+          "worst": 4.512372040161207e-14,
+          "channel": 25,
+          "cartesian_convergence": 4.8408782303755e-13
+        },
+        {
+          "label": [
+            7,
+            "interior"
+          ],
+          "worst": 4.917985378670764e-14,
+          "channel": 26,
+          "cartesian_convergence": 4.4711643210615816e-13
+        },
+        {
+          "label": [
+            7,
+            "vertex0"
+          ],
+          "worst": 5.5442081173793526e-15,
+          "channel": 23,
+          "cartesian_convergence": 1.2395827744726892e-13
+        },
+        {
+          "label": [
+            7,
+            "vertex1"
+          ],
+          "worst": 2.1794060673003068e-14,
+          "channel": 25,
+          "cartesian_convergence": 7.162865289350821e-13
+        },
+        {
+          "label": [
+            7,
+            "edge"
+          ],
+          "worst": 5.097050271807052e-14,
+          "channel": 27,
+          "cartesian_convergence": 5.927308322962715e-13
+        },
+        {
+          "label": [
+            7,
+            "face"
+          ],
+          "worst": 1.9301063537076879e-13,
+          "channel": 23,
+          "cartesian_convergence": 1.0795549599371996e-12
+        },
+        {
+          "label": [
+            8,
+            "interior"
+          ],
+          "worst": 3.9151859092839426e-14,
+          "channel": 23,
+          "cartesian_convergence": 4.804688672884606e-13
+        },
+        {
+          "label": [
+            8,
+            "vertex0"
+          ],
+          "worst": 9.894459446380876e-15,
+          "channel": 25,
+          "cartesian_convergence": 2.0136092908424435e-14
+        },
+        {
+          "label": [
+            8,
+            "vertex1"
+          ],
+          "worst": 2.3819750382186736e-13,
+          "channel": 22,
+          "cartesian_convergence": 1.543904149975715e-12
+        },
+        {
+          "label": [
+            8,
+            "edge"
+          ],
+          "worst": 2.8870672529779376e-14,
+          "channel": 25,
+          "cartesian_convergence": 3.703593635568737e-13
+        },
+        {
+          "label": [
+            8,
+            "face"
+          ],
+          "worst": 5.894638467305807e-14,
+          "channel": 24,
+          "cartesian_convergence": 4.002334901893639e-13
+        },
+        {
+          "label": [
+            9,
+            "interior"
+          ],
+          "worst": 1.4583625063821156e-13,
+          "channel": 24,
+          "cartesian_convergence": 1.7284449819172121e-12
+        },
+        {
+          "label": [
+            9,
+            "vertex0"
+          ],
+          "worst": 3.6095575323686265e-14,
+          "channel": 27,
+          "cartesian_convergence": 3.709488402402618e-13
+        },
+        {
+          "label": [
+            9,
+            "vertex1"
+          ],
+          "worst": 9.490594028410901e-14,
+          "channel": 27,
+          "cartesian_convergence": 4.936342291481824e-13
+        },
+        {
+          "label": [
+            9,
+            "edge"
+          ],
+          "worst": 4.645278427156568e-13,
+          "channel": 22,
+          "cartesian_convergence": 1.984716338493587e-12
+        },
+        {
+          "label": [
+            9,
+            "face"
+          ],
+          "worst": 1.7571900445365859e-12,
+          "channel": 22,
+          "cartesian_convergence": 7.659251742975135e-12
+        },
+        {
+          "label": [
+            10,
+            "interior"
+          ],
+          "worst": 1.780352150620956e-13,
+          "channel": 26,
+          "cartesian_convergence": 1.370021252989958e-12
+        },
+        {
+          "label": [
+            10,
+            "vertex0"
+          ],
+          "worst": 2.946070691664841e-15,
+          "channel": 24,
+          "cartesian_convergence": 4.301001124798835e-15
+        },
+        {
+          "label": [
+            10,
+            "vertex1"
+          ],
+          "worst": 9.111623242597045e-16,
+          "channel": 24,
+          "cartesian_convergence": 1.1187780305551119e-14
+        },
+        {
+          "label": [
+            10,
+            "edge"
+          ],
+          "worst": 2.6855171910011942e-14,
+          "channel": 24,
+          "cartesian_convergence": 4.66362219645648e-13
+        },
+        {
+          "label": [
+            10,
+            "face"
+          ],
+          "worst": 6.037546569978413e-14,
+          "channel": 26,
+          "cartesian_convergence": 5.62050191998457e-13
+        },
+        {
+          "label": [
+            11,
+            "interior"
+          ],
+          "worst": 1.8907596982025286e-14,
+          "channel": 23,
+          "cartesian_convergence": 1.4613996834023987e-12
+        },
+        {
+          "label": [
+            11,
+            "vertex0"
+          ],
+          "worst": 5.22016399987112e-15,
+          "channel": 26,
+          "cartesian_convergence": 8.71440281069114e-15
+        },
+        {
+          "label": [
+            11,
+            "vertex1"
+          ],
+          "worst": 9.917824952353112e-16,
+          "channel": 22,
+          "cartesian_convergence": 1.9835649904706207e-15
+        },
+        {
+          "label": [
+            11,
+            "edge"
+          ],
+          "worst": 8.678492897511077e-14,
+          "channel": 23,
+          "cartesian_convergence": 1.286071537478188e-12
+        },
+        {
+          "label": [
+            11,
+            "face"
+          ],
+          "worst": 2.3578717501146567e-12,
+          "channel": 22,
+          "cartesian_convergence": 9.609619828123409e-12
+        },
+        {
+          "label": [
+            12,
+            "interior"
+          ],
+          "worst": 3.138934820165193e-13,
+          "channel": 22,
+          "cartesian_convergence": 6.891130128843457e-13
+        },
+        {
+          "label": [
+            12,
+            "vertex0"
+          ],
+          "worst": 5.247081512349196e-15,
+          "channel": 27,
+          "cartesian_convergence": 7.963490967857365e-15
+        },
+        {
+          "label": [
+            12,
+            "vertex1"
+          ],
+          "worst": 2.3727871925248937e-14,
+          "channel": 22,
+          "cartesian_convergence": 1.5082153213662792e-13
+        },
+        {
+          "label": [
+            12,
+            "edge"
+          ],
+          "worst": 2.6062488325981372e-14,
+          "channel": 22,
+          "cartesian_convergence": 1.7250658243240772e-13
+        },
+        {
+          "label": [
+            12,
+            "face"
+          ],
+          "worst": 2.984287362067181e-13,
+          "channel": 22,
+          "cartesian_convergence": 6.234665107034657e-13
+        },
+        {
+          "label": [
+            13,
+            "interior"
+          ],
+          "worst": 5.696988604910788e-14,
+          "channel": 24,
+          "cartesian_convergence": 8.843099411545753e-13
+        },
+        {
+          "label": [
+            13,
+            "vertex0"
+          ],
+          "worst": 6.020257299928865e-15,
+          "channel": 25,
+          "cartesian_convergence": 9.328016647867252e-15
+        },
+        {
+          "label": [
+            13,
+            "vertex1"
+          ],
+          "worst": 8.080989588791272e-16,
+          "channel": 22,
+          "cartesian_convergence": 1.1404051484201195e-15
+        },
+        {
+          "label": [
+            13,
+            "edge"
+          ],
+          "worst": 2.271442894714769e-13,
+          "channel": 27,
+          "cartesian_convergence": 1.533740803819822e-12
+        },
+        {
+          "label": [
+            13,
+            "face"
+          ],
+          "worst": 2.709763427798999e-14,
+          "channel": 27,
+          "cartesian_convergence": 4.4054280364824693e-13
+        },
+        {
+          "label": [
+            14,
+            "interior"
+          ],
+          "worst": 1.9850692028313854e-13,
+          "channel": 23,
+          "cartesian_convergence": 1.4885135841568291e-12
+        },
+        {
+          "label": [
+            14,
+            "vertex0"
+          ],
+          "worst": 6.03391137404253e-15,
+          "channel": 26,
+          "cartesian_convergence": 1.4392762069997093e-14
+        },
+        {
+          "label": [
+            14,
+            "vertex1"
+          ],
+          "worst": 1.5505838214400274e-14,
+          "channel": 27,
+          "cartesian_convergence": 3.5182889435905716e-13
+        },
+        {
+          "label": [
+            14,
+            "edge"
+          ],
+          "worst": 8.013869347594237e-15,
+          "channel": 27,
+          "cartesian_convergence": 7.14328186972194e-15
+        },
+        {
+          "label": [
+            14,
+            "face"
+          ],
+          "worst": 5.051939862863056e-13,
+          "channel": 27,
+          "cartesian_convergence": 1.2519732178701319e-12
+        },
+        {
+          "label": [
+            15,
+            "interior"
+          ],
+          "worst": 3.966427179350422e-14,
+          "channel": 27,
+          "cartesian_convergence": 7.976704307416964e-13
+        },
+        {
+          "label": [
+            15,
+            "vertex0"
+          ],
+          "worst": 4.958324667122554e-15,
+          "channel": 22,
+          "cartesian_convergence": 8.699322171305102e-15
+        },
+        {
+          "label": [
+            15,
+            "vertex1"
+          ],
+          "worst": 1.6798357744286213e-13,
+          "channel": 27,
+          "cartesian_convergence": 6.857732610184407e-13
+        },
+        {
+          "label": [
+            15,
+            "edge"
+          ],
+          "worst": 4.70202051027197e-14,
+          "channel": 27,
+          "cartesian_convergence": 5.119142945775924e-13
+        },
+        {
+          "label": [
+            15,
+            "face"
+          ],
+          "worst": 1.572101648966969e-13,
+          "channel": 27,
+          "cartesian_convergence": 1.6325590510366141e-12
+        },
+        {
+          "label": [
+            16,
+            "interior"
+          ],
+          "worst": 7.659673908037692e-15,
+          "channel": 27,
+          "cartesian_convergence": 7.112611584538585e-13
+        },
+        {
+          "label": [
+            16,
+            "vertex0"
+          ],
+          "worst": 4.9438167486996225e-15,
+          "channel": 25,
+          "cartesian_convergence": 8.743718451822515e-15
+        },
+        {
+          "label": [
+            16,
+            "vertex1"
+          ],
+          "worst": 5.636310549197673e-16,
+          "channel": 27,
+          "cartesian_convergence": 9.199648413039918e-16
+        },
+        {
+          "label": [
+            16,
+            "edge"
+          ],
+          "worst": 1.6718699040168486e-13,
+          "channel": 27,
+          "cartesian_convergence": 4.167702650367887e-13
+        },
+        {
+          "label": [
+            16,
+            "face"
+          ],
+          "worst": 2.7853987804247588e-14,
+          "channel": 27,
+          "cartesian_convergence": 4.3963015172340885e-13
+        },
+        {
+          "label": [
+            17,
+            "interior"
+          ],
+          "worst": 2.47207389706775e-14,
+          "channel": 24,
+          "cartesian_convergence": 2.19910466046312e-13
+        },
+        {
+          "label": [
+            17,
+            "vertex0"
+          ],
+          "worst": 1.5275422352904777e-15,
+          "channel": 25,
+          "cartesian_convergence": 3.2830758489825245e-15
+        },
+        {
+          "label": [
+            17,
+            "vertex1"
+          ],
+          "worst": 1.2805381906319038e-13,
+          "channel": 22,
+          "cartesian_convergence": 9.515570924342785e-13
+        },
+        {
+          "label": [
+            17,
+            "edge"
+          ],
+          "worst": 1.1892496486051387e-14,
+          "channel": 22,
+          "cartesian_convergence": 8.889116272751703e-14
+        },
+        {
+          "label": [
+            17,
+            "face"
+          ],
+          "worst": 7.710099585730012e-14,
+          "channel": 24,
+          "cartesian_convergence": 5.349314473019626e-13
+        }
+      ],
+      "worst": {
+        "label": [
+          0,
+          "face"
+        ],
+        "worst": 1.0143316452543973e-11,
+        "channel": 27,
+        "cartesian_convergence": 3.837944824471869e-11
+      },
+      "budget": 1e-10,
+      "passed": true
+    },
+    "cartesian_rejected_as_acceptance_oracle": true,
+    "cartesian_worst_convergence": 3.837944824471869e-11,
+    "cartesian_unconverged": [
+      {
+        "label": [
+          0,
+          "face"
+        ],
+        "orders": [
+          72,
+          96,
+          128,
+          160,
+          192,
+          224,
+          256
+        ],
+        "convergence": 3.837944824471869e-11
+      },
+      {
+        "label": [
+          1,
+          "face"
+        ],
+        "orders": [
+          72,
+          96,
+          128,
+          160,
+          192,
+          224,
+          256
+        ],
+        "convergence": 1.3225015180008557e-11
+      },
+      {
+        "label": [
+          3,
+          "face"
+        ],
+        "orders": [
+          72,
+          96,
+          128,
+          160,
+          192,
+          224,
+          256
+        ],
+        "convergence": 3.3056052804006212e-12
+      },
+      {
+        "label": [
+          9,
+          "face"
+        ],
+        "orders": [
+          72,
+          96,
+          128,
+          160,
+          192,
+          224,
+          256
+        ],
+        "convergence": 7.659251742975135e-12
+      },
+      {
+        "label": [
+          11,
+          "face"
+        ],
+        "orders": [
+          72,
+          96,
+          128,
+          160,
+          192,
+          224,
+          256
+        ],
+        "convergence": 9.609619828123409e-12
+      }
+    ]
+  },
+  "validation": {
+    "budget": 1e-10,
+    "full_outputs_per_device": 3248,
+    "cpu_cuda_passed": true,
+    "all_subset_families_passed": true,
+    "cpu_worst": 6.623655452855306e-12,
+    "cuda_worst": 3.0019222138406807e-12,
+    "invariants": [
+      "24 vertex permutations",
+      "translation",
+      "unit scaling",
+      "vector/tensor rotation",
+      "tetrahedron subdivision with query at common internal vertex",
+      "empty batch"
+    ],
+    "all_graph_replays_bitwise_equal": true,
+    "all_launch_sizes_bitwise_equal": true
+  },
+  "generated_source_sha256": {
+    "/tmp/fluxbridge-full-20261026/cuda-final/hessian-native.cpp": "d25f636359330c796c6b9909286448ac25fe25dcd9011d9bd0d12468b182abec",
+    "/tmp/fluxbridge-full-20261026/cuda-final/full-native.cpp": "736fccd6779b8937d67aeed1c51cf4784c5b9253ef34cda8bae97f873b53196e",
+    "/tmp/fluxbridge-full-20261026/cuda-final/gradient-native.cpp": "7c195da9ca23b2eb132ae43b63af42fb5de925baf68fc845fca9a4a3cfd9fda3",
+    "/tmp/fluxbridge-full-20261026/cuda-final/values-native.cpp": "109f40033d42832e744c2df4d4bbec9eb94828d61ca2ce8c52dd5e712ce4dca5"
+  },
+  "source_sha256": {
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py": "80e1ab5c7dd8fce572769839c59fc92f8431fed8f1f8e43c679b989ca497e09e",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py": "567e95f56478feda7819ca7f4fa58ba0440527eb6c75c7b11356bb0dfc51aa92",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py": "4e0b906f7c4f47fd9912e80d2a67d6dfc3f6a3f588b8e543d227df5118aa2e90",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py": "214fceb14947bb4e402d6cb5e3740d111c5aacc22a4728e1c733748ce4e2f6fd",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py": "17b3e11b308740b7fe4594b7fac787f6bfbe3dd4140e98efc01f4ec0aa6b39b6",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py": "7f84d7657d4eefe7fe96e5ca3183881318065dd2c2f5cf7f55c2d7f22b01cb70",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py": "1a754660a307e40dbfefa7f5a21666f99e93f41468c70a1fd3bdb812f7a7cb91",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py": "d278f157eadb74f8716871acb367a7d3dd4c996dac8cbdcaabf20286b204e834",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py": "882e7eb34ed417c6fe89306fb2a5f57275899cddca23a209624de8a7a29a826b",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py": "37c3f433f0cdd66879148a0679f46c0f251a7a8273f3af45d0a10aa263030058",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py": "222bba991c07dd89e5ee8bfdc7b81b5ad69d126453ae711310028d0be6a10476",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+    "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1"
+  },
+  "preservation": {
+    "tracked_dirty_patch_preserved": true,
+    "prior_plan_preserved": true,
+    "prior_source_hashes_preserved": 44,
+    "verified_measurement_source_paths": [
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_consumers.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_launch.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_reference.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_full_study.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_contract_study.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_gradient_study.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_layout_study.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_mixed.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_registers.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_shapes.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_shared_jk_study.py",
+      "/home/lu26029/dev/curvatureBoundaries/scripts/studies/fluxbridge_single_term_study.py",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-diskbox-v1.json",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-nearplane-v1.json",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-planar-v1.json",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-radial-v1.json",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-sphere-v1.json",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-tetquad-v1.json",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-v1.json",
+      "/home/lu26029/dev/curvatureBoundaries/tests/fixtures/fluxbridge-weighted-disk-v1.json",
+      "/tmp/fluxbridge-full-20261026/cone-reference.json"
+    ]
+  },
+  "interpretation": [
+    "Full 28 is a distinct operator family, not 28 nodal scalar field components",
+    "Six physical edge J streams and paired face C streams run through fixed degree 15; no quadrature or global per-pair primitive/moment scratch",
+    "26 named double accumulators cover two scalar potentials, two vectors and three symmetric tensors; three Cov entries are duplicated only on output",
+    "All final subsets and full kernels have zero runtime local allocation and measured local LD/ST sectors",
+    "The full family has 188 registers (192 allocated), versus 128 Hessian-only, 136 gradient-only and 144 values-only",
+    "Smaller blocks reduce 8192-pair latency approximately twofold but do not raise large-batch achieved occupancy or materially improve throughput",
+    "Mixed geometry executes fewer predicated arithmetic operations per pair but runs slower, consistent with divergent edge/support paths",
+    "No production dispatch, 2D backend, raw-fp32 policy or solver integration was changed"
+  ],
+  "limitations": [
+    "Experimental device functions and studies; native 3D compact boundary-limit failures still require a guarded production fix",
+    "W6 volume tetrahedra and this 28-output contract only; no generic higher-degree, arbitrary kernel, surface-triangle or quadrature-fp32 performance claim",
+    "Independent references use empirical successive-order convergence, not a universal error bound or double-machine-epsilon certification",
+    "Counts are executed add/mul/FMA arithmetic (FMA=2); division, root, transcendental, integer and control costs are not converted to FLOPs",
+    "Mixed sample uses 256 static tetrahedra, random queries/supports and indices; it is not a localized accepted-pair distribution or complete solver step",
+    "Static geometry preparation is host fp64; warm timings exclude preparation/JIT/search/assembly; transfer timer includes host input validation/allocation/upload/kernel/readback",
+    "At 1048576 pairs, full output is 224 MiB and inputs plus output 260 MiB; explicit readback remains much slower than device-only evaluation",
+    "Serialized measurements with unlocked clocks/caches and desktop activity; sub-percent launch timing changes do not establish a preferred large-batch size"
+  ],
+  "raw_evidence_directory": "/tmp/fluxbridge-full-20261026",
+  "next_step": "Extract the validated regular-flux/edge-line stream into a production W6 fp64 device path with explicit request/order mapping; reproduce the native compact rotated-boundary failures as regressions, validate the supported dispatch on CPU/CUDA and leave generic kernels on existing paths until separately checked"
+}

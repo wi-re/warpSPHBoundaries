@@ -1,0 +1,3134 @@
+{
+  "schema": 1,
+  "date": "2026-10-26",
+  "scope": "Isolated source-level P1 contraction lifetime reduction and register-cap experiments; no production or solver changes",
+  "baseline_reference": "docs/work/fluxbridge-shared-jk-20261026.json",
+  "runs": {
+    "direct-cap96": {
+      "precision": "float64",
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.049389648437500835,
+          "reference": 0.0493896484375,
+          "mixed_error": 7.934776845842497e-16,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.2428933013223005,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.3322959933112434e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122652894,
+          "reference": 0.08197729122652364,
+          "mixed_error": 4.8996545357949066e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982149575,
+          "reference": 0.1759343998215134,
+          "mixed_error": 1.5011505823980776e-14,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 8.768260492486983e-17,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 8.768260492486983e-17,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.2428933013223005,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.3322959933112434e-15,
+          "finite": true
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756244554,
+          "reference": 0.13360087756244415,
+          "mixed_error": 1.224221688823631e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750687316,
+          "reference": 0.1336008775068844,
+          "mixed_error": 9.916195679957422e-15,
+          "finite": true
+        },
+        {
+          "label": "face_tangent",
+          "value": 3.897570654831078e-15,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 3.897570654831078e-15,
+          "finite": true
+        },
+        {
+          "label": "near_tangent",
+          "value": 6.441385653022275e-15,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 6.441385653022275e-15,
+          "finite": true
+        },
+        {
+          "label": "edge_tangent",
+          "value": 8.717565094696055e-15,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 8.717565094696055e-15,
+          "finite": true
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -5.414833991657081e-15,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 5.414833991657081e-15,
+          "finite": true
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 9.337918840090416e-18,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 9.337918840090416e-18,
+          "finite": true
+        },
+        {
+          "label": "full_support",
+          "value": 0.48749999999999993,
+          "reference": 0.4875,
+          "mixed_error": 3.731842099580358e-17,
+          "finite": true
+        },
+        {
+          "label": "sliver",
+          "value": 0.0004905751858706512,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 2.140969653261916e-12,
+          "finite": true
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394739935,
+          "reference": 0.28683037394742034,
+          "mixed_error": 1.630612362766068e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.1336008775624346,
+          "reference": 0.1336008775624442,
+          "mixed_error": 8.471614086659526e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756244857,
+          "reference": 0.1336008775624441,
+          "mixed_error": 3.941993838012093e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329688526,
+          "reference": 0.08581393329687921,
+          "mixed_error": 5.572515970425238e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329687922,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.4059099925384775e-16,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.049389648437506865,
+          "reference": 0.04938964843750006,
+          "mixed_error": 6.486680071476242e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.049389648437500835,
+          "reference": 0.04938964843749994,
+          "mixed_error": 8.529885109280685e-16,
+          "finite": true
+        },
+        {
+          "label": "switch_below",
+          "value": 0.1336008775629837,
+          "reference": 0.13360087756299918,
+          "mixed_error": 1.3662314047265035e-14,
+          "finite": true
+        },
+        {
+          "label": "switch_above",
+          "value": 0.1336008775629879,
+          "reference": 0.1336008775630003,
+          "mixed_error": 1.0920057464301433e-14,
+          "finite": true
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.25337414352797205,
+          "reference": 0.25337414352797827,
+          "mixed_error": 4.960409443584547e-15,
+          "finite": true
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296660582,
+          "reference": 0.08765408296661414,
+          "mixed_error": 7.655625823586656e-15,
+          "finite": true
+        }
+      ],
+      "properties": {
+        "all_24_vertex_orders": 1.8547383694802115e-14,
+        "units_translation": 8.224631683667906e-15,
+        "partition_of_unity": 1.6350807391265496e-14,
+        "field_linearity": 5.497075257961713e-15,
+        "64_varied_positions_supports_fields_vs_native_fp64": 7.098371848761972e-13,
+        "zero_field": 0.0,
+        "empty_output_count": 0
+      },
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 0.5393996834754944,
+            "samples_ms": [
+              0.5393996834754944
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 38912,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.018701121211052,
+            "samples_ms": [
+              0.8197668939828873,
+              0.7461719214916229,
+              1.3854224234819412,
+              2.001134678721428,
+              1.018701121211052,
+              1.016109250485897,
+              1.7277682200074196
+            ],
+            "cuda_event_median_ms": 0.283488005399704
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.5014520138502121,
+            "samples_ms": [
+              0.6535016000270844,
+              0.48043858259916306,
+              0.5014520138502121
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 0.5393996834754944,
+            "samples_ms": [
+              0.5393996834754944
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 9961472,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.4834841713309288,
+            "samples_ms": [
+              2.714776434004307,
+              1.4834841713309288,
+              2.6329169049859047,
+              1.1377707123756409,
+              1.0611778125166893,
+              1.240469515323639,
+              1.7937347292900085
+            ],
+            "cuda_event_median_ms": 0.8438720107078552
+          },
+          "upload_kernel_readback": {
+            "median_ms": 3.9667245000600815,
+            "samples_ms": [
+              3.9667245000600815,
+              4.33933362364769,
+              3.6386763677001
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "static_setup": {
+            "median_ms": 0.5393996834754944,
+            "samples_ms": [
+              0.5393996834754944
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 79691776,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 8.533068932592869,
+            "samples_ms": [
+              9.808579459786415,
+              7.990996353328228,
+              7.6182810589671135,
+              9.764784015715122,
+              8.23254231363535,
+              8.533068932592869,
+              9.037300013005733
+            ],
+            "cuda_event_median_ms": 7.510015964508057
+          },
+          "upload_kernel_readback": {
+            "median_ms": 24.212964810431004,
+            "samples_ms": [
+              24.212964810431004,
+              23.853931576013565,
+              24.7259559109807
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      },
+      "scope": "One scalar integral of W6 times a P1 field, with shared edge J and face-specific combined K recurrences; all per-query work in one kernel",
+      "limitations": [
+        "Prototype, not a production operator replacement",
+        "Static normals/tangents/outward vectors/FEM gradients prepared once per tet in host fp64 and stored in the selected device dtype",
+        "No quadrature, recurrence DAG interpreter or global per-pair integration scratch",
+        "Field, particle, support and tet index are independently supplied per pair",
+        "Raw fp32 is diagnostic; accepted analytic-fp64 policy unchanged",
+        "Warm times exclude JIT/static geometry and reuse input/output buffers",
+        "No search, scatter or global assembly; only a local particle-tet scalar",
+        "GPU measurements serialized, clocks/caches and desktop activity uncontrolled"
+      ],
+      "invalid_input_rejections": {
+        "expected": 8,
+        "actual": 8
+      },
+      "validation_budget": 1e-10,
+      "validation_passed": true,
+      "variant": "direct",
+      "cuda_max_registers": 96,
+      "cuda_kernel_properties": {
+        "register_count": 96,
+        "local_memory_size": 96
+      }
+    },
+    "baseline-cap96": {
+      "precision": "float64",
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.04938964843750372,
+          "reference": 0.0493896484375,
+          "mixed_error": 3.5442003244763157e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.24289330132229592,
+          "reference": 0.24289330132230588,
+          "mixed_error": 8.016980729890394e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122652646,
+          "reference": 0.08197729122652364,
+          "mixed_error": 2.60374311718944e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982150316,
+          "reference": 0.1759343998215134,
+          "mixed_error": 8.709505737498281e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 8.57305264764131e-17,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 8.57305264764131e-17,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.24289330132229592,
+          "reference": 0.24289330132230588,
+          "mixed_error": 8.016980729890394e-15,
+          "finite": true
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756244002,
+          "reference": 0.13360087756244415,
+          "mixed_error": 3.648180632694421e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750686936,
+          "reference": 0.1336008775068844,
+          "mixed_error": 1.3270563107498575e-14,
+          "finite": true
+        },
+        {
+          "label": "face_tangent",
+          "value": 1.2225313480538493e-15,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 1.2225313480538493e-15,
+          "finite": true
+        },
+        {
+          "label": "near_tangent",
+          "value": 9.762273425549605e-16,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 9.762273425549605e-16,
+          "finite": true
+        },
+        {
+          "label": "edge_tangent",
+          "value": -8.951800049196499e-16,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 8.951800049196499e-16,
+          "finite": true
+        },
+        {
+          "label": "vertex_tangent",
+          "value": 6.18638773183599e-15,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 6.18638773183599e-15,
+          "finite": true
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 1.730337436123078e-17,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 1.730337436123078e-17,
+          "finite": true
+        },
+        {
+          "label": "full_support",
+          "value": 0.4874999999999998,
+          "reference": 0.4875,
+          "mixed_error": 1.1195526298741074e-16,
+          "finite": true
+        },
+        {
+          "label": "sliver",
+          "value": 0.000490575180683503,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 3.0436350369013944e-12,
+          "finite": true
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394738775,
+          "reference": 0.28683037394742034,
+          "mixed_error": 2.5321943305388412e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.13360087756243583,
+          "reference": 0.1336008775624442,
+          "mixed_error": 7.394299000494732e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756243982,
+          "reference": 0.1336008775624441,
+          "mixed_error": 3.770602801576784e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329688121,
+          "reference": 0.08581393329687921,
+          "mixed_error": 1.8404639902321886e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329688103,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.802120990435685e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.0493896484375038,
+          "reference": 0.04938964843750006,
+          "mixed_error": 3.564037266590922e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.04938964843750367,
+          "reference": 0.04938964843749994,
+          "mixed_error": 3.55742495255272e-15,
+          "finite": true
+        },
+        {
+          "label": "switch_below",
+          "value": 0.13360087756298672,
+          "reference": 0.13360087756299918,
+          "mixed_error": 1.0993510765630826e-14,
+          "finite": true
+        },
+        {
+          "label": "switch_above",
+          "value": 0.13360087756299552,
+          "reference": 0.1336008775630003,
+          "mixed_error": 4.211322609551225e-15,
+          "finite": true
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.2533741435279354,
+          "reference": 0.25337414352797827,
+          "mixed_error": 3.4191393664707766e-14,
+          "finite": true
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296659691,
+          "reference": 0.08765408296661414,
+          "mixed_error": 1.5847145454824378e-14,
+          "finite": true
+        }
+      ],
+      "properties": {
+        "all_24_vertex_orders": 5.329225631764423e-15,
+        "units_translation": 5.4551128514124015e-16,
+        "partition_of_unity": 6.337522244676456e-17,
+        "field_linearity": 4.196240654932617e-17,
+        "64_varied_positions_supports_fields_vs_native_fp64": 7.196298051960704e-13,
+        "zero_field": 0.0,
+        "empty_output_count": 0
+      },
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 0.5020881071686745,
+            "samples_ms": [
+              0.5020881071686745
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 38912,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.4254104569554329,
+            "samples_ms": [
+              0.6754901260137558,
+              0.39551593363285065,
+              0.41158124804496765,
+              0.6893090903759003,
+              0.39652734994888306,
+              0.4254104569554329,
+              0.45867543667554855
+            ],
+            "cuda_event_median_ms": 0.27878400683403015
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.8527403697371483,
+            "samples_ms": [
+              0.6922828033566475,
+              2.063932828605175,
+              0.8527403697371483
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 0.5020881071686745,
+            "samples_ms": [
+              0.5020881071686745
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 9961472,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.9981626644730568,
+            "samples_ms": [
+              0.958690419793129,
+              1.0740570724010468,
+              1.6233203932642937,
+              1.0899575427174568,
+              0.9501921012997627,
+              0.9981626644730568,
+              0.9919311851263046
+            ],
+            "cuda_event_median_ms": 0.8300480246543884
+          },
+          "upload_kernel_readback": {
+            "median_ms": 3.684842027723789,
+            "samples_ms": [
+              3.684842027723789,
+              3.680337220430374,
+              3.8403738290071487
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "static_setup": {
+            "median_ms": 0.5020881071686745,
+            "samples_ms": [
+              0.5020881071686745
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 79691776,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 7.261036895215511,
+            "samples_ms": [
+              9.63528174906969,
+              7.261036895215511,
+              7.372410036623478,
+              7.072743959724903,
+              7.59873166680336,
+              7.081965915858746,
+              7.134217768907547
+            ],
+            "cuda_event_median_ms": 6.839839935302734
+          },
+          "upload_kernel_readback": {
+            "median_ms": 25.41621681302786,
+            "samples_ms": [
+              25.41621681302786,
+              25.15961229801178,
+              26.276644319295883
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      },
+      "scope": "One scalar integral of W6 times a P1 field, with shared edge J and face-specific combined K recurrences; all per-query work in one kernel",
+      "limitations": [
+        "Prototype, not a production operator replacement",
+        "Static normals/tangents/outward vectors/FEM gradients prepared once per tet in host fp64 and stored in the selected device dtype",
+        "No quadrature, recurrence DAG interpreter or global per-pair integration scratch",
+        "Field, particle, support and tet index are independently supplied per pair",
+        "Raw fp32 is diagnostic; accepted analytic-fp64 policy unchanged",
+        "Warm times exclude JIT/static geometry and reuse input/output buffers",
+        "No search, scatter or global assembly; only a local particle-tet scalar",
+        "GPU measurements serialized, clocks/caches and desktop activity uncontrolled"
+      ],
+      "invalid_input_rejections": {
+        "expected": 8,
+        "actual": 8
+      },
+      "validation_budget": 1e-10,
+      "validation_passed": true,
+      "variant": "baseline",
+      "cuda_max_registers": 96,
+      "cuda_kernel_properties": {
+        "register_count": 96,
+        "local_memory_size": 144
+      }
+    },
+    "direct-cap112": {
+      "precision": "float64",
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.049389648437500835,
+          "reference": 0.0493896484375,
+          "mixed_error": 7.934776845842497e-16,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.2428933013223005,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.3322959933112434e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122652894,
+          "reference": 0.08197729122652364,
+          "mixed_error": 4.8996545357949066e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982149575,
+          "reference": 0.1759343998215134,
+          "mixed_error": 1.5011505823980776e-14,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 8.768260492486983e-17,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 8.768260492486983e-17,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.2428933013223005,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.3322959933112434e-15,
+          "finite": true
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756244554,
+          "reference": 0.13360087756244415,
+          "mixed_error": 1.224221688823631e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750687316,
+          "reference": 0.1336008775068844,
+          "mixed_error": 9.916195679957422e-15,
+          "finite": true
+        },
+        {
+          "label": "face_tangent",
+          "value": 3.897570654831078e-15,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 3.897570654831078e-15,
+          "finite": true
+        },
+        {
+          "label": "near_tangent",
+          "value": 6.441385653022275e-15,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 6.441385653022275e-15,
+          "finite": true
+        },
+        {
+          "label": "edge_tangent",
+          "value": 8.717565094696055e-15,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 8.717565094696055e-15,
+          "finite": true
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -5.414833991657081e-15,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 5.414833991657081e-15,
+          "finite": true
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 9.337918840090416e-18,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 9.337918840090416e-18,
+          "finite": true
+        },
+        {
+          "label": "full_support",
+          "value": 0.48749999999999993,
+          "reference": 0.4875,
+          "mixed_error": 3.731842099580358e-17,
+          "finite": true
+        },
+        {
+          "label": "sliver",
+          "value": 0.0004905751858706512,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 2.140969653261916e-12,
+          "finite": true
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394739935,
+          "reference": 0.28683037394742034,
+          "mixed_error": 1.630612362766068e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.1336008775624346,
+          "reference": 0.1336008775624442,
+          "mixed_error": 8.471614086659526e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756244857,
+          "reference": 0.1336008775624441,
+          "mixed_error": 3.941993838012093e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329688526,
+          "reference": 0.08581393329687921,
+          "mixed_error": 5.572515970425238e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329687922,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.4059099925384775e-16,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.049389648437506865,
+          "reference": 0.04938964843750006,
+          "mixed_error": 6.486680071476242e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.049389648437500835,
+          "reference": 0.04938964843749994,
+          "mixed_error": 8.529885109280685e-16,
+          "finite": true
+        },
+        {
+          "label": "switch_below",
+          "value": 0.1336008775629837,
+          "reference": 0.13360087756299918,
+          "mixed_error": 1.3662314047265035e-14,
+          "finite": true
+        },
+        {
+          "label": "switch_above",
+          "value": 0.1336008775629879,
+          "reference": 0.1336008775630003,
+          "mixed_error": 1.0920057464301433e-14,
+          "finite": true
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.25337414352797205,
+          "reference": 0.25337414352797827,
+          "mixed_error": 4.960409443584547e-15,
+          "finite": true
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296660582,
+          "reference": 0.08765408296661414,
+          "mixed_error": 7.655625823586656e-15,
+          "finite": true
+        }
+      ],
+      "properties": {
+        "all_24_vertex_orders": 1.8547383694802115e-14,
+        "units_translation": 8.224631683667906e-15,
+        "partition_of_unity": 1.6350807391265496e-14,
+        "field_linearity": 5.497075257961713e-15,
+        "64_varied_positions_supports_fields_vs_native_fp64": 7.098371848761972e-13,
+        "zero_field": 0.0,
+        "empty_output_count": 0
+      },
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 0.4119947552680969,
+            "samples_ms": [
+              0.4119947552680969
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 38912,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.9771278128027916,
+            "samples_ms": [
+              1.4848792925477028,
+              0.8402075618505478,
+              0.6915396079421043,
+              1.35037861764431,
+              1.563369296491146,
+              0.9771278128027916,
+              0.7605655118823051
+            ],
+            "cuda_event_median_ms": 0.27721598744392395
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.651986338198185,
+            "samples_ms": [
+              0.6542382761836052,
+              0.5539963021874428,
+              0.651986338198185
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 0.4119947552680969,
+            "samples_ms": [
+              0.4119947552680969
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 9961472,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 2.0877160131931305,
+            "samples_ms": [
+              2.5695813819766045,
+              1.3765227049589157,
+              2.4835970252752304,
+              1.4087371528148651,
+              1.4347443357110023,
+              2.0877160131931305,
+              2.471902407705784
+            ],
+            "cuda_event_median_ms": 0.823199987411499
+          },
+          "upload_kernel_readback": {
+            "median_ms": 3.678777255117893,
+            "samples_ms": [
+              3.499074839055538,
+              3.755662590265274,
+              3.678777255117893
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "static_setup": {
+            "median_ms": 0.4119947552680969,
+            "samples_ms": [
+              0.4119947552680969
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 79691776,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 7.44987465441227,
+            "samples_ms": [
+              7.151732221245766,
+              9.451508522033691,
+              9.424583986401558,
+              7.0088328793644905,
+              7.44987465441227,
+              7.646710611879826,
+              7.018731907010078
+            ],
+            "cuda_event_median_ms": 7.172863960266113
+          },
+          "upload_kernel_readback": {
+            "median_ms": 22.289220243692398,
+            "samples_ms": [
+              21.31439745426178,
+              22.289220243692398,
+              22.983744740486145
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      },
+      "scope": "One scalar integral of W6 times a P1 field, with shared edge J and face-specific combined K recurrences; all per-query work in one kernel",
+      "limitations": [
+        "Prototype, not a production operator replacement",
+        "Static normals/tangents/outward vectors/FEM gradients prepared once per tet in host fp64 and stored in the selected device dtype",
+        "No quadrature, recurrence DAG interpreter or global per-pair integration scratch",
+        "Field, particle, support and tet index are independently supplied per pair",
+        "Raw fp32 is diagnostic; accepted analytic-fp64 policy unchanged",
+        "Warm times exclude JIT/static geometry and reuse input/output buffers",
+        "No search, scatter or global assembly; only a local particle-tet scalar",
+        "GPU measurements serialized, clocks/caches and desktop activity uncontrolled"
+      ],
+      "invalid_input_rejections": {
+        "expected": 8,
+        "actual": 8
+      },
+      "validation_budget": 1e-10,
+      "validation_passed": true,
+      "variant": "direct",
+      "cuda_max_registers": 112,
+      "cuda_kernel_properties": {
+        "register_count": 112,
+        "local_memory_size": 40
+      }
+    },
+    "baseline-cap112": {
+      "precision": "float64",
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.04938964843750372,
+          "reference": 0.0493896484375,
+          "mixed_error": 3.5442003244763157e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.24289330132229592,
+          "reference": 0.24289330132230588,
+          "mixed_error": 8.016980729890394e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122652646,
+          "reference": 0.08197729122652364,
+          "mixed_error": 2.60374311718944e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982150316,
+          "reference": 0.1759343998215134,
+          "mixed_error": 8.709505737498281e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 8.57305264764131e-17,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 8.57305264764131e-17,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.24289330132229592,
+          "reference": 0.24289330132230588,
+          "mixed_error": 8.016980729890394e-15,
+          "finite": true
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756244002,
+          "reference": 0.13360087756244415,
+          "mixed_error": 3.648180632694421e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750686936,
+          "reference": 0.1336008775068844,
+          "mixed_error": 1.3270563107498575e-14,
+          "finite": true
+        },
+        {
+          "label": "face_tangent",
+          "value": 1.2225313480538493e-15,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 1.2225313480538493e-15,
+          "finite": true
+        },
+        {
+          "label": "near_tangent",
+          "value": 9.762273425549605e-16,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 9.762273425549605e-16,
+          "finite": true
+        },
+        {
+          "label": "edge_tangent",
+          "value": -8.951800049196499e-16,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 8.951800049196499e-16,
+          "finite": true
+        },
+        {
+          "label": "vertex_tangent",
+          "value": 6.18638773183599e-15,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 6.18638773183599e-15,
+          "finite": true
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 1.730337436123078e-17,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 1.730337436123078e-17,
+          "finite": true
+        },
+        {
+          "label": "full_support",
+          "value": 0.4874999999999998,
+          "reference": 0.4875,
+          "mixed_error": 1.1195526298741074e-16,
+          "finite": true
+        },
+        {
+          "label": "sliver",
+          "value": 0.000490575180683503,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 3.0436350369013944e-12,
+          "finite": true
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394738775,
+          "reference": 0.28683037394742034,
+          "mixed_error": 2.5321943305388412e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.13360087756243583,
+          "reference": 0.1336008775624442,
+          "mixed_error": 7.394299000494732e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756243982,
+          "reference": 0.1336008775624441,
+          "mixed_error": 3.770602801576784e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329688121,
+          "reference": 0.08581393329687921,
+          "mixed_error": 1.8404639902321886e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329688103,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.802120990435685e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.0493896484375038,
+          "reference": 0.04938964843750006,
+          "mixed_error": 3.564037266590922e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.04938964843750367,
+          "reference": 0.04938964843749994,
+          "mixed_error": 3.55742495255272e-15,
+          "finite": true
+        },
+        {
+          "label": "switch_below",
+          "value": 0.13360087756298672,
+          "reference": 0.13360087756299918,
+          "mixed_error": 1.0993510765630826e-14,
+          "finite": true
+        },
+        {
+          "label": "switch_above",
+          "value": 0.13360087756299552,
+          "reference": 0.1336008775630003,
+          "mixed_error": 4.211322609551225e-15,
+          "finite": true
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.2533741435279354,
+          "reference": 0.25337414352797827,
+          "mixed_error": 3.4191393664707766e-14,
+          "finite": true
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296659691,
+          "reference": 0.08765408296661414,
+          "mixed_error": 1.5847145454824378e-14,
+          "finite": true
+        }
+      ],
+      "properties": {
+        "all_24_vertex_orders": 5.329225631764423e-15,
+        "units_translation": 5.4551128514124015e-16,
+        "partition_of_unity": 6.337522244676456e-17,
+        "field_linearity": 4.196240654932617e-17,
+        "64_varied_positions_supports_fields_vs_native_fp64": 7.196298051960704e-13,
+        "zero_field": 0.0,
+        "empty_output_count": 0
+      },
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 0.49813929945230484,
+            "samples_ms": [
+              0.49813929945230484
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 38912,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.4010619595646858,
+            "samples_ms": [
+              0.38577429950237274,
+              0.7115136831998825,
+              0.4242081195116043,
+              0.3965608775615692,
+              0.3971932455897331,
+              0.5876980721950531,
+              0.4010619595646858
+            ],
+            "cuda_event_median_ms": 0.2781440019607544
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.5919076502323151,
+            "samples_ms": [
+              0.7697269320487976,
+              0.5919076502323151,
+              0.5424479022622108
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 0.49813929945230484,
+            "samples_ms": [
+              0.49813929945230484
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 9961472,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.0858578607439995,
+            "samples_ms": [
+              1.549496315419674,
+              1.1893194168806076,
+              1.0858578607439995,
+              0.9487038478255272,
+              0.9910725057125092,
+              0.9861821308732033,
+              1.1162152513861656
+            ],
+            "cuda_event_median_ms": 0.8276799917221069
+          },
+          "upload_kernel_readback": {
+            "median_ms": 4.346190951764584,
+            "samples_ms": [
+              5.181934684514999,
+              4.346190951764584,
+              3.83863877505064
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "static_setup": {
+            "median_ms": 0.49813929945230484,
+            "samples_ms": [
+              0.49813929945230484
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 79691776,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 7.075422443449497,
+            "samples_ms": [
+              7.8630270436406136,
+              6.851010024547577,
+              7.034607231616974,
+              6.904596462845802,
+              7.912768982350826,
+              7.075422443449497,
+              8.373995311558247
+            ],
+            "cuda_event_median_ms": 6.9179840087890625
+          },
+          "upload_kernel_readback": {
+            "median_ms": 25.52641462534666,
+            "samples_ms": [
+              25.35705640912056,
+              25.52641462534666,
+              27.74734701961279
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      },
+      "scope": "One scalar integral of W6 times a P1 field, with shared edge J and face-specific combined K recurrences; all per-query work in one kernel",
+      "limitations": [
+        "Prototype, not a production operator replacement",
+        "Static normals/tangents/outward vectors/FEM gradients prepared once per tet in host fp64 and stored in the selected device dtype",
+        "No quadrature, recurrence DAG interpreter or global per-pair integration scratch",
+        "Field, particle, support and tet index are independently supplied per pair",
+        "Raw fp32 is diagnostic; accepted analytic-fp64 policy unchanged",
+        "Warm times exclude JIT/static geometry and reuse input/output buffers",
+        "No search, scatter or global assembly; only a local particle-tet scalar",
+        "GPU measurements serialized, clocks/caches and desktop activity uncontrolled"
+      ],
+      "invalid_input_rejections": {
+        "expected": 8,
+        "actual": 8
+      },
+      "validation_budget": 1e-10,
+      "validation_passed": true,
+      "variant": "baseline",
+      "cuda_max_registers": 112,
+      "cuda_kernel_properties": {
+        "register_count": 112,
+        "local_memory_size": 80
+      }
+    },
+    "direct-cpu": {
+      "precision": "float64",
+      "device": "cpu",
+      "device_name": "x86_64",
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.04938964843750749,
+          "reference": 0.0493896484375,
+          "mixed_error": 7.134686847220045e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.2428933013222996,
+          "reference": 0.24289330132230588,
+          "mixed_error": 5.046901517981139e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122653129,
+          "reference": 0.08197729122652364,
+          "mixed_error": 7.067302746657051e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982149456,
+          "reference": 0.1759343998215134,
+          "mixed_error": 1.602643467685998e-14,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 2.944239054496053e-17,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 2.944239054496053e-17,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.2428933013222996,
+          "reference": 0.24289330132230588,
+          "mixed_error": 5.046901517981139e-15,
+          "finite": true
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756243957,
+          "reference": 0.13360087756244415,
+          "mixed_error": 4.039931573117983e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750688165,
+          "reference": 0.1336008775068844,
+          "mixed_error": 2.423958943989592e-15,
+          "finite": true
+        },
+        {
+          "label": "face_tangent",
+          "value": 6.779110422977163e-16,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 6.779110422977163e-16,
+          "finite": true
+        },
+        {
+          "label": "near_tangent",
+          "value": 6.49125355073114e-15,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 6.49125355073114e-15,
+          "finite": true
+        },
+        {
+          "label": "edge_tangent",
+          "value": 1.573401350722691e-14,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 1.573401350722691e-14,
+          "finite": true
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -2.3553912435968424e-15,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 2.3553912435968424e-15,
+          "finite": true
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 2.3553912435968425e-17,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 2.3553912435968425e-17,
+          "finite": true
+        },
+        {
+          "label": "full_support",
+          "value": 0.4874999999999998,
+          "reference": 0.4875,
+          "mixed_error": 1.1195526298741074e-16,
+          "finite": true
+        },
+        {
+          "label": "sliver",
+          "value": 0.0004905751862249298,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 2.4950746105283686e-12,
+          "finite": true
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394738764,
+          "reference": 0.28683037394742034,
+          "mixed_error": 2.540821909177815e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.13360087756241942,
+          "reference": 0.1336008775624442,
+          "mixed_error": 2.186459936239005e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756244457,
+          "reference": 0.1336008775624441,
+          "mixed_error": 4.1623537420003462e-16,
+          "finite": true
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.0858139332968873,
+          "reference": 0.08581393329687921,
+          "mixed_error": 7.45132296045393e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329687524,
+          "reference": 0.08581393329687907,
+          "mixed_error": 3.527555981278362e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.04938964843750749,
+          "reference": 0.04938964843750006,
+          "mixed_error": 7.081788334914429e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.04938964843749845,
+          "reference": 0.04938964843749994,
+          "mixed_error": 1.4216475182134476e-15,
+          "finite": true
+        },
+        {
+          "label": "switch_below",
+          "value": 0.13360087756300074,
+          "reference": 0.13360087756299918,
+          "mixed_error": 1.3711282914817957e-15,
+          "finite": true
+        },
+        {
+          "label": "switch_above",
+          "value": 0.13360087756299743,
+          "reference": 0.1336008775630003,
+          "mixed_error": 2.5218966789754433e-15,
+          "finite": true
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.2533741435279363,
+          "reference": 0.25337414352797827,
+          "mixed_error": 3.348276374419569e-14,
+          "finite": true
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296660457,
+          "reference": 0.08765408296661414,
+          "mixed_error": 8.803969697124653e-15,
+          "finite": true
+        }
+      ],
+      "properties": {
+        "all_24_vertex_orders": 3.646533129136388e-14,
+        "units_translation": 0.0,
+        "partition_of_unity": 2.661759342764112e-15,
+        "field_linearity": 2.2827549162833082e-14,
+        "64_varied_positions_supports_fields_vs_native_fp64": 1.1005129654530453e-12,
+        "zero_field": 0.0,
+        "empty_output_count": 0
+      },
+      "rows": [],
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      },
+      "scope": "One scalar integral of W6 times a P1 field, with shared edge J and face-specific combined K recurrences; all per-query work in one kernel",
+      "limitations": [
+        "Prototype, not a production operator replacement",
+        "Static normals/tangents/outward vectors/FEM gradients prepared once per tet in host fp64 and stored in the selected device dtype",
+        "No quadrature, recurrence DAG interpreter or global per-pair integration scratch",
+        "Field, particle, support and tet index are independently supplied per pair",
+        "Raw fp32 is diagnostic; accepted analytic-fp64 policy unchanged",
+        "Warm times exclude JIT/static geometry and reuse input/output buffers",
+        "No search, scatter or global assembly; only a local particle-tet scalar",
+        "GPU measurements serialized, clocks/caches and desktop activity uncontrolled"
+      ],
+      "invalid_input_rejections": {
+        "expected": 8,
+        "actual": 8
+      },
+      "validation_budget": 1e-10,
+      "validation_passed": true,
+      "variant": "direct",
+      "cuda_max_registers": null
+    },
+    "baseline-cap128": {
+      "precision": "float64",
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.04938964843750372,
+          "reference": 0.0493896484375,
+          "mixed_error": 3.5442003244763157e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.24289330132229592,
+          "reference": 0.24289330132230588,
+          "mixed_error": 8.016980729890394e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122652646,
+          "reference": 0.08197729122652364,
+          "mixed_error": 2.60374311718944e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982150316,
+          "reference": 0.1759343998215134,
+          "mixed_error": 8.709505737498281e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 8.57305264764131e-17,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 8.57305264764131e-17,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.24289330132229592,
+          "reference": 0.24289330132230588,
+          "mixed_error": 8.016980729890394e-15,
+          "finite": true
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756244002,
+          "reference": 0.13360087756244415,
+          "mixed_error": 3.648180632694421e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750686936,
+          "reference": 0.1336008775068844,
+          "mixed_error": 1.3270563107498575e-14,
+          "finite": true
+        },
+        {
+          "label": "face_tangent",
+          "value": 1.2225313480538493e-15,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 1.2225313480538493e-15,
+          "finite": true
+        },
+        {
+          "label": "near_tangent",
+          "value": 9.762273425549605e-16,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 9.762273425549605e-16,
+          "finite": true
+        },
+        {
+          "label": "edge_tangent",
+          "value": -8.907047615568158e-16,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 8.907047615568158e-16,
+          "finite": true
+        },
+        {
+          "label": "vertex_tangent",
+          "value": 6.18638773183599e-15,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 6.18638773183599e-15,
+          "finite": true
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 1.730337436123078e-17,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 1.730337436123078e-17,
+          "finite": true
+        },
+        {
+          "label": "full_support",
+          "value": 0.4874999999999998,
+          "reference": 0.4875,
+          "mixed_error": 1.1195526298741074e-16,
+          "finite": true
+        },
+        {
+          "label": "sliver",
+          "value": 0.000490575180683503,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 3.0436350369013944e-12,
+          "finite": true
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394738775,
+          "reference": 0.28683037394742034,
+          "mixed_error": 2.5321943305388412e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.13360087756243583,
+          "reference": 0.1336008775624442,
+          "mixed_error": 7.394299000494732e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756243982,
+          "reference": 0.1336008775624441,
+          "mixed_error": 3.770602801576784e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329688121,
+          "reference": 0.08581393329687921,
+          "mixed_error": 1.8404639902321886e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329688103,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.802120990435685e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.0493896484375038,
+          "reference": 0.04938964843750006,
+          "mixed_error": 3.564037266590922e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.04938964843750367,
+          "reference": 0.04938964843749994,
+          "mixed_error": 3.55742495255272e-15,
+          "finite": true
+        },
+        {
+          "label": "switch_below",
+          "value": 0.13360087756298675,
+          "reference": 0.13360087756299918,
+          "mixed_error": 1.0969026331854366e-14,
+          "finite": true
+        },
+        {
+          "label": "switch_above",
+          "value": 0.13360087756299555,
+          "reference": 0.1336008775630003,
+          "mixed_error": 4.186838175774765e-15,
+          "finite": true
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.2533741435279354,
+          "reference": 0.25337414352797827,
+          "mixed_error": 3.4191393664707766e-14,
+          "finite": true
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296659691,
+          "reference": 0.08765408296661414,
+          "mixed_error": 1.5847145454824378e-14,
+          "finite": true
+        }
+      ],
+      "properties": {
+        "all_24_vertex_orders": 5.329225631764423e-15,
+        "units_translation": 5.4551128514124015e-16,
+        "partition_of_unity": 6.337522244676456e-17,
+        "field_linearity": 4.196240654932617e-17,
+        "64_varied_positions_supports_fields_vs_native_fp64": 7.196298051960704e-13,
+        "zero_field": 0.0,
+        "empty_output_count": 0
+      },
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 0.5508949980139732,
+            "samples_ms": [
+              0.5508949980139732
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 38912,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.8331825956702232,
+            "samples_ms": [
+              0.7859645411372185,
+              1.0669762268662453,
+              0.700339674949646,
+              0.887715257704258,
+              0.8331825956702232,
+              1.5149442479014397,
+              0.6822925060987473
+            ],
+            "cuda_event_median_ms": 0.2747200131416321
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.8418112993240356,
+            "samples_ms": [
+              0.8418112993240356,
+              0.8212290704250336,
+              1.1776359751820564
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 0.5508949980139732,
+            "samples_ms": [
+              0.5508949980139732
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 9961472,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.0815523564815521,
+            "samples_ms": [
+              1.0815523564815521,
+              1.0119853541254997,
+              1.0748542845249176,
+              1.0644802823662758,
+              1.854119822382927,
+              1.9596973434090614,
+              2.4993158876895905
+            ],
+            "cuda_event_median_ms": 0.8184000253677368
+          },
+          "upload_kernel_readback": {
+            "median_ms": 3.3322907984256744,
+            "samples_ms": [
+              3.6109546199440956,
+              3.2486291602253914,
+              3.3322907984256744
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "static_setup": {
+            "median_ms": 0.5508949980139732,
+            "samples_ms": [
+              0.5508949980139732
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 79691776,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 7.548914290964603,
+            "samples_ms": [
+              9.158304892480373,
+              7.548914290964603,
+              7.600612007081509,
+              7.011307403445244,
+              6.862146779894829,
+              7.4938638135790825,
+              7.791778072714806
+            ],
+            "cuda_event_median_ms": 7.331744194030762
+          },
+          "upload_kernel_readback": {
+            "median_ms": 22.924717515707016,
+            "samples_ms": [
+              22.218353115022182,
+              22.924717515707016,
+              24.043649435043335
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      },
+      "scope": "One scalar integral of W6 times a P1 field, with shared edge J and face-specific combined K recurrences; all per-query work in one kernel",
+      "limitations": [
+        "Prototype, not a production operator replacement",
+        "Static normals/tangents/outward vectors/FEM gradients prepared once per tet in host fp64 and stored in the selected device dtype",
+        "No quadrature, recurrence DAG interpreter or global per-pair integration scratch",
+        "Field, particle, support and tet index are independently supplied per pair",
+        "Raw fp32 is diagnostic; accepted analytic-fp64 policy unchanged",
+        "Warm times exclude JIT/static geometry and reuse input/output buffers",
+        "No search, scatter or global assembly; only a local particle-tet scalar",
+        "GPU measurements serialized, clocks/caches and desktop activity uncontrolled"
+      ],
+      "invalid_input_rejections": {
+        "expected": 8,
+        "actual": 8
+      },
+      "validation_budget": 1e-10,
+      "validation_passed": true,
+      "variant": "baseline",
+      "cuda_max_registers": 128,
+      "cuda_kernel_properties": {
+        "register_count": 128,
+        "local_memory_size": 24
+      }
+    },
+    "direct": {
+      "precision": "float64",
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.049389648437500835,
+          "reference": 0.0493896484375,
+          "mixed_error": 7.934776845842497e-16,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.2428933013223005,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.3322959933112434e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122652894,
+          "reference": 0.08197729122652364,
+          "mixed_error": 4.8996545357949066e-15,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982149575,
+          "reference": 0.1759343998215134,
+          "mixed_error": 1.5011505823980776e-14,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 8.768260492486983e-17,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 8.768260492486983e-17,
+          "finite": true
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.2428933013223005,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.3322959933112434e-15,
+          "finite": true
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756244554,
+          "reference": 0.13360087756244415,
+          "mixed_error": 1.224221688823631e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750687316,
+          "reference": 0.1336008775068844,
+          "mixed_error": 9.916195679957422e-15,
+          "finite": true
+        },
+        {
+          "label": "face_tangent",
+          "value": 3.897570654831078e-15,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 3.897570654831078e-15,
+          "finite": true
+        },
+        {
+          "label": "near_tangent",
+          "value": 6.441385653022275e-15,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 6.441385653022275e-15,
+          "finite": true
+        },
+        {
+          "label": "edge_tangent",
+          "value": 8.717565094696055e-15,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 8.717565094696055e-15,
+          "finite": true
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -5.414833991657081e-15,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 5.414833991657081e-15,
+          "finite": true
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 9.337918840090416e-18,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 9.337918840090416e-18,
+          "finite": true
+        },
+        {
+          "label": "full_support",
+          "value": 0.48749999999999993,
+          "reference": 0.4875,
+          "mixed_error": 3.731842099580358e-17,
+          "finite": true
+        },
+        {
+          "label": "sliver",
+          "value": 0.0004905751858706512,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 2.140969653261916e-12,
+          "finite": true
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394739935,
+          "reference": 0.28683037394742034,
+          "mixed_error": 1.630612362766068e-14,
+          "finite": true
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.1336008775624346,
+          "reference": 0.1336008775624442,
+          "mixed_error": 8.471614086659526e-15,
+          "finite": true
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756244857,
+          "reference": 0.1336008775624441,
+          "mixed_error": 3.941993838012093e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329688526,
+          "reference": 0.08581393329687921,
+          "mixed_error": 5.572515970425238e-15,
+          "finite": true
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329687922,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.4059099925384775e-16,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.049389648437506865,
+          "reference": 0.04938964843750006,
+          "mixed_error": 6.486680071476242e-15,
+          "finite": true
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.049389648437500835,
+          "reference": 0.04938964843749994,
+          "mixed_error": 8.529885109280685e-16,
+          "finite": true
+        },
+        {
+          "label": "switch_below",
+          "value": 0.1336008775629837,
+          "reference": 0.13360087756299918,
+          "mixed_error": 1.3662314047265035e-14,
+          "finite": true
+        },
+        {
+          "label": "switch_above",
+          "value": 0.1336008775629879,
+          "reference": 0.1336008775630003,
+          "mixed_error": 1.0920057464301433e-14,
+          "finite": true
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.25337414352797205,
+          "reference": 0.25337414352797827,
+          "mixed_error": 4.960409443584547e-15,
+          "finite": true
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296660582,
+          "reference": 0.08765408296661414,
+          "mixed_error": 7.655625823586656e-15,
+          "finite": true
+        }
+      ],
+      "properties": {
+        "all_24_vertex_orders": 1.8547383694802115e-14,
+        "units_translation": 8.224631683667906e-15,
+        "partition_of_unity": 1.6350807391265496e-14,
+        "field_linearity": 5.497075257961713e-15,
+        "64_varied_positions_supports_fields_vs_native_fp64": 7.098371848761972e-13,
+        "zero_field": 0.0,
+        "empty_output_count": 0
+      },
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 0.5700439214706421,
+            "samples_ms": [
+              0.5700439214706421
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 38912,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 0.9742807596921921,
+            "samples_ms": [
+              0.9742807596921921,
+              1.718863844871521,
+              0.5211476236581802,
+              0.7399125024676323,
+              1.9830279052257538,
+              2.642054110765457,
+              0.48609450459480286
+            ],
+            "cuda_event_median_ms": 0.2749119997024536
+          },
+          "upload_kernel_readback": {
+            "median_ms": 0.6061652675271034,
+            "samples_ms": [
+              0.828450545668602,
+              0.6061652675271034,
+              0.46811439096927643
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 0.5700439214706421,
+            "samples_ms": [
+              0.5700439214706421
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 9961472,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 1.317434012889862,
+            "samples_ms": [
+              2.4831201881170273,
+              1.2543248012661934,
+              1.8016118556261063,
+              1.7765164375305176,
+              1.024847850203514,
+              1.0048430413007736,
+              1.317434012889862
+            ],
+            "cuda_event_median_ms": 0.8196160197257996
+          },
+          "upload_kernel_readback": {
+            "median_ms": 3.524227999150753,
+            "samples_ms": [
+              3.524227999150753,
+              3.230360336601734,
+              3.6080926656723022
+            ],
+            "cuda_event_median_ms": null
+          }
+        },
+        {
+          "pairs": 1048576,
+          "static_setup": {
+            "median_ms": 0.5700439214706421,
+            "samples_ms": [
+              0.5700439214706421
+            ],
+            "cuda_event_median_ms": null
+          },
+          "static_geometry_bytes": 816,
+          "input_output_bytes": 79691776,
+          "global_pair_scratch_bytes": 0,
+          "warm": {
+            "median_ms": 8.139138109982014,
+            "samples_ms": [
+              6.917491555213928,
+              7.8184958547353745,
+              8.139138109982014,
+              7.161734625697136,
+              9.581784717738628,
+              11.75253838300705,
+              9.062536992132664
+            ],
+            "cuda_event_median_ms": 7.042943954467773
+          },
+          "upload_kernel_readback": {
+            "median_ms": 21.68393600732088,
+            "samples_ms": [
+              20.946772769093513,
+              21.68393600732088,
+              22.955995053052902
+            ],
+            "cuda_event_median_ms": null
+          }
+        }
+      ],
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      },
+      "scope": "One scalar integral of W6 times a P1 field, with shared edge J and face-specific combined K recurrences; all per-query work in one kernel",
+      "limitations": [
+        "Prototype, not a production operator replacement",
+        "Static normals/tangents/outward vectors/FEM gradients prepared once per tet in host fp64 and stored in the selected device dtype",
+        "No quadrature, recurrence DAG interpreter or global per-pair integration scratch",
+        "Field, particle, support and tet index are independently supplied per pair",
+        "Raw fp32 is diagnostic; accepted analytic-fp64 policy unchanged",
+        "Warm times exclude JIT/static geometry and reuse input/output buffers",
+        "No search, scatter or global assembly; only a local particle-tet scalar",
+        "GPU measurements serialized, clocks/caches and desktop activity uncontrolled"
+      ],
+      "invalid_input_rejections": {
+        "expected": 8,
+        "actual": 8
+      },
+      "validation_budget": 1e-10,
+      "validation_passed": true,
+      "variant": "direct",
+      "cuda_max_registers": null,
+      "cuda_kernel_properties": {
+        "register_count": 128,
+        "local_memory_size": 0
+      }
+    }
+  },
+  "profiles": [
+    {
+      "name": "ncu-baseline-cap128",
+      "pairs": 131072,
+      "metrics": {
+        "gpu__time_duration.sum": 816864.0,
+        "launch__registers_per_thread": 128.0,
+        "launch__registers_per_thread_allocated": 128.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 29.08,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 78.59,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 1.23,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 98304.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 98396.0,
+        "derived__local_spilling_requests": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 532.0,
+        "dmul": 1311.0,
+        "dfma": 2914.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "fp64_flops_per_pair": 7671.0,
+      "cuda_kernel_properties": {
+        "register_count": 128,
+        "local_memory_size": 24
+      },
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      }
+    },
+    {
+      "name": "ncu-baseline-cap96",
+      "pairs": 131072,
+      "metrics": {
+        "gpu__time_duration.sum": 834144.0,
+        "launch__registers_per_thread": 96.0,
+        "launch__registers_per_thread_allocated": 96.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 29.04,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 78.57,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 1.9,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 2883584.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 1113172.0,
+        "derived__local_spilling_requests": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 523.0,
+        "dmul": 1347.0,
+        "dfma": 2992.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "fp64_flops_per_pair": 7854.0,
+      "cuda_kernel_properties": {
+        "register_count": 96,
+        "local_memory_size": 144
+      },
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      }
+    },
+    {
+      "name": "ncu-direct",
+      "pairs": 131072,
+      "metrics": {
+        "gpu__time_duration.sum": 822272.0,
+        "launch__registers_per_thread": 128.0,
+        "launch__registers_per_thread_allocated": 128.0,
+        "launch__stack_size": 1024.0,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 29.1,
+        "sm__pipe_fp64_cycles_active.avg.pct_of_peak_sustained_elapsed": 78.9,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 0.91,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_ld.sum": 0.0,
+        "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum": 0.0,
+        "derived__local_spilling_requests": 0.0
+      },
+      "arithmetic_instructions_per_pair": {
+        "dadd": 490.0,
+        "dmul": 1431.0,
+        "dfma": 2899.0,
+        "fadd": 0.0,
+        "fmul": 0.0,
+        "ffma": 132.0
+      },
+      "fp64_flops_per_pair": 7719.0,
+      "cuda_kernel_properties": {
+        "register_count": 128,
+        "local_memory_size": 0
+      },
+      "source_sha256": {
+        "scripts/studies/fluxbridge_shared_jk.py": "112c355f8dcc80bd9aebf1755b4d486f38689cc5e65fd669f419b7e84467a0db",
+        "scripts/studies/fluxbridge_shared_jk_shapes.py": "118600aacc7044a1ee2e46f2e174e9616b6943786f30e5df11bbacf62c491dfd",
+        "scripts/studies/fluxbridge_shared_jk_registers.py": "6e0bfd39389b44f23ec77e269a44fdeacb90565b284ccbdffb6ae0925afc6546",
+        "scripts/studies/fluxbridge_shared_jk_mixed.py": "c2eba7814a34e3b5c2e4f1645151186652237efd99ddd9a2fa369f5672293043",
+        "scripts/studies/fluxbridge_shared_jk_study.py": "826b7df646db773fc9a437e1eb4d9c080ace5b92cd7488cd6e5c72b940f784e1",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+      }
+    }
+  ],
+  "validation": {
+    "direct_cpu_cuda_fixtures_passed": true,
+    "cpu_worst": 2.4950746105283686e-12,
+    "cuda_worst": 2.140969653261916e-12,
+    "independent_shape_count": 90,
+    "independent_shape_passed": true,
+    "independent_shape_worst": 2.3697375660117674e-13,
+    "independent_reference": "docs/work/fluxbridge-shared-jk-shapes-20261026.json",
+    "direct_shape_results": [
+      {
+        "label": [
+          0,
+          "interior"
+        ],
+        "value": 0.03781843719126679,
+        "mixed_error": 7.200863336686755e-15
+      },
+      {
+        "label": [
+          0,
+          "vertex0"
+        ],
+        "value": -0.046436554915295886,
+        "mixed_error": 1.5781718837828367e-14
+      },
+      {
+        "label": [
+          0,
+          "vertex1"
+        ],
+        "value": 0.03703649910472744,
+        "mixed_error": 3.859414791310396e-14
+      },
+      {
+        "label": [
+          0,
+          "edge"
+        ],
+        "value": 0.1199753002725163,
+        "mixed_error": 5.144807654599367e-14
+      },
+      {
+        "label": [
+          0,
+          "face"
+        ],
+        "value": 0.21622706803640715,
+        "mixed_error": 2.3697375660117674e-13
+      },
+      {
+        "label": [
+          1,
+          "interior"
+        ],
+        "value": 0.05481882326886064,
+        "mixed_error": 1.7761356857938996e-16
+      },
+      {
+        "label": [
+          1,
+          "vertex0"
+        ],
+        "value": 0.013206166067009126,
+        "mixed_error": 3.847631605614411e-14
+      },
+      {
+        "label": [
+          1,
+          "vertex1"
+        ],
+        "value": 0.007265980148509949,
+        "mixed_error": 7.502377019731394e-14
+      },
+      {
+        "label": [
+          1,
+          "edge"
+        ],
+        "value": 0.0826312319028552,
+        "mixed_error": 5.468403371670466e-14
+      },
+      {
+        "label": [
+          1,
+          "face"
+        ],
+        "value": 0.24921270091429149,
+        "mixed_error": 2.1665215029422585e-13
+      },
+      {
+        "label": [
+          2,
+          "interior"
+        ],
+        "value": -0.15702496999137783,
+        "mixed_error": 6.237073397056668e-16
+      },
+      {
+        "label": [
+          2,
+          "vertex0"
+        ],
+        "value": -0.056714532934021206,
+        "mixed_error": 1.3132958216522376e-16
+      },
+      {
+        "label": [
+          2,
+          "vertex1"
+        ],
+        "value": -0.04035537156424164,
+        "mixed_error": 2.019595545456675e-14
+      },
+      {
+        "label": [
+          2,
+          "edge"
+        ],
+        "value": -0.13847510909240307,
+        "mixed_error": 4.095773957801282e-15
+      },
+      {
+        "label": [
+          2,
+          "face"
+        ],
+        "value": -0.12388404263013056,
+        "mixed_error": 6.791433105888389e-16
+      },
+      {
+        "label": [
+          3,
+          "interior"
+        ],
+        "value": 0.05657981306017539,
+        "mixed_error": 4.334428805065522e-16
+      },
+      {
+        "label": [
+          3,
+          "vertex0"
+        ],
+        "value": 0.047485842761688435,
+        "mixed_error": 1.1526337540721732e-15
+      },
+      {
+        "label": [
+          3,
+          "vertex1"
+        ],
+        "value": 0.013039903630169469,
+        "mixed_error": 4.268998299191385e-15
+      },
+      {
+        "label": [
+          3,
+          "edge"
+        ],
+        "value": 0.03717903303691719,
+        "mixed_error": 1.8331038992406155e-15
+      },
+      {
+        "label": [
+          3,
+          "face"
+        ],
+        "value": 0.0970902251646815,
+        "mixed_error": 6.5651590972607465e-15
+      },
+      {
+        "label": [
+          4,
+          "interior"
+        ],
+        "value": 0.0982182509004379,
+        "mixed_error": 1.010931136606841e-16
+      },
+      {
+        "label": [
+          4,
+          "vertex0"
+        ],
+        "value": 0.14472601627856788,
+        "mixed_error": 4.117052178874482e-14
+      },
+      {
+        "label": [
+          4,
+          "vertex1"
+        ],
+        "value": 0.0302721539147847,
+        "mixed_error": 1.105551994197248e-14
+      },
+      {
+        "label": [
+          4,
+          "edge"
+        ],
+        "value": 0.06244605378685892,
+        "mixed_error": 7.053539696918308e-16
+      },
+      {
+        "label": [
+          4,
+          "face"
+        ],
+        "value": 0.3062652217935586,
+        "mixed_error": 6.931110631107078e-14
+      },
+      {
+        "label": [
+          5,
+          "interior"
+        ],
+        "value": 0.03229838666767161,
+        "mixed_error": 2.083755179696635e-16
+      },
+      {
+        "label": [
+          5,
+          "vertex0"
+        ],
+        "value": 0.009567613363597873,
+        "mixed_error": 9.277013171603957e-15
+      },
+      {
+        "label": [
+          5,
+          "vertex1"
+        ],
+        "value": 0.011726809587380087,
+        "mixed_error": 1.9820966680195393e-15
+      },
+      {
+        "label": [
+          5,
+          "edge"
+        ],
+        "value": 0.05217316579052337,
+        "mixed_error": 1.5959467313385751e-15
+      },
+      {
+        "label": [
+          5,
+          "face"
+        ],
+        "value": 0.03969084097254343,
+        "mixed_error": 1.8687192543473914e-16
+      },
+      {
+        "label": [
+          6,
+          "interior"
+        ],
+        "value": -0.0730139178118878,
+        "mixed_error": 1.2933464866992899e-17
+      },
+      {
+        "label": [
+          6,
+          "vertex0"
+        ],
+        "value": -0.0478115217106684,
+        "mixed_error": 1.7880136982997222e-16
+      },
+      {
+        "label": [
+          6,
+          "vertex1"
+        ],
+        "value": -0.002183824125498612,
+        "mixed_error": 4.662296047953814e-15
+      },
+      {
+        "label": [
+          6,
+          "edge"
+        ],
+        "value": -0.06252508466778742,
+        "mixed_error": 9.54769259935574e-15
+      },
+      {
+        "label": [
+          6,
+          "face"
+        ],
+        "value": -0.055565131864133574,
+        "mixed_error": 1.2489895715047822e-16
+      },
+      {
+        "label": [
+          7,
+          "interior"
+        ],
+        "value": -0.043218947132697486,
+        "mixed_error": 9.977139395779111e-17
+      },
+      {
+        "label": [
+          7,
+          "vertex0"
+        ],
+        "value": -0.0629514773601425,
+        "mixed_error": 3.629540099190512e-15
+      },
+      {
+        "label": [
+          7,
+          "vertex1"
+        ],
+        "value": -0.0013182546876710096,
+        "mixed_error": 5.684784252494179e-15
+      },
+      {
+        "label": [
+          7,
+          "edge"
+        ],
+        "value": -0.01823797141935039,
+        "mixed_error": 7.836800643340913e-17
+      },
+      {
+        "label": [
+          7,
+          "face"
+        ],
+        "value": -0.24895312791685997,
+        "mixed_error": 6.302463293975474e-14
+      },
+      {
+        "label": [
+          8,
+          "interior"
+        ],
+        "value": -0.07551627604774565,
+        "mixed_error": 1.6774385057616632e-16
+      },
+      {
+        "label": [
+          8,
+          "vertex0"
+        ],
+        "value": -0.06890594728286968,
+        "mixed_error": 1.0308637113877488e-14
+      },
+      {
+        "label": [
+          8,
+          "vertex1"
+        ],
+        "value": 0.009609408289427752,
+        "mixed_error": 8.316148358752964e-15
+      },
+      {
+        "label": [
+          8,
+          "edge"
+        ],
+        "value": -0.006673710427571239,
+        "mixed_error": 3.5756881056554186e-16
+      },
+      {
+        "label": [
+          8,
+          "face"
+        ],
+        "value": -0.0664068265245762,
+        "mixed_error": 3.1232630840615803e-16
+      },
+      {
+        "label": [
+          9,
+          "interior"
+        ],
+        "value": -0.10528899707381459,
+        "mixed_error": 1.381138021731019e-16
+      },
+      {
+        "label": [
+          9,
+          "vertex0"
+        ],
+        "value": -0.10276444374021995,
+        "mixed_error": 7.7646637285294e-15
+      },
+      {
+        "label": [
+          9,
+          "vertex1"
+        ],
+        "value": 0.006267930358035073,
+        "mixed_error": 6.4758982582185995e-15
+      },
+      {
+        "label": [
+          9,
+          "edge"
+        ],
+        "value": 0.009494407492785188,
+        "mixed_error": 1.4881415083091227e-14
+      },
+      {
+        "label": [
+          9,
+          "face"
+        ],
+        "value": -0.08867824848186796,
+        "mixed_error": 2.6896957218830775e-15
+      },
+      {
+        "label": [
+          10,
+          "interior"
+        ],
+        "value": 0.52574485091567,
+        "mixed_error": 8.004256585593229e-16
+      },
+      {
+        "label": [
+          10,
+          "vertex0"
+        ],
+        "value": 0.1617972605526304,
+        "mixed_error": 7.405963788167488e-16
+      },
+      {
+        "label": [
+          10,
+          "vertex1"
+        ],
+        "value": 0.02933913942505258,
+        "mixed_error": 7.75228268688051e-16
+      },
+      {
+        "label": [
+          10,
+          "edge"
+        ],
+        "value": 0.15053384034081446,
+        "mixed_error": 4.800692820885634e-15
+      },
+      {
+        "label": [
+          10,
+          "face"
+        ],
+        "value": 0.43202824803491824,
+        "mixed_error": 1.0853921608097478e-15
+      },
+      {
+        "label": [
+          11,
+          "interior"
+        ],
+        "value": 0.11463472689867901,
+        "mixed_error": 1.4318104033409837e-15
+      },
+      {
+        "label": [
+          11,
+          "vertex0"
+        ],
+        "value": 0.025537576556595307,
+        "mixed_error": 1.7591870412720244e-16
+      },
+      {
+        "label": [
+          11,
+          "vertex1"
+        ],
+        "value": 0.00832879380039941,
+        "mixed_error": 9.582598276077313e-16
+      },
+      {
+        "label": [
+          11,
+          "edge"
+        ],
+        "value": 0.03531904186103889,
+        "mixed_error": 1.6755448377135544e-16
+      },
+      {
+        "label": [
+          11,
+          "face"
+        ],
+        "value": 0.055419797095278577,
+        "mixed_error": 6.844090449930587e-15
+      },
+      {
+        "label": [
+          12,
+          "interior"
+        ],
+        "value": 0.11458989177063596,
+        "mixed_error": 3.353061322588577e-14
+      },
+      {
+        "label": [
+          12,
+          "vertex0"
+        ],
+        "value": -0.015548547138756709,
+        "mixed_error": 2.4050949224011992e-15
+      },
+      {
+        "label": [
+          12,
+          "vertex1"
+        ],
+        "value": -0.0022154752179481918,
+        "mixed_error": 5.371380466515003e-14
+      },
+      {
+        "label": [
+          12,
+          "edge"
+        ],
+        "value": -0.013067011248686342,
+        "mixed_error": 2.0565301915024763e-14
+      },
+      {
+        "label": [
+          12,
+          "face"
+        ],
+        "value": 0.11199775576895214,
+        "mixed_error": 7.413149815344267e-15
+      },
+      {
+        "label": [
+          13,
+          "interior"
+        ],
+        "value": 0.24400907875139258,
+        "mixed_error": 5.966066523459784e-14
+      },
+      {
+        "label": [
+          13,
+          "vertex0"
+        ],
+        "value": 0.04403147918167416,
+        "mixed_error": 1.6017461773780949e-15
+      },
+      {
+        "label": [
+          13,
+          "vertex1"
+        ],
+        "value": -0.010072368713239509,
+        "mixed_error": 1.8594559811914553e-14
+      },
+      {
+        "label": [
+          13,
+          "edge"
+        ],
+        "value": -0.039459825086383765,
+        "mixed_error": 1.020680984779026e-14
+      },
+      {
+        "label": [
+          13,
+          "face"
+        ],
+        "value": 0.04361100909381426,
+        "mixed_error": 5.851056171533212e-16
+      },
+      {
+        "label": [
+          14,
+          "interior"
+        ],
+        "value": 0.1934731176666383,
+        "mixed_error": 5.814034519247044e-16
+      },
+      {
+        "label": [
+          14,
+          "vertex0"
+        ],
+        "value": 0.0614321609188917,
+        "mixed_error": 1.3466825265285306e-15
+      },
+      {
+        "label": [
+          14,
+          "vertex1"
+        ],
+        "value": 0.06315160326273571,
+        "mixed_error": 2.1799248167359113e-15
+      },
+      {
+        "label": [
+          14,
+          "edge"
+        ],
+        "value": 0.08347528848636827,
+        "mixed_error": 1.396136014477094e-15
+      },
+      {
+        "label": [
+          14,
+          "face"
+        ],
+        "value": 0.17488101187914648,
+        "mixed_error": 2.9057715344824544e-15
+      },
+      {
+        "label": [
+          15,
+          "interior"
+        ],
+        "value": -0.2191075251411137,
+        "mixed_error": 8.15063139672188e-15
+      },
+      {
+        "label": [
+          15,
+          "vertex0"
+        ],
+        "value": -0.010123159286879202,
+        "mixed_error": 1.447716426263153e-15
+      },
+      {
+        "label": [
+          15,
+          "vertex1"
+        ],
+        "value": -0.019513727172280903,
+        "mixed_error": 1.8376421073321765e-16
+      },
+      {
+        "label": [
+          15,
+          "edge"
+        ],
+        "value": -0.06504124764571761,
+        "mixed_error": 2.6842380938101926e-15
+      },
+      {
+        "label": [
+          15,
+          "face"
+        ],
+        "value": -0.09157261494251108,
+        "mixed_error": 4.1954789941482384e-16
+      },
+      {
+        "label": [
+          16,
+          "interior"
+        ],
+        "value": 0.13560417631740898,
+        "mixed_error": 9.776496492161903e-16
+      },
+      {
+        "label": [
+          16,
+          "vertex0"
+        ],
+        "value": 0.029980130954766017,
+        "mixed_error": 1.1722241070423918e-15
+      },
+      {
+        "label": [
+          16,
+          "vertex1"
+        ],
+        "value": -0.0014584247226191187,
+        "mixed_error": 2.4383057315551586e-14
+      },
+      {
+        "label": [
+          16,
+          "edge"
+        ],
+        "value": -0.007048869351939891,
+        "mixed_error": 1.6073405419496533e-14
+      },
+      {
+        "label": [
+          16,
+          "face"
+        ],
+        "value": 0.03098165199482226,
+        "mixed_error": 9.086007255463556e-17
+      },
+      {
+        "label": [
+          17,
+          "interior"
+        ],
+        "value": 0.01602112449489574,
+        "mixed_error": 7.512425785529321e-17
+      },
+      {
+        "label": [
+          17,
+          "vertex0"
+        ],
+        "value": 0.006235013891499314,
+        "mixed_error": 2.241166812560368e-17
+      },
+      {
+        "label": [
+          17,
+          "vertex1"
+        ],
+        "value": 0.007072883534234998,
+        "mixed_error": 2.2263831440197823e-15
+      },
+      {
+        "label": [
+          17,
+          "edge"
+        ],
+        "value": 0.011709349950140092,
+        "mixed_error": 3.5664638566497197e-16
+      },
+      {
+        "label": [
+          17,
+          "face"
+        ],
+        "value": 0.03870228332915635,
+        "mixed_error": 5.678296767979755e-16
+      }
+    ]
+  },
+  "interpretation": [
+    "Early contraction reduces 134 to 128 registers with zero local allocation/traffic and raises achieved occupancy from 16.65% to 29.10% at block size 256",
+    "131072-pair CUDA-event time remains about 0.82 ms; fp64 pipeline activity remains about 79%; do not claim a substantial speedup from occupancy alone",
+    "Caps add local allocation and measured LD/ST traffic, even where Nsight derived__local_spilling_requests reports zero; raw counters and runtime kernel properties are retained",
+    "No cap was promoted; original validated baseline remains unchanged",
+    "Adding all 28 fp64 accumulators naively would require at least 56 32-bit registers for the outputs alone; prefer consumer-specific contractions and bounded output scheduling"
+  ],
+  "solver_mapping": {
+    "current_provider": "src/warpSPHBoundaries/scene/provider.py:AnalyticBoundary.aggregate",
+    "current_geometry": "Existing 2D edge/box/disk/conditioned triangle provider, separate from FluxBridge 3D tet prototype",
+    "WCSPH": "Analytic wall terms consume lam, G, Cov and hydrostatic contraction, with additional lap/cover/tens channels depending on the scheme",
+    "DFSPH": "Shared projection geometry requests the lean provider: lam, G, Cov; fixed geometry is assembled once and reused by projection iterations",
+    "applicability": "Same solid-domain kernel moment types; no intrinsic porosity requirement. New 3D provider/kernel-family/derivative validation required before solver benefit.",
+    "no_automatic_solver_speedup": true,
+    "boundary_limit_failure_scope": "The previously reported 38/90 failures concern native 3D FluxBridge compact evaluation, not evidence against the existing 2D solver boundary path"
+  },
+  "preservation": {
+    "original_tracked_patch_preserved": true,
+    "prior_plan_preserved": true,
+    "prior_shared_jk_and_native_sources_unchanged": 36,
+    "warpSPH_inspected_read_only": true
+  },
+  "next_step": "Keep the direct-contraction variant available, then design full output scheduling around shared primitives and actual consumer contractions; separately benchmark vertex reload/packed geometry or cooperative output ownership if register liveness grows",
+  "raw_evidence_directory": "/tmp/fluxbridge-registers-20261026",
+  "limitations": [
+    "Serialized GPU runs; clocks/caches/desktop activity uncontrolled",
+    "Small register reductions do not establish throughput improvement on fp64-compute-limited hardware",
+    "No all-28-output register count or speed has yet been measured",
+    "No 2D backend or warpSPH solver performance measurement was performed in this experiment"
+  ]
+}

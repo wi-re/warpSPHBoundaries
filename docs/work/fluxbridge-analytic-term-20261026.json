@@ -1,0 +1,3465 @@
+{
+  "schema": 1,
+  "equation": "integral_T W6(|y-x|,h) sum_a lambda_a(y) f_a dy",
+  "runs": {
+    "cpu-3d": {
+      "device": "cpu",
+      "device_name": "x86_64",
+      "precision": "float64",
+      "dimension": 3,
+      "compact": true,
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.04938964843751688,
+          "reference": 0.0493896484375,
+          "mixed_error": 1.6081147740907462e-14
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.2428933013227779,
+          "reference": 0.24289330132230588,
+          "mixed_error": 3.7976817351675774e-13
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122649229,
+          "reference": 0.08197729122652364,
+          "mixed_error": 2.8974658629216476e-14
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982140152,
+          "reference": 0.1759343998215134,
+          "mixed_error": 9.514367920828067e-14
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 0.0,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 3.442560330579651e-70
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.2428933013227779,
+          "reference": 0.24289330132230588,
+          "mixed_error": 3.7976817351675774e-13
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756263558,
+          "reference": 0.13360087756244415,
+          "mixed_error": 1.6886913975633167e-13
+        },
+        {
+          "label": "near_face",
+          "value": 0.1336008775065899,
+          "reference": 0.1336008775068844,
+          "mixed_error": 2.5980432681488443e-13
+        },
+        {
+          "label": "face_tangent",
+          "value": -1.1485336349736808e-18,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 1.1485336349736808e-18
+        },
+        {
+          "label": "near_tangent",
+          "value": 1.7239591153306685e-15,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 1.7239591153306685e-15
+        },
+        {
+          "label": "edge_tangent",
+          "value": -5.455534766133707e-18,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 5.455534766133707e-18
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -2.576838283594793e-18,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 2.576838283594793e-18
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 6.73659151282639e-18,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 6.73659151282639e-18
+        },
+        {
+          "label": "full_support",
+          "value": 0.4875000000004971,
+          "reference": 0.4875,
+          "mixed_error": 3.3418646001742105e-13
+        },
+        {
+          "label": "sliver",
+          "value": 0.0004905751929014701,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 9.168341160077198e-12
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394706695,
+          "reference": 0.28683037394742034,
+          "mixed_error": 2.746158280785394e-13
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.13360087756263558,
+          "reference": 0.1336008775624442,
+          "mixed_error": 1.6882017088877872e-13
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756263558,
+          "reference": 0.1336008775624441,
+          "mixed_error": 1.6891810862388466e-13
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329675484,
+          "reference": 0.08581393329687921,
+          "mixed_error": 1.145433213920894e-13
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.0858139332970921,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.9618834895877848e-13
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.04938964843769285,
+          "reference": 0.04938964843750006,
+          "mixed_error": 1.8371653323740663e-13
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.04938964843743979,
+          "reference": 0.04938964843749994,
+          "mixed_error": 5.732215039717384e-14
+        },
+        {
+          "label": "switch_below",
+          "value": 0.13360087756259606,
+          "reference": 0.13360087756299918,
+          "mixed_error": 3.5561191616931426e-13
+        },
+        {
+          "label": "switch_above",
+          "value": 0.1336008775625053,
+          "reference": 0.1336008775630003,
+          "mixed_error": 4.3665539196939856e-13
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.25337414352764487,
+          "reference": 0.25337414352797827,
+          "mixed_error": 2.660019564122213e-13
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296643667,
+          "reference": 0.08765408296661414,
+          "mixed_error": 1.6316690505337692e-13
+        }
+      ],
+      "rows": [],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "84f5faccaef0494dcf5d8b4c8e6ee2cee313326fd7d7d7de520f3d6c10a57887",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    },
+    "cuda-3d": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "dimension": 3,
+      "compact": true,
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.04938964843751688,
+          "reference": 0.0493896484375,
+          "mixed_error": 1.6081147740907462e-14
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.2428933013228669,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.5138504594226887e-13
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122625069,
+          "reference": 0.08197729122652364,
+          "mixed_error": 2.52268076989566e-13
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982140152,
+          "reference": 0.1759343998215134,
+          "mixed_error": 9.514367920828067e-14
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 0.0,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 3.442560330579651e-70
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.2428933013228669,
+          "reference": 0.24289330132230588,
+          "mixed_error": 4.5138504594226887e-13
+        },
+        {
+          "label": "face",
+          "value": 0.1336008775627622,
+          "reference": 0.13360087756244415,
+          "mixed_error": 2.805671266445998e-13
+        },
+        {
+          "label": "near_face",
+          "value": 0.13360087750645844,
+          "reference": 0.1336008775068844,
+          "mixed_error": 3.757626051859421e-13
+        },
+        {
+          "label": "face_tangent",
+          "value": -5.742668174868404e-19,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 5.742668174868404e-19
+        },
+        {
+          "label": "near_tangent",
+          "value": 1.7254620554831803e-15,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 1.7254620554831803e-15
+        },
+        {
+          "label": "edge_tangent",
+          "value": -7.134160848013014e-18,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 7.134160848013014e-18
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -2.576838283594793e-18,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 2.576838283594793e-18
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 2.0209774538520974e-17,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 2.0209774538520974e-17
+        },
+        {
+          "label": "full_support",
+          "value": 0.4875000000004971,
+          "reference": 0.4875,
+          "mixed_error": 3.3418646001742105e-13
+        },
+        {
+          "label": "sliver",
+          "value": 0.0004905751931817477,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 9.448481267582586e-12
+        },
+        {
+          "label": "scalene",
+          "value": 0.2868303739477166,
+          "reference": 0.28683037394742034,
+          "mixed_error": 2.3022693598101863e-13
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.1336008775627622,
+          "reference": 0.1336008775624442,
+          "mixed_error": 2.8051815777704685e-13
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.1336008775627622,
+          "reference": 0.1336008775624441,
+          "mixed_error": 2.806160955121528e-13
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329675484,
+          "reference": 0.08581393329687921,
+          "mixed_error": 1.145433213920894e-13
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.0858139332970921,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.9618834895877848e-13
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.04938964843739224,
+          "reference": 0.04938964843750006,
+          "mixed_error": 1.0274213552558394e-13
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.04938964843743979,
+          "reference": 0.04938964843749994,
+          "mixed_error": 5.732215039717384e-14
+        },
+        {
+          "label": "switch_below",
+          "value": 0.1336008775625812,
+          "reference": 0.13360087756299918,
+          "mixed_error": 3.687110882397207e-13
+        },
+        {
+          "label": "switch_above",
+          "value": 0.1336008775625053,
+          "reference": 0.1336008775630003,
+          "mixed_error": 4.3665539196939856e-13
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.2533741435281327,
+          "reference": 0.25337414352797827,
+          "mixed_error": 1.2321302742903757e-13
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08765408296645372,
+          "reference": 0.08765408296661414,
+          "mixed_error": 1.4749839086776957e-13
+        }
+      ],
+      "rows": [
+        {
+          "pairs": 128,
+          "static_setup": {
+            "median_ms": 1.0025594383478165,
+            "samples_ms": [
+              1.0025594383478165
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 1.188713125884533,
+            "samples_ms": [
+              1.188713125884533
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 100364,
+          "scratch_bytes": 89088,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 2.884862944483757,
+            "samples_ms": [
+              2.770308405160904,
+              3.0438145622611046,
+              3.200247883796692,
+              2.884862944483757,
+              3.0868258327245712,
+              2.833961509168148,
+              2.8720051050186157
+            ],
+            "cuda_event_median_ms": 2.7601280212402344
+          },
+          "complete": {
+            "median_ms": 4.356161691248417,
+            "samples_ms": [
+              4.481900483369827,
+              4.113226197659969,
+              4.356161691248417
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 2.8633599281311035
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.0037440001033246517
+            }
+          ]
+        },
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 1.0025594383478165,
+            "samples_ms": [
+              1.0025594383478165
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 1.416664570569992,
+            "samples_ms": [
+              1.416664570569992
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 401420,
+          "scratch_bytes": 356352,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 5.468958057463169,
+            "samples_ms": [
+              5.675647407770157,
+              5.384303629398346,
+              5.763618275523186,
+              5.119637586176395,
+              5.9088971465826035,
+              5.468958057463169,
+              5.1695965230464935
+            ],
+            "cuda_event_median_ms": 5.261375904083252
+          },
+          "complete": {
+            "median_ms": 6.87768030911684,
+            "samples_ms": [
+              6.889120675623417,
+              6.399764679372311,
+              6.87768030911684
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 5.175871849060059
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.0037440001033246517
+            }
+          ]
+        },
+        {
+          "pairs": 8192,
+          "static_setup": {
+            "median_ms": 1.0025594383478165,
+            "samples_ms": [
+              1.0025594383478165
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 2.3363223299384117,
+            "samples_ms": [
+              2.3363223299384117
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 6422540,
+          "scratch_bytes": 5701632,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 5.328225903213024,
+            "samples_ms": [
+              5.186349153518677,
+              6.075327284634113,
+              5.410106852650642,
+              5.3942846134305,
+              5.328225903213024,
+              5.1886942237615585,
+              5.101156421005726
+            ],
+            "cuda_event_median_ms": 5.080992221832275
+          },
+          "complete": {
+            "median_ms": 7.937013171613216,
+            "samples_ms": [
+              8.242994546890259,
+              7.937013171613216,
+              7.31945876032114
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 5.160416126251221
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.0037440001033246517
+            }
+          ]
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 1.0025594383478165,
+            "samples_ms": [
+              1.0025594383478165
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 22.119763307273388,
+            "samples_ms": [
+              22.119763307273388
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 102760460,
+          "scratch_bytes": 91226112,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 16.40414260327816,
+            "samples_ms": [
+              16.40414260327816,
+              15.885441564023495,
+              17.462050542235374,
+              16.255099326372147,
+              16.469317488372326,
+              15.97290113568306,
+              17.364484257996082
+            ],
+            "cuda_event_median_ms": 16.20368003845215
+          },
+          "complete": {
+            "median_ms": 38.56732230633497,
+            "samples_ms": [
+              39.30348809808493,
+              38.56732230633497,
+              38.11190277338028
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 16.794015884399414
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.003776000114157796
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "84f5faccaef0494dcf5d8b4c8e6ee2cee313326fd7d7d7de520f3d6c10a57887",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    },
+    "cuda-2d": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "dimension": 2,
+      "compact": true,
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-2",
+          "value": 0.0916575168807298,
+          "reference": 0.09165751688076788,
+          "mixed_error": 3.488333030807324e-14
+        },
+        {
+          "label": "fluxbridge-v1-6",
+          "value": 0.25870643481468686,
+          "reference": 0.2587064348145775,
+          "mixed_error": 8.688043923576788e-14
+        },
+        {
+          "label": "fluxbridge-v1-10",
+          "value": 0.08660303088868433,
+          "reference": 0.08660303088863981,
+          "mixed_error": 4.097167228685136e-14
+        },
+        {
+          "label": "fluxbridge-v1-14",
+          "value": 0.33957014769018423,
+          "reference": 0.33957014769018723,
+          "mixed_error": 2.2377343744608445e-15
+        },
+        {
+          "label": "fluxbridge-v1-18",
+          "value": 0.0,
+          "reference": 0.0,
+          "mixed_error": 0.0
+        },
+        {
+          "label": "fluxbridge-v1-46",
+          "value": 0.25870643481468686,
+          "reference": 0.2587064348145775,
+          "mixed_error": 8.688043923576788e-14
+        }
+      ],
+      "rows": [
+        {
+          "pairs": 128,
+          "static_setup": {
+            "median_ms": 1.0009417310357094,
+            "samples_ms": [
+              1.0009417310357094
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 1.2797694653272629,
+            "samples_ms": [
+              1.2797694653272629
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 80908,
+          "scratch_bytes": 69632,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 29,
+            "volume_nodes": 27,
+            "moment_outputs": 3,
+            "terms": 27,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": -2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 0.560547225177288,
+            "samples_ms": [
+              0.5492819473147392,
+              0.6806124001741409,
+              0.6409259513020515,
+              0.5573909729719162,
+              0.5591278895735741,
+              0.560547225177288,
+              0.9235907346010208
+            ],
+            "cuda_event_median_ms": 0.44070398807525635
+          },
+          "complete": {
+            "median_ms": 1.8764408305287361,
+            "samples_ms": [
+              1.8764408305287361,
+              2.172962762415409,
+              1.754671335220337
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 0.43798398971557617
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.0037120000924915075
+            }
+          ]
+        },
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 1.0009417310357094,
+            "samples_ms": [
+              1.0009417310357094
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 1.2275809422135353,
+            "samples_ms": [
+              1.2275809422135353
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 323596,
+          "scratch_bytes": 278528,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 29,
+            "volume_nodes": 27,
+            "moment_outputs": 3,
+            "terms": 27,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": -2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 0.8897464722394943,
+            "samples_ms": [
+              0.9017633274197578,
+              0.8804136887192726,
+              0.9339740499854088,
+              0.8930191397666931,
+              0.8897464722394943,
+              0.8839722722768784,
+              0.8743200451135635
+            ],
+            "cuda_event_median_ms": 0.7518079876899719
+          },
+          "complete": {
+            "median_ms": 2.205035649240017,
+            "samples_ms": [
+              2.205035649240017,
+              2.1755285561084747,
+              2.4814847856760025
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 0.751583993434906
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.003776000114157796
+            }
+          ]
+        },
+        {
+          "pairs": 8192,
+          "static_setup": {
+            "median_ms": 1.0009417310357094,
+            "samples_ms": [
+              1.0009417310357094
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 2.4958448484539986,
+            "samples_ms": [
+              2.4958448484539986
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 5177356,
+          "scratch_bytes": 4456448,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 29,
+            "volume_nodes": 27,
+            "moment_outputs": 3,
+            "terms": 27,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": -2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 0.8813692256808281,
+            "samples_ms": [
+              0.881461426615715,
+              0.8853431791067123,
+              0.8797300979495049,
+              0.8778860792517662,
+              0.8790912106633186,
+              0.8847219869494438,
+              0.8813692256808281
+            ],
+            "cuda_event_median_ms": 0.7597119808197021
+          },
+          "complete": {
+            "median_ms": 3.4076757729053497,
+            "samples_ms": [
+              3.4076757729053497,
+              3.343973308801651,
+              3.4783314913511276
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 0.7577919960021973
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.0037440001033246517
+            }
+          ]
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 1.0009417310357094,
+            "samples_ms": [
+              1.0009417310357094
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 25.64711682498455,
+            "samples_ms": [
+              25.64711682498455
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 82837516,
+          "scratch_bytes": 71303168,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 29,
+            "volume_nodes": 27,
+            "moment_outputs": 3,
+            "terms": 27,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": -2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 3.095116466283798,
+            "samples_ms": [
+              2.7788663282990456,
+              3.095116466283798,
+              3.2578250393271446,
+              3.4974105656147003,
+              3.520985133945942,
+              3.0869776383042336,
+              2.663607709109783
+            ],
+            "cuda_event_median_ms": 2.9261438846588135
+          },
+          "complete": {
+            "median_ms": 25.30263550579548,
+            "samples_ms": [
+              26.208446361124516,
+              25.30263550579548,
+              24.585874751210213
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 2.60262393951416
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.0037440001033246517
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "84f5faccaef0494dcf5d8b4c8e6ee2cee313326fd7d7d7de520f3d6c10a57887",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    },
+    "cuda-3d-exhaustive": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "dimension": 3,
+      "compact": false,
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.0493896484375506,
+          "reference": 0.0493896484375,
+          "mixed_error": 4.821699396656958e-14
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.24289330132246764,
+          "reference": 0.24289330132230588,
+          "mixed_error": 1.3014753118050478e-13
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08197729122657205,
+          "reference": 0.08197729122652364,
+          "mixed_error": 4.473820686087077e-14
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17593439982157924,
+          "reference": 0.1759343998215134,
+          "mixed_error": 5.598630788440629e-14
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 0.0,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 3.442560330579651e-70
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.24289330132246764,
+          "reference": 0.24289330132230588,
+          "mixed_error": 1.3014753118050478e-13
+        },
+        {
+          "label": "face",
+          "value": 0.13360087756260686,
+          "reference": 0.13360087756244415,
+          "mixed_error": 1.435277507976825e-13
+        },
+        {
+          "label": "near_face",
+          "value": 0.1336008775070455,
+          "reference": 0.1336008775068844,
+          "mixed_error": 1.4210765364561204e-13
+        },
+        {
+          "label": "face_tangent",
+          "value": 1.952906215516334e-15,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 1.952906215516334e-15
+        },
+        {
+          "label": "near_tangent",
+          "value": 1.1653393506278658e-14,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 1.1653393506278658e-14
+        },
+        {
+          "label": "edge_tangent",
+          "value": 1.7817251749022154e-14,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 1.7817251749022154e-14
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -2.0399333923686795e-14,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 2.0399333923686795e-14
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 2.4066210031449785e-15,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 2.4066210031449785e-15
+        },
+        {
+          "label": "full_support",
+          "value": 0.4875000000008157,
+          "reference": 0.4875,
+          "mixed_error": 5.483941965333336e-13
+        },
+        {
+          "label": "sliver",
+          "value": 0.000490575193035553,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 9.302358263602427e-12
+        },
+        {
+          "label": "scalene",
+          "value": 0.28683037394749994,
+          "reference": 0.28683037394742034,
+          "mixed_error": 6.18597388414429e-14
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.13360087756260686,
+          "reference": 0.1336008775624442,
+          "mixed_error": 1.4347878193012956e-13
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13360087756260686,
+          "reference": 0.1336008775624441,
+          "mixed_error": 1.4357671966523547e-13
+        },
+        {
+          "label": "near_edge_inside",
+          "value": 0.08581393329684477,
+          "reference": 0.08581393329687921,
+          "mixed_error": 3.172244183164092e-14
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.08581393329689786,
+          "reference": 0.08581393329687907,
+          "mixed_error": 1.730547390815544e-14
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": 0.049389648437500266,
+          "reference": 0.04938964843750006,
+          "mixed_error": 1.9836942114606244e-16
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": 0.04938964843754315,
+          "reference": 0.04938964843749994,
+          "mixed_error": 4.117487951588436e-14
+        },
+        {
+          "label": "switch_below",
+          "value": 0.1336008775630616,
+          "reference": 0.13360087756299918,
+          "mixed_error": 5.5065491563259974e-14
+        },
+        {
+          "label": "switch_above",
+          "value": 0.13360087756314484,
+          "reference": 0.1336008775630003,
+          "mixed_error": 1.2751493110780687e-13
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.25337414352807397,
+          "reference": 0.25337414352797827,
+          "mixed_error": 7.635487393517641e-14
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.0876540829666217,
+          "reference": 0.08765408296661414,
+          "mixed_error": 6.941100746718568e-15
+        }
+      ],
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 1.1825645342469215,
+            "samples_ms": [
+              1.1825645342469215
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 1.6686413437128067,
+            "samples_ms": [
+              1.6686413437128067
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 405516,
+          "scratch_bytes": 360448,
+          "plan": {
+            "face_nodes": 13,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "-1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 5.346505902707577,
+            "samples_ms": [
+              5.301945842802525,
+              5.717444233596325,
+              5.494896322488785,
+              5.12338150292635,
+              5.061824806034565,
+              5.346505902707577,
+              5.76463807374239
+            ],
+            "cuda_event_median_ms": 5.134751796722412
+          },
+          "complete": {
+            "median_ms": 6.5164705738425255,
+            "samples_ms": [
+              6.810526363551617,
+              6.5164705738425255,
+              6.476476788520813
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_e05b1053",
+              "elapsed_ms": 5.063104152679443
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_c66100c2",
+              "elapsed_ms": 0.003776000114157796
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "84f5faccaef0494dcf5d8b4c8e6ee2cee313326fd7d7d7de520f3d6c10a57887",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    },
+    "cuda-3d-raw32": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float32",
+      "dimension": 3,
+      "compact": true,
+      "accuracy": [
+        {
+          "label": "fluxbridge-v1-22",
+          "value": 0.04932231828570366,
+          "finite": true,
+          "reference": 0.0493896484375,
+          "mixed_error": 6.416125020538908e-05
+        },
+        {
+          "label": "fluxbridge-v1-26",
+          "value": 0.24201932549476624,
+          "finite": true,
+          "reference": 0.24289330132230588,
+          "mixed_error": 0.0007031784841143082
+        },
+        {
+          "label": "fluxbridge-v1-30",
+          "value": 0.08210573345422745,
+          "finite": true,
+          "reference": 0.08197729122652364,
+          "mixed_error": 0.00011871065016365107
+        },
+        {
+          "label": "fluxbridge-v1-34",
+          "value": 0.17603270709514618,
+          "finite": true,
+          "reference": 0.1759343998215134,
+          "mixed_error": 8.359928381013122e-05
+        },
+        {
+          "label": "fluxbridge-v1-38",
+          "value": 0.0,
+          "finite": true,
+          "reference": -3.442560330579651e-70,
+          "mixed_error": 3.442560330579651e-70
+        },
+        {
+          "label": "fluxbridge-v1-50",
+          "value": 0.24201932549476624,
+          "finite": true,
+          "reference": 0.24289330132230588,
+          "mixed_error": 0.0007031784841143082
+        },
+        {
+          "label": "face",
+          "value": 0.13353872299194336,
+          "finite": true,
+          "reference": 0.13360087756244415,
+          "mixed_error": 5.482932461594749e-05
+        },
+        {
+          "label": "near_face",
+          "value": 0.13353872299194336,
+          "finite": true,
+          "reference": 0.1336008775068844,
+          "mixed_error": 5.482927560689498e-05
+        },
+        {
+          "label": "face_tangent",
+          "value": 0.0,
+          "finite": true,
+          "reference": 2.0536869163427742e-70,
+          "mixed_error": 2.0536869163427742e-70
+        },
+        {
+          "label": "near_tangent",
+          "value": 4.62583915616932e-10,
+          "finite": true,
+          "reference": 9.697162119632496e-60,
+          "mixed_error": 4.62583915616932e-10
+        },
+        {
+          "label": "edge_tangent",
+          "value": -1.3891068419980002e-06,
+          "finite": true,
+          "reference": 1.379517881764881e-69,
+          "mixed_error": 1.3891068419980002e-06
+        },
+        {
+          "label": "vertex_tangent",
+          "value": -1.3831142897657855e-09,
+          "finite": true,
+          "reference": 4.209069034702409e-70,
+          "mixed_error": 1.3831142897657855e-09
+        },
+        {
+          "label": "disjoint_in_aabb",
+          "value": 1.0852982512687959e-08,
+          "finite": true,
+          "reference": -2.2354668359423607e-69,
+          "mixed_error": 1.0852982512687959e-08
+        },
+        {
+          "label": "full_support",
+          "value": 0.48675423860549927,
+          "finite": true,
+          "reference": 0.4875,
+          "mixed_error": 0.0005013521979836782
+        },
+        {
+          "label": "sliver",
+          "value": -0.004959742538630962,
+          "finite": true,
+          "reference": 0.0004905751837286312,
+          "mixed_error": 0.005447645242793723
+        },
+        {
+          "label": "scalene",
+          "value": 0.2863997220993042,
+          "finite": true,
+          "reference": 0.28683037394742034,
+          "mixed_error": 0.0003346609287711244
+        },
+        {
+          "label": "near_face_inside",
+          "value": 0.13353872299194336,
+          "finite": true,
+          "reference": 0.1336008775624442,
+          "mixed_error": 5.4829324615996464e-05
+        },
+        {
+          "label": "near_face_outside",
+          "value": 0.13353872299194336,
+          "finite": true,
+          "reference": 0.1336008775624441,
+          "mixed_error": 5.482932461589853e-05
+        },
+        {
+          "label": "near_edge_inside",
+          "value": -0.010448658838868141,
+          "finite": true,
+          "reference": 0.08581393329687921,
+          "mixed_error": 0.08865477701456939
+        },
+        {
+          "label": "near_edge_outside",
+          "value": 0.1819971799850464,
+          "finite": true,
+          "reference": 0.08581393329687907,
+          "mixed_error": 0.08858170238811004
+        },
+        {
+          "label": "near_vertex_inside",
+          "value": null,
+          "finite": false,
+          "reference": 0.04938964843750006,
+          "mixed_error": null
+        },
+        {
+          "label": "near_vertex_outside",
+          "value": null,
+          "finite": false,
+          "reference": 0.04938964843749994,
+          "mixed_error": null
+        },
+        {
+          "label": "switch_below",
+          "value": 0.13353872299194336,
+          "finite": true,
+          "reference": 0.13360087756299918,
+          "mixed_error": 5.4829325105535876e-05
+        },
+        {
+          "label": "switch_above",
+          "value": 0.13353872299194336,
+          "finite": true,
+          "reference": 0.1336008775630003,
+          "mixed_error": 5.48293251065152e-05
+        },
+        {
+          "label": "slanted_face_roundoff",
+          "value": 0.25338679552078247,
+          "finite": true,
+          "reference": 0.25337414352797827,
+          "mixed_error": 1.0094346424436152e-05
+        },
+        {
+          "label": "wall_grid_roundoff",
+          "value": 0.08789145201444626,
+          "finite": true,
+          "reference": 0.08765408296661414,
+          "mixed_error": 0.000218239467446012
+        }
+      ],
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 1.0128263384103775,
+            "samples_ms": [
+              1.0128263384103775
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 1.2172888964414597,
+            "samples_ms": [
+              1.2172888964414597
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 204812,
+          "scratch_bytes": 178176,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 0.4791179671883583,
+            "samples_ms": [
+              0.4835454747080803,
+              0.4803696647286415,
+              0.4791179671883583,
+              0.47712400555610657,
+              0.47562457621097565,
+              0.4785098135471344,
+              0.6323568522930145
+            ],
+            "cuda_event_median_ms": 0.47366398572921753
+          },
+          "complete": {
+            "median_ms": 1.5701577067375183,
+            "samples_ms": [
+              1.9752094522118568,
+              1.4216573908925056,
+              1.5701577067375183
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_27d7d578",
+              "elapsed_ms": 0.45286399126052856
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_bb1c7875",
+              "elapsed_ms": 0.0037440001033246517
+            }
+          ]
+        },
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 1.0128263384103775,
+            "samples_ms": [
+              1.0128263384103775
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 30.752400867640972,
+            "samples_ms": [
+              30.752400867640972
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 52428812,
+          "scratch_bytes": 45613056,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          },
+          "warm": {
+            "median_ms": 1.3369889929890633,
+            "samples_ms": [
+              1.9255103543400764,
+              1.3181697577238083,
+              1.1652978137135506,
+              1.658327877521515,
+              1.43419299274683,
+              1.3369889929890633,
+              1.1775568127632141
+            ],
+            "cuda_event_median_ms": 1.1544959545135498
+          },
+          "complete": {
+            "median_ms": 31.444876454770565,
+            "samples_ms": [
+              30.98657913506031,
+              31.444876454770565,
+              33.005270175635815
+            ],
+            "cuda_event_median_ms": null
+          },
+          "kernel_events": [
+            {
+              "name": "forward kernel field_functions__locals__fused_27d7d578",
+              "elapsed_ms": 1.1582720279693604
+            },
+            {
+              "name": "forward kernel Batch____init____locals__reduce_bb1c7875",
+              "elapsed_ms": 0.0037440001033246517
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    },
+    "ncu-analytic-3d-driver": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "dimension": 3,
+      "compact": true,
+      "accuracy": [],
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 29.11390643566847,
+            "samples_ms": [
+              29.11390643566847
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 6.827265024185181,
+            "samples_ms": [
+              6.827265024185181
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 401420,
+          "scratch_bytes": 356352,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          }
+        }
+      ],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "84f5faccaef0494dcf5d8b4c8e6ee2cee313326fd7d7d7de520f3d6c10a57887",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    },
+    "ncu-analytic-2d-driver": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "dimension": 2,
+      "compact": true,
+      "accuracy": [],
+      "rows": [
+        {
+          "pairs": 512,
+          "static_setup": {
+            "median_ms": 28.953145258128643,
+            "samples_ms": [
+              28.953145258128643
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 6.9040292873978615,
+            "samples_ms": [
+              6.9040292873978615
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 323596,
+          "scratch_bytes": 278528,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 29,
+            "volume_nodes": 27,
+            "moment_outputs": 3,
+            "terms": 27,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": -2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          }
+        }
+      ],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "84f5faccaef0494dcf5d8b4c8e6ee2cee313326fd7d7d7de520f3d6c10a57887",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    },
+    "ncu-analytic-3d-large-driver": {
+      "device": "cuda:0",
+      "device_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "precision": "float64",
+      "dimension": 3,
+      "compact": true,
+      "accuracy": [],
+      "rows": [
+        {
+          "pairs": 131072,
+          "static_setup": {
+            "median_ms": 29.70875147730112,
+            "samples_ms": [
+              29.70875147730112
+            ],
+            "cuda_event_median_ms": null
+          },
+          "preparation": {
+            "median_ms": 35.08332651108503,
+            "samples_ms": [
+              35.08332651108503
+            ],
+            "cuda_event_median_ms": null
+          },
+          "batch_owned_bytes": 102760460,
+          "scratch_bytes": 91226112,
+          "plan": {
+            "face_nodes": 12,
+            "boundary_nodes": 39,
+            "volume_nodes": 36,
+            "moment_outputs": 4,
+            "terms": 36,
+            "face_metadata": [
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 0,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": -3,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 2,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 4,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 6,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 7,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 8,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 9,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 10,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 11,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 12,
+                "radius": "1"
+              },
+              {
+                "alpha": [
+                  0,
+                  0,
+                  0
+                ],
+                "radial_power": 13,
+                "radius": "1"
+              }
+            ]
+          }
+        }
+      ],
+      "source_sha256": {
+        "src/warpSPHBoundaries/fluxbridge/paired.py": "20e771e9af039353b67f450bf174e2fa1a7598ee7f3e123d61958bbad352a908",
+        "src/warpSPHBoundaries/fluxbridge/wp_func.py": "7c62ce5ea8a6b10a37e36a24481826bfc733fd0da00b25c6364a8c0e6783622b",
+        "src/warpSPHBoundaries/fluxbridge/planar.py": "804eb815bbba1317af0e64ccd309ab754c27fcdac94f80b5fbeeea8835148c62",
+        "src/warpSPHBoundaries/fluxbridge/sphere_shell.py": "1357df546106fc52bccd8196c03297d38c26733abb9f25bec99acfedadd9ef81",
+        "src/warpSPHBoundaries/fluxbridge/radial_reference.py": "91b4afef6f6f4f9bff72c6e9b6aebd1615cf2fa490afa6a128db42ee05531ce1",
+        "src/warpSPHBoundaries/fluxbridge/__init__.py": "9d9697a73d6e384febcc0af74af007910a1646a445c1fde5e50872fc08821165",
+        "src/warpSPHBoundaries/fluxbridge/_paired_code.py": "49779cec2065b582b849a4d46a77f79846973af30d06484911f8cfbeaf9e7ca6",
+        "src/warpSPHBoundaries/fluxbridge/contract.py": "f8028201450dbfae5939d7ab73d7a37367e36065c0e5fb7aebe783fe7b374e4a",
+        "src/warpSPHBoundaries/fluxbridge/disk.py": "59acad6a271591199beb5f6b708487b814a56178e141363f4a5d5477f76e8d03",
+        "src/warpSPHBoundaries/fluxbridge/box.py": "a99463ff70cc2673258f730d51015ce5fb0f70ea1f93e4d87a490512c3f7e317",
+        "src/warpSPHBoundaries/fluxbridge/conditioned2d.py": "c1db8ea0faa2eeaf9dbcc9de19a97214242910837bfab3ece75c1b3c15e3ae40",
+        "src/warpSPHBoundaries/fluxbridge/material.py": "c86fa41a9ac0765c4373ebdad8ef2cc9e019468cd8fffaf2f9c56b8c1089527e",
+        "src/warpSPHBoundaries/fluxbridge/disks.py": "c2871c8dd779989b1d99c5850a2a09c4ecd9ca9181bae9a60a026a6973c465cb",
+        "src/warpSPHBoundaries/fluxbridge/_disk_code.py": "51faae754b17145dd006ffd35afe2d9cf9ff837e64990116aeb9af90f9e84279",
+        "src/warpSPHBoundaries/fluxbridge/fields.py": "519c5fd6bed2068a40df5245ba2031d41da7b7e09ce54c53c2395b3c0995f1cc",
+        "src/warpSPHBoundaries/fluxbridge/radial.py": "1103ba417318b33283ab6656aacce04390a2396e83d8958a4920daccd499d01b",
+        "src/warpSPHBoundaries/fluxbridge/sphere_reference.py": "b93f29047d8fb96b278541089e70f6f76e5f9a8dbe4b93966db4806eec67ea5c",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk.py": "55cc8417c91ea9f3d962def6cfda41760fa553ca7cb78d940060c34f54e1123f",
+        "src/warpSPHBoundaries/fluxbridge/device_panels.py": "0ffccaacec16a2d53c90ed11e0609c8765e96335015d6773a13d071cedcae32d",
+        "src/warpSPHBoundaries/fluxbridge/reference.py": "f9fd02127ee2e4d5eeeeed4c8a75b2b660b130cd78f4d661e2a969a84344dcd1",
+        "src/warpSPHBoundaries/fluxbridge/plan.py": "673d8961ac6605e834dbb57126718f40f7915226367cbf4a8ff28a1e84d58c40",
+        "src/warpSPHBoundaries/fluxbridge/affine.py": "052797e00e1ff8960ef95ceea538b7dba78b3203c47d7928d02b90bd4ce2d1fe",
+        "src/warpSPHBoundaries/fluxbridge/evaluate.py": "b6e7810af9bec4bc6b3fa77ce21407639b2a8c6b82e86050b0b9f52df33dc36f",
+        "src/warpSPHBoundaries/fluxbridge/planar_reference.py": "1d04e6af684c97c7ba65bf114d0b8365d6b3d23db834735bb6a90852a6112918",
+        "src/warpSPHBoundaries/fluxbridge/disk_reference.py": "44c6c55e5f024a98aba5a6512261226acc9c24e586e5e1ae666c6ca3b7487889",
+        "src/warpSPHBoundaries/fluxbridge/geometry.py": "2cbdd6d4c116ca400510d139fee0f34d6d6a26f396734c267dc18cf474ec2df7",
+        "src/warpSPHBoundaries/fluxbridge/device_search.py": "542e2696ca62c7602ad3a4a53ac1492084840b2e1b6c40d45caee6866968b95e",
+        "src/warpSPHBoundaries/fluxbridge/weighted_disk_reference.py": "a5f20bb8c48c83bfc631987efdf10b760b0116039ddac6773298cf96c1cfcfbf",
+        "src/warpSPHBoundaries/fluxbridge/planar_shell.py": "0e5ad424188d21525f759dbfd8f329c4aeb3210fb771f9ddc08ab63787a9ed3a",
+        "src/warpSPHBoundaries/fluxbridge/streaming.py": "df0b1a939b667e8d2e8c27c9f7b3d4765c9407b5516937bc216c554b293448d2",
+        "src/warpSPHBoundaries/fluxbridge/_radial_code.py": "0f917a4aa03fc272a3bb47fd7e234fa3adb64914c6c70d3380ca1e5648228300",
+        "src/warpSPHBoundaries/fluxbridge/tet_quadrature.py": "1035b8067778e4c0c71545b44474dd3e27b61a015c8049f60e35de84f59aa0b0",
+        "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9",
+        "scripts/studies/fluxbridge_single_term_study.py": "45b77316c2b670cde194c94e85fe1937f121f83c0ced2bd63551520dd3f8cdc0",
+        "scripts/studies/fluxbridge_shell_acceptance.py": "cba654c87f9863a81cf69e9a8600cb8d784bb6d260d72f5a3eb7930f5a472bc8"
+      },
+      "limitations": [
+        "Same scalar P1 FEM-weighted W6 volume integral as the direct quadrature toy",
+        "Existing shared analytic DAG interpreter; not an optimized specialized formula",
+        "Warm timings reuse static geometry, field coefficients, plan, adjacency and scratch, recomputing analytic integrals each action",
+        "Complete timings include validation, search, allocation, evaluation and readback; static rational plan construction and JIT excluded",
+        "GPU clock/cache and desktop activity uncontrolled; profiler timing separate from ordinary timings",
+        "FLOP instruction counts exclude division, square root, logarithm and atan2 cost",
+        "Raw analytic fp32 remains experimental; no accepted precision tradeoff or error budget changed"
+      ]
+    }
+  },
+  "profiles": {
+    "ncu-analytic-3d": [
+      {
+        "kernel": "field_functions__locals__fused_e05b1053_cuda_kernel_forward",
+        "pairs": 512,
+        "fp32_flops_per_pair": 5144.0,
+        "fp64_flops_per_pair": 111888.0,
+        "duration_ms": 4.563808,
+        "fp64_gflops_per_second": 12.55238081882498,
+        "registers_per_thread": 242.0,
+        "achieved_occupancy_pct": 16.67,
+        "fp64_pipeline_active_pct": 0.89,
+        "local_load_sectors": 61440.0,
+        "local_store_sectors": 103984.0,
+        "stack_size": 1024.0,
+        "register_spill_instructions": 0.0
+      },
+      {
+        "kernel": "Batch____init____locals__reduce_c66100c2_cuda_kernel_forward",
+        "pairs": 512,
+        "fp32_flops_per_pair": 0.0,
+        "fp64_flops_per_pair": 2.0,
+        "duration_ms": 0.002496,
+        "fp64_gflops_per_second": 0.41025641025641024,
+        "registers_per_thread": 40.0,
+        "achieved_occupancy_pct": 16.19,
+        "fp64_pipeline_active_pct": 0.04,
+        "local_load_sectors": 0.0,
+        "local_store_sectors": 0.0,
+        "stack_size": 1024.0,
+        "register_spill_instructions": 0.0
+      }
+    ],
+    "ncu-analytic-2d": [
+      {
+        "kernel": "field_functions__locals__fused_e05b1053_cuda_kernel_forward",
+        "pairs": 512,
+        "fp32_flops_per_pair": 984.0,
+        "fp64_flops_per_pair": 18919.0,
+        "duration_ms": 0.774656,
+        "fp64_gflops_per_second": 12.504296100462657,
+        "registers_per_thread": 242.0,
+        "achieved_occupancy_pct": 16.67,
+        "fp64_pipeline_active_pct": 0.86,
+        "local_load_sectors": 10752.0,
+        "local_store_sectors": 39068.0,
+        "stack_size": 1024.0,
+        "register_spill_instructions": 0.0
+      },
+      {
+        "kernel": "Batch____init____locals__reduce_c66100c2_cuda_kernel_forward",
+        "pairs": 512,
+        "fp32_flops_per_pair": 0.0,
+        "fp64_flops_per_pair": 2.0,
+        "duration_ms": 0.00272,
+        "fp64_gflops_per_second": 0.3764705882352941,
+        "registers_per_thread": 40.0,
+        "achieved_occupancy_pct": 16.05,
+        "fp64_pipeline_active_pct": 0.04,
+        "local_load_sectors": 0.0,
+        "local_store_sectors": 0.0,
+        "stack_size": 1024.0,
+        "register_spill_instructions": 0.0
+      }
+    ],
+    "ncu-analytic-3d-large": [
+      {
+        "kernel": "field_functions__locals__fused_e05b1053_cuda_kernel_forward",
+        "pairs": 131072,
+        "fp32_flops_per_pair": 5144.0,
+        "fp64_flops_per_pair": 111888.0,
+        "duration_ms": 13.557216,
+        "fp64_gflops_per_second": 1081.7400811494042,
+        "registers_per_thread": 242.0,
+        "achieved_occupancy_pct": 16.67,
+        "fp64_pipeline_active_pct": 76.78,
+        "local_load_sectors": null,
+        "local_store_sectors": null,
+        "stack_size": 1024.0,
+        "register_spill_instructions": null
+      },
+      {
+        "kernel": "Batch____init____locals__reduce_c66100c2_cuda_kernel_forward",
+        "pairs": 131072,
+        "fp32_flops_per_pair": 0.0,
+        "fp64_flops_per_pair": 2.0,
+        "duration_ms": 0.0032,
+        "fp64_gflops_per_second": 81.92,
+        "registers_per_thread": 40.0,
+        "achieved_occupancy_pct": 41.27,
+        "fp64_pipeline_active_pct": 7.78,
+        "local_load_sectors": null,
+        "local_store_sectors": null,
+        "stack_size": 1024.0,
+        "register_spill_instructions": null
+      }
+    ]
+  },
+  "source_sha256": {
+    "scripts/studies/fluxbridge_single_term_analytic.py": "5603adfb27a80ceb5a2dc16689a7ddbba30a395ac2d180313edb3b90f87973d9"
+  },
+  "evidence_sha256": {
+    "/tmp/fluxbridge-analytic-term-20261026/cpu-3d/report.json": "bb1fbe412dd5db5f7adbbb7367b4e8abe5e42b39e06d84265960ab12aaa52f2a",
+    "/tmp/fluxbridge-analytic-term-20261026/cuda-3d/report.json": "d214d479d40598e8ec7995add9f75f94aefc3a0a4dcf2898efaddeb7d0372e42",
+    "/tmp/fluxbridge-analytic-term-20261026/cuda-2d/report.json": "eb140ebfbb394f5d501e4b377d3242bf000188ad501017b9d0830cff33fc2ddd",
+    "/tmp/fluxbridge-analytic-term-20261026/cuda-3d-exhaustive/report.json": "ae6ffb6ab182faf7f4dbc579543d267b51606984c8e6ecc745ab0b44dc50573e",
+    "/tmp/fluxbridge-analytic-term-20261026/cuda-3d-raw32/report.json": "53ce3569c68114d55101ac270b9d178020e0261f0c9fe1dde0a54fbfda890f8d",
+    "/tmp/fluxbridge-analytic-term-20261026/ncu-analytic-3d-driver/report.json": "1a5c22c837eca3596f7405964ba70a52197cf25f625cbcbef58e554380110749",
+    "/tmp/fluxbridge-analytic-term-20261026/ncu-analytic-2d-driver/report.json": "3a562abf8e23405680a2f955432969d42024bac60b49a165a930dacf87fd2aa4",
+    "/tmp/fluxbridge-analytic-term-20261026/ncu-analytic-3d-large-driver/report.json": "02163f824fd17b605cec9174c81372c8cd5606241e3afdf58c2bea52f1b0be34",
+    "/tmp/fluxbridge-analytic-term-20261026/ncu-analytic-3d.csv": "4c162692b95cf0fee93fe4db929fd15086d0cb9d180bee615f6d0422ac1defe3",
+    "/tmp/fluxbridge-analytic-term-20261026/ncu-analytic-2d.csv": "0d46233397170fc6b0d8a3a0a0cb0df1992b6782b860964b6e9dea7517610929",
+    "/tmp/fluxbridge-analytic-term-20261026/ncu-analytic-3d-large.csv": "f5b400f0b569454ff355af706e1ded4f62fab9ed517b2381ab185bec5906a6d4",
+    "/tmp/fluxbridge-analytic-term-20261026/fp64-measured-script.py": "84f5faccaef0494dcf5d8b4c8e6ee2cee313326fd7d7d7de520f3d6c10a57887"
+  },
+  "verification": "All native FluxBridge source files and the pre-existing tracked patch unchanged. Original fp64 measurement script archived before adding JSON-safe recording of nonfinite raw-fp32 outputs."
+}
