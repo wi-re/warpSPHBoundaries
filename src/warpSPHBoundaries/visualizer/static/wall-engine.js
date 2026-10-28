@@ -8,7 +8,7 @@ export function cancelWall(){
 export function computeWallInBrowser(config,progress=()=>{},comparison=false){
  cancelWall();return new Promise((resolve,reject)=>{
   if(!worker){
-   worker=new Worker(new URL('./wall-worker.js',import.meta.url),{type:'module'});
+   worker=new Worker(new URL('./wall-worker.js?v=20261028-webgpu1',import.meta.url),{type:'module'});
    worker.onmessage=({data})=>{
     if(!active)return;
     if(data.type==='progress'){active.progress(data.detail);return;}

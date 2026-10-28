@@ -45,7 +45,14 @@ export function compileProfiles(source,d,kernel,requests){
   if(ds.length===2&&ds[0]===ds[1]){const b=term(alpha,1,1);metadata.set(b.a,i*12+4);metadata[i*12+9]=b.sign;}
   metadata[i*12+10]=alpha.reduce((s,a)=>s+a,0)-ds.length;
  });
- return {table:new Float32Array(table),metadata,requests:req,dimension:d,kernel};
+ const profileIndices=[...new Set(req.flatMap((_,i)=>[metadata[i*12+3],metadata[i*12+7]]).filter(i=>i>=0))];
+ const mapSize=Math.ceil(profileIndices.length/4)*4,masks=new Int32Array(Math.ceil(req.length/64));
+ const sharedMetadata=new Int32Array(metadata.length+mapSize+Math.ceil(masks.length/4)*4);sharedMetadata.set(metadata);
+ for(let i=0;i<req.length;i++)for(const offset of [3,7])if(metadata[i*12+offset]>=0)sharedMetadata[i*12+offset]=profileIndices.indexOf(metadata[i*12+offset]);
+ for(let i=0;i<req.length;i++)for(const offset of [3,7]){const profile=sharedMetadata[i*12+offset];if(profile>=0)masks[Math.floor(i/64)]|=1<<profile;}
+ sharedMetadata.set(profileIndices,metadata.length);
+ sharedMetadata.set(masks,metadata.length+mapSize);
+ return {table:new Float32Array(table),metadata,sharedMetadata,profileCount:profileIndices.length,requests:req,dimension:d,kernel};
 }
 // All edges/faces of selected volumes participate: exterior regular flux stays.
 export function facets(vertices,d){
@@ -72,11 +79,15 @@ export function selectedElements(elements,q,h,exhaustive=false){
 export function prepareSamples(geometry,q,h,kernel,nodes=16){
  const d=q.length,vertices=Array.isArray(geometry)?geometry:geometry.faces.flat();if(![2,3].includes(d)||q.some(v=>!Number.isFinite(v))||!Number.isFinite(h)||h<=0||!Number.isInteger(nodes)||nodes<8||nodes>64||vertices.some(v=>v.length!==d||v.some(x=>!Number.isFinite(x))))throw Error('Invalid integration geometry/rule');
  const rawFaces=Array.isArray(geometry)?facets(vertices,d):geometry.faces;
- const fs=rawFaces.map(face=>face.map(v=>mul(sub(v,q),1/h))),rule=[...gauss(nodes)].sort((a,b)=>a[0]-b[0]),knots=kernel==='cubic'?[.5,1]:[1],samples=[];
- const push=(u,r,w,kind=0)=>{
-  if(samples.length>=8*2_000_000)throw Error('FluxBridge sample budget exceeded; reduce geometry/grid size');
-  samples.push(u[0],u[1],u[2]??0,r,w,kind,0,0);
+ const fs=rawFaces.map(face=>face.map(v=>mul(sub(v,q),1/h))),rule=[...gauss(nodes)].sort((a,b)=>a[0]-b[0]),knots=kernel==='cubic'?[.5,1]:[1];
+ let samples=new Float32Array(4096),size=0;
+ const pushXYZ=(x,y,z,r,w,kind=0)=>{
+  if(size>=8*2_000_000)throw Error('FluxBridge sample budget exceeded; reduce geometry/grid size');
+  if(size+8>samples.length){const grown=new Float32Array(Math.min(8*2_000_000,samples.length*2));grown.set(samples);samples=grown;}
+  samples[size++]=x;samples[size++]=y;samples[size++]=z;samples[size++]=r;
+  samples[size++]=w;samples[size++]=kind;samples[size++]=0;samples[size++]=0;
  };
+ const push=(u,r,w,kind=0)=>pushXYZ(u[0],u[1],u[2]??0,r,w,kind);
  // Split each signed edge at closest approach, kernel knots and geometric scales.
  const panels=(s0,s1,c,c0,visit)=>{
   for(const side of [-1,1]){
@@ -96,7 +107,7 @@ export function prepareSamples(geometry,q,h,kernel,nodes=16){
    const sign=Math.sign(z);
    panels(dot(t,a),dot(t,b),c,0,(side,mid,half,start)=>{
     const outside=c>=1||start*start+c*c>=1;
-    for(const [x,w]of rule){const angle=mid+half*x,sn=Math.sin(angle)*side,cs=Math.cos(angle);push(add(mul(t,sn),mul(n,sign*cs)),outside?1:c/cs,sign*half*w);}
+    for(const [x,w]of rule){const angle=mid+half*x,sn=Math.sin(angle)*side,cs=Math.cos(angle),axial=sign*cs;pushXYZ(t[0]*sn+n[0]*axial,t[1]*sn+n[1]*axial,0,outside?1:c/cs,sign*half*w);}
    });
   }
  }else{
@@ -124,7 +135,7 @@ export function prepareSamples(geometry,q,h,kernel,nodes=16){
       for(const {e,maxrho,w:pw}of azimuth){
        if(maxrho<=rho)continue;const t0=Math.atan2(rho,c0),t1=Math.atan2(Math.min(high,maxrho),c0),dh=(t1-t0)/2;
        if(dh<=0)continue;
-       for(const [x,w]of rule){const theta=(t0+t1)/2+dh*x,st=Math.sin(theta),ct=Math.cos(theta);push(add(mul(n,sign0*ct),mul(e,st)),outer?1:c0/ct,sign0*sign*half*pw*dh*w*st);}
+       for(const [x,w]of rule){const theta=(t0+t1)/2+dh*x,st=Math.sin(theta),ct=Math.cos(theta),axial=sign0*ct;pushXYZ(n[0]*axial+e[0]*st,n[1]*axial+e[1]*st,n[2]*axial+e[2]*st,outer?1:c0/ct,sign0*sign*half*pw*dh*w*st);}
       }
       rho=high;
      }
@@ -132,8 +143,9 @@ export function prepareSamples(geometry,q,h,kernel,nodes=16){
    }
   }
  }
- if(samples.some(v=>!Number.isFinite(v)))throw Error('Nonfinite prepared geometry');
- return new Float32Array(samples);
+ const result=size===samples.length?samples:samples.slice(0,size);
+ if(!result.every(Number.isFinite))throw Error('Nonfinite prepared geometry');
+ return result;
 }
 
 // Exact incidence cancellation is legal here only for a common volume integrand.

@@ -1,6 +1,6 @@
 // Prescribed-state wall adapter. No pressure/porosity solver or native imports.
-import {add,sub,mul,dot,monomials,baseline,compileProfiles,prepareSamples,selectedElements,mergeVolumeFacets} from './fluxbridge-plan.js';
-import {fluxBridgeGPU,dispatchFluxBridge} from './fluxbridge-gpu.js';
+import {add,sub,mul,dot,monomials,baseline,compileProfiles,prepareSamples,selectedElements,mergeVolumeFacets} from './fluxbridge-plan.js?v=20261028-webgpu1';
+import {fluxBridgeGPU,dispatchFluxBridge} from './fluxbridge-gpu.js?v=20261028-webgpu1';
 export const DEFAULT_WALL={dimension:2,geometry:'wall',width:2,thickness:.4,depth:1,fraction:.5,subdivisions:2,grading:1,angle:0,center:[0,0,0],h:.6,kernel:'w2',precision:'float32',backend:'numerical',device:'cpu',preparation:'host',resolution:9,slice:0,slice_plane:'xy',degree:0,resistance:4,anisotropy:4,tensor_angle:0,dt:.1,fluid:[0,1,0],skeleton:[0,0,0],fluid_gradient:[[0,0,0],[0,0,0],[0,0,0]],skeleton_gradient:[[0,0,0],[0,0,0],[0,0,0]],porous_enabled:true,exhaustive:false,segments:16,fibres:3,search:'host'};
 const identity=d=>Array.from({length:d},(_,i)=>Array.from({length:d},(_,j)=>+(i===j)));
 const mv=(A,v)=>A.map(row=>dot(row,v));
@@ -95,20 +95,29 @@ export function assembleWall(c,queries,requests,regional,rotation,profiles){
  if(c.geometry!=='wall')for(const r of ['solid','porous','total']){delete terms[r].normal_relative;delete terms[r].normal_response;}
  return terms;
 }
-async function integrateRule(resource,plan,elements,regions,q,h,kernel,nodes,exhaustive,progress){
- const columns=plan.requests.length,regional={solid:q.map(()=>Array(columns).fill(0)),porous:q.map(()=>Array(columns).fill(0))},selected=q.map(x=>selectedElements(elements,x,h,exhaustive));
- let peak=0,totalSamples=0,prepare_ms=0,action_readback_ms=0,dispatches=0,parts=[],ranges=[],owners=[],sampleCount=0;
+export function prepareWallRegions(elements,regions,q,h,dimension,exhaustive=false){
+ const selected=q.map(x=>selectedElements(elements,x,h,exhaustive)),cache=new Map();
+ const surfaces=selected.map(indices=>['solid','porous'].flatMap(region=>{
+  const ids=indices.filter(ei=>regions[ei]===region);if(!ids.length)return [];
+  const key=region+'|'+ids.join(',');
+  if(!cache.has(key))cache.set(key,mergeVolumeFacets(elements,ids,dimension));
+  return [{region,surface:cache.get(key)}];
+ }));
+ return {selected,surfaces};
+}
+async function integrateRule(resource,plan,geometry,q,h,kernel,nodes,progress){
+ const columns=plan.requests.length,regional={solid:q.map(()=>Array(columns).fill(0)),porous:q.map(()=>Array(columns).fill(0))},{selected,surfaces}=geometry;
+ let peak=0,totalSamples=0,prepare_ms=0,action_readback_ms=0,dispatches=0,compute_passes=0,parts=[],ranges=[],owners=[],sampleCount=0;const strategies=new Set();
  const flush=async()=>{
   if(!owners.length)return;const started=performance.now(),samples=new Float32Array(sampleCount*8);let offset=0;for(const p of parts){samples.set(p,offset);offset+=p.length;}
-  peak=Math.max(peak,Math.max(4,samples.byteLength)+2*owners.length*columns*4+plan.table.byteLength+plan.metadata.byteLength+ranges.length*4+32);totalSamples+=sampleCount;prepare_ms+=performance.now()-started;
+  totalSamples+=sampleCount;prepare_ms+=performance.now()-started;
   const before=performance.now(),values=await dispatchFluxBridge(resource,plan,samples,new Uint32Array(ranges),h);action_readback_ms+=performance.now()-before;dispatches++;
+  peak=Math.max(peak,resource.lastDispatch.owned_gpu_bytes);compute_passes+=resource.lastDispatch.compute_passes;strategies.add(resource.lastDispatch.strategy);
   owners.forEach(([qi,region],row)=>{const output=regional[region][qi];for(let j=0;j<columns;j++)output[j]+=values[row*columns+j];});
   parts=[];ranges=[];owners=[];sampleCount=0;
  };
  for(let qi=0;qi<q.length;qi++){
-  for(const region of ['solid','porous']){
-   const ids=selected[qi].filter(ei=>regions[ei]===region);if(!ids.length)continue;
-   const beforeMerge=performance.now(),surface=mergeVolumeFacets(elements,ids,plan.dimension);prepare_ms+=performance.now()-beforeMerge;
+  for(const {region,surface}of surfaces[qi]){
    // Each bounded face group contributes to the same regional integral. Groups
    // need not be closed individually; all regular-flux tails are retained.
    const faceChunk=plan.dimension===3?4:16;
@@ -122,7 +131,7 @@ async function integrateRule(resource,plan,elements,regions,q,h,kernel,nodes,exh
   if(qi%4===3)await flush();
   if(qi%4===0)progress(`Order ${nodes}: preparing ${qi+1}/${q.length} probes…`);
  }
- await flush();return {regional,selected,timing:{prepare_ms,action_readback_ms,samples:totalSamples,dispatches,owned_gpu_peak_bytes:peak,method:plan.dimension===2?'browser_conditioned_boundary':'browser_tet_quadrature',nodes}};
+ await flush();return {regional,selected,timing:{prepare_ms,action_readback_ms,samples:totalSamples,dispatches,compute_passes,strategies:[...strategies],owned_gpu_peak_bytes:peak,method:plan.dimension===2?'browser_conditioned_boundary':'browser_tet_quadrature',nodes}};
 }
 export async function computeBrowserWall(payload,progress=()=>{},dependencies={}){
  const start=performance.now(),c=validateWall(payload),d=c.dimension,geo=generateWall(c),requests=wallRequests(d,c.degree),plot_axes=d===2?[0,1]:{xy:[0,1],xz:[0,2],yz:[1,2]}[c.slice_plane];
@@ -132,11 +141,11 @@ export async function computeBrowserWall(payload,progress=()=>{},dependencies={}
  progress('Loading WebGPU numerical fp32…');
  const resource=dependencies.resource??await fluxBridgeGPU();
  const profiles=dependencies.profiles??await fetch(new URL('./fluxbridge-profiles.json',import.meta.url)).then(r=>{if(!r.ok)throw Error('Could not load FluxBridge profiles');return r.json();});
- const plan=compileProfiles(profiles,d,c.kernel,requests),static_prepare_ms=performance.now()-start;
- let nodes=16,low=await integrateRule(resource,plan,geo.elements,geo.regions,queries,c.h,c.kernel,nodes,c.exhaustive,progress),difference=Infinity,high;
+ const plan=compileProfiles(profiles,d,c.kernel,requests),geometry=prepareWallRegions(geo.elements,geo.regions,queries,c.h,d,c.exhaustive),static_prepare_ms=performance.now()-start;
+ let nodes=16,low=await integrateRule(resource,plan,geometry,queries,c.h,c.kernel,nodes,progress),difference=Infinity,high;
  const allTiming=[low.timing];
  while(nodes<64){
-  high=await integrateRule(resource,plan,geo.elements,geo.regions,queries,c.h,c.kernel,nodes+8,c.exhaustive,progress);allTiming.push(high.timing);difference=0;
+  high=await integrateRule(resource,plan,geometry,queries,c.h,c.kernel,nodes+8,progress);allTiming.push(high.timing);difference=0;
   for(const r of ['solid','porous'])for(let i=0;i<queries.length;i++)for(let j=0;j<requests.length;j++){
    const scale=c.h**(requests[j].alpha.reduce((a,b)=>a+b,0)-requests[j].derivative.length),a=low.regional[r][i][j]/scale,b=high.regional[r][i][j]/scale;difference=Math.max(difference,Math.abs(a-b)/(1+Math.abs(b)));
   }

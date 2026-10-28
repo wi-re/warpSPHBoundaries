@@ -1,6 +1,6 @@
 import {compileSeries} from './series-plan.js?v=20261022-7';
 import {compileAnalytic3d} from './analytic3d-plan.js?v=20261022-7';
-import {dispatchAnalytic,disposeAnalyticGPU} from './analytic-gpu.js?v=20261022-7';
+import {dispatchAnalytic,disposeAnalyticGPU} from './analytic-gpu.js?v=20261028-webgpu1';
 import {FIELD_IDS,SHAPES,gauss} from './term-engine.js?v=20261022-7';
 import {BROWSER_MODELS,validate,grid,samples,modelError,resultRow,packageResult} from './browser-compute.js?v=20261022-7';
 let resourcesPromise;

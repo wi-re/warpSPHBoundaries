@@ -1,0 +1,526 @@
+{
+  "adapter": {
+    "vendor": "mesa",
+    "architecture": "software",
+    "device": "llvmpipe-llvm-20-1-2-256-bits-",
+    "description": "llvmpipe: Mesa 25.2.8-0ubuntu0.24.04.4 (LLVM 20.1.2)",
+    "core_features_and_limits": true,
+    "limits": {
+      "maxStorageBuffersPerShaderStage": 16,
+      "maxStorageBufferBindingSize": 134217728,
+      "maxBufferSize": 4294967295,
+      "maxComputeInvocationsPerWorkgroup": 1024,
+      "maxComputeWorkgroupsPerDimension": 65535
+    }
+  },
+  "repeats": 3,
+  "core": [
+    {
+      "dimension": 2,
+      "columns": 30,
+      "profiles": 10,
+      "samples": 384,
+      "preparation_ms": {
+        "generic": [
+          0.9630300000000034,
+          0.5998280000000022,
+          0.29427599999999643,
+          0.24832900000001246,
+          0.2342559999999878
+        ],
+        "shared": [
+          0.5997119999999967,
+          0.14825199999999938,
+          0.15803200000000572,
+          0.08933000000001812,
+          0.42161899999999264
+        ]
+      },
+      "dispatch_readback_ms": {
+        "generic": [
+          81.503004,
+          1.0055859999999939,
+          1.0593339999999785,
+          0.7709970000000226
+        ],
+        "shared": [
+          99.638091,
+          1.0656789999999887,
+          0.8408299999999826,
+          0.8075749999999857
+        ]
+      },
+      "warm_speedup": 1.1959444834271074,
+      "worst_mixed": 0
+    },
+    {
+      "dimension": 3,
+      "columns": 74,
+      "profiles": 10,
+      "samples": 218616,
+      "preparation_ms": {
+        "generic": [
+          101.939187,
+          69.52463500000005,
+          67.59816899999998,
+          59.40307800000005,
+          65.50732099999993
+        ],
+        "shared": [
+          36.058423000000005,
+          27.1209080000001,
+          18.994996000000015,
+          22.40368699999999,
+          19.43918300000007
+        ]
+      },
+      "dispatch_readback_ms": {
+        "generic": [
+          570.9664319999999,
+          567.9344429999999,
+          582.2637799999998,
+          572.380228
+        ],
+        "shared": [
+          184.70396400000004,
+          53.68656499999997,
+          60.513340000000426,
+          61.51953000000003
+        ]
+      },
+      "warm_speedup": 9.458744600777216,
+      "worst_mixed": 0
+    }
+  ],
+  "walls": [
+    {
+      "config": {
+        "dimension": 2,
+        "degree": 0,
+        "resolution": 9,
+        "subdivisions": 1,
+        "angle": 17
+      },
+      "elapsed_ms": {
+        "generic": [
+          70.83687800000007,
+          56.70402899999999,
+          51.05091600000014,
+          51.49620999999979
+        ],
+        "shared": [
+          27.48998299999994,
+          25.33780200000001,
+          30.49812400000019,
+          34.27447499999971
+        ]
+      },
+      "costs": {
+        "generic": [
+          {
+            "static_prepare_ms": 0.8140559999997095,
+            "prepare_ms": 14.98650899999393,
+            "dispatch_readback_ms": 48.77183199999945,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.18776000000025306,
+            "prepare_ms": 14.126707999998871,
+            "dispatch_readback_ms": 38.07695800000192,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.1655070000001615,
+            "prepare_ms": 13.067929999996522,
+            "dispatch_readback_ms": 34.00238300000001,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.16294799999968745,
+            "prepare_ms": 11.541341999995439,
+            "dispatch_readback_ms": 36.06127199999764,
+            "samples": 38000,
+            "dispatches": 38
+          }
+        ],
+        "shared": [
+          {
+            "static_prepare_ms": 0.8674700000001394,
+            "prepare_ms": 5.982081999998627,
+            "dispatch_readback_ms": 15.770229999998264,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.5386709999997947,
+            "prepare_ms": 3.3607199999987643,
+            "dispatch_readback_ms": 18.074490999999853,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.5196999999998297,
+            "prepare_ms": 5.1636730000027455,
+            "dispatch_readback_ms": 19.869321000001037,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.880435000000034,
+            "prepare_ms": 3.063733000006323,
+            "dispatch_readback_ms": 27.0432650000007,
+            "samples": 38000,
+            "dispatches": 38
+          }
+        ]
+      },
+      "orders": {
+        "generic": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 1.8994614161378388e-07,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        },
+        "shared": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 1.8994614161378388e-07,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        }
+      },
+      "warm_speedup": 1.6885041847163935,
+      "worst_mixed": 0
+    },
+    {
+      "config": {
+        "dimension": 2,
+        "degree": 3,
+        "resolution": 9,
+        "subdivisions": 1,
+        "angle": 17
+      },
+      "elapsed_ms": {
+        "generic": [
+          63.17180999999982,
+          82.06810300000006,
+          63.73600299999998,
+          83.40553
+        ],
+        "shared": [
+          49.7260339999998,
+          35.237337000000025,
+          53.0443580000001,
+          35.31196
+        ]
+      },
+      "costs": {
+        "generic": [
+          {
+            "static_prepare_ms": 0.1598359999998138,
+            "prepare_ms": 11.560534000005191,
+            "dispatch_readback_ms": 46.065743999999995,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.15704699999969307,
+            "prepare_ms": 15.923488000001726,
+            "dispatch_readback_ms": 60.3606379999992,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.17025799999964875,
+            "prepare_ms": 12.22880500000474,
+            "dispatch_readback_ms": 45.83995000000141,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.1680980000001,
+            "prepare_ms": 15.202402999997503,
+            "dispatch_readback_ms": 62.33870500000194,
+            "samples": 38000,
+            "dispatches": 38
+          }
+        ],
+        "shared": [
+          {
+            "static_prepare_ms": 0.5740740000001097,
+            "prepare_ms": 7.56324999999606,
+            "dispatch_readback_ms": 36.245117999999366,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.6103680000001077,
+            "prepare_ms": 3.513279999997394,
+            "dispatch_readback_ms": 26.42678799999976,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.5641189999996641,
+            "prepare_ms": 3.9845729999979085,
+            "dispatch_readback_ms": 43.400814999999966,
+            "samples": 38000,
+            "dispatches": 38
+          },
+          {
+            "static_prepare_ms": 0.5404669999998077,
+            "prepare_ms": 3.515841999996155,
+            "dispatch_readback_ms": 26.620536999997967,
+            "samples": 38000,
+            "dispatches": 38
+          }
+        ]
+      },
+      "orders": {
+        "generic": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 1.8994614161378388e-07,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        },
+        "shared": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 1.8994614161378388e-07,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        }
+      },
+      "warm_speedup": 2.3240880143724696,
+      "worst_mixed": 0
+    },
+    {
+      "config": {
+        "dimension": 3,
+        "degree": 0,
+        "resolution": 5,
+        "subdivisions": 1,
+        "angle": 17
+      },
+      "elapsed_ms": {
+        "generic": [
+          5712.629377,
+          5529.809015999997,
+          5620.290487999999,
+          5707.464546000003
+        ],
+        "shared": [
+          1071.736730999999,
+          1031.6794979999995,
+          1035.7854110000007,
+          1034.7231370000009
+        ]
+      },
+      "costs": {
+        "generic": [
+          {
+            "static_prepare_ms": 0.2172069999996893,
+            "prepare_ms": 2050.520234999998,
+            "dispatch_readback_ms": 3655.803549000004,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.18756999999823165,
+            "prepare_ms": 1952.470257999992,
+            "dispatch_readback_ms": 3564.766651999995,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.17688800000178162,
+            "prepare_ms": 1998.0091140000186,
+            "dispatch_readback_ms": 3618.176282000004,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.18801300000268384,
+            "prepare_ms": 2035.6378790000163,
+            "dispatch_readback_ms": 3666.103383000005,
+            "samples": 4543040,
+            "dispatches": 27
+          }
+        ],
+        "shared": [
+          {
+            "static_prepare_ms": 0.9769229999983509,
+            "prepare_ms": 525.3646889999964,
+            "dispatch_readback_ms": 542.3788089999944,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.9340080000001763,
+            "prepare_ms": 490.2236769999963,
+            "dispatch_readback_ms": 537.976740999995,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.9407490000012331,
+            "prepare_ms": 499.05038100003003,
+            "dispatch_readback_ms": 532.7224840000126,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.8708609999994223,
+            "prepare_ms": 499.8691770000187,
+            "dispatch_readback_ms": 530.9785610000072,
+            "samples": 4543040,
+            "dispatches": 27
+          }
+        ]
+      },
+      "orders": {
+        "generic": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 8.583068110965603e-08,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        },
+        "shared": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 8.583068110965603e-08,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        }
+      },
+      "warm_speedup": 5.431685334006399,
+      "worst_mixed": 0
+    },
+    {
+      "config": {
+        "dimension": 3,
+        "degree": 3,
+        "resolution": 5,
+        "subdivisions": 1,
+        "angle": 17
+      },
+      "elapsed_ms": {
+        "generic": [
+          8282.176088,
+          8276.221621000004,
+          8322.885603000002,
+          8356.234885000005
+        ],
+        "shared": [
+          1746.7753729999968,
+          1778.3766479999977,
+          1792.9180930000002,
+          1783.354551999997
+        ]
+      },
+      "costs": {
+        "generic": [
+          {
+            "static_prepare_ms": 0.22419300000183284,
+            "prepare_ms": 2015.4223369999854,
+            "dispatch_readback_ms": 6260.503208000009,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.2593579999957001,
+            "prepare_ms": 1976.8732589999854,
+            "dispatch_readback_ms": 6291.3008100000225,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.36381100000289734,
+            "prepare_ms": 1951.477522999994,
+            "dispatch_readback_ms": 6364.610384000007,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 0.2546710000024177,
+            "prepare_ms": 2019.258700999977,
+            "dispatch_readback_ms": 6330.921852000007,
+            "samples": 4543040,
+            "dispatches": 27
+          }
+        ],
+        "shared": [
+          {
+            "static_prepare_ms": 1.0166269999972428,
+            "prepare_ms": 537.5360409999485,
+            "dispatch_readback_ms": 1203.1760119999963,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 1.0784210000056191,
+            "prepare_ms": 543.3967970000303,
+            "dispatch_readback_ms": 1229.13171899999,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 1.065439999998489,
+            "prepare_ms": 528.4238799999584,
+            "dispatch_readback_ms": 1258.7000520000147,
+            "samples": 4543040,
+            "dispatches": 27
+          },
+          {
+            "static_prepare_ms": 1.0218929999973625,
+            "prepare_ms": 535.3908149999843,
+            "dispatch_readback_ms": 1242.1879449999979,
+            "samples": 4543040,
+            "dispatches": 27
+          }
+        ]
+      },
+      "orders": {
+        "generic": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 8.583068110965603e-08,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        },
+        "shared": {
+          "nodes": 16,
+          "comparison_nodes": 24,
+          "mixed_difference": 8.583068110965603e-08,
+          "budget": 1e-05,
+          "scope": "normalized regional requested moments; two-order agreement is not an error certificate"
+        }
+      },
+      "warm_speedup": 4.666983126639652,
+      "worst_mixed": 0
+    }
+  ],
+  "baseline_revision": "c624db745629b274589b0be6f19fbda2098a1c3b",
+  "timing": "wall-clock, with allocation/upload/readback; warm ratios exclude first run",
+  "source_sha256": {
+    "src/warpSPHBoundaries/visualizer/static/fluxbridge-plan.js": "3cf93b1a82bfb1a4afb54d98472f1ca42772fdfe2debfecf97c295176f0b8178",
+    "src/warpSPHBoundaries/visualizer/static/fluxbridge-gpu.js": "75abbea905c59dc8dfae02ca1d96a3657a837f579c5955481dda15ac9f8d197c",
+    "src/warpSPHBoundaries/visualizer/static/fluxbridge-compute.wgsl": "236ba7a0c3597dcd1659bccf7e2a1cbae8dc8b8452420ad2d8f03660dd6bfb78",
+    "src/warpSPHBoundaries/visualizer/static/wall-browser.js": "5628a34a65a8945793189dab29e6edba88aebe75ace9067200f4c02349253450",
+    "tests/visualizer/js/mixed-wall-bench.mjs": "ffe1f7a761e7aaa4c4541da1e22cef949e900fa5ddea23b91f8f19562610a7e1"
+  },
+  "deployment_source_sha256": {
+    "src/warpSPHBoundaries/visualizer/static/fluxbridge-plan.js": "3cf93b1a82bfb1a4afb54d98472f1ca42772fdfe2debfecf97c295176f0b8178",
+    "src/warpSPHBoundaries/visualizer/static/fluxbridge-gpu.js": "d48ac15b0f284828c5a682e163cc80f900c8f3affa721330a53c303546c0e35c",
+    "src/warpSPHBoundaries/visualizer/static/fluxbridge-compute.wgsl": "236ba7a0c3597dcd1659bccf7e2a1cbae8dc8b8452420ad2d8f03660dd6bfb78",
+    "src/warpSPHBoundaries/visualizer/static/wall-browser.js": "c3dbf6fd01517039b31a64f342813d1a6db88f5b2da0f73925491bc487cdab8a",
+    "tests/visualizer/js/mixed-wall-bench.mjs": "ffe1f7a761e7aaa4c4541da1e22cef949e900fa5ddea23b91f8f19562610a7e1"
+  },
+  "deployment_only_changes": "Versioned JavaScript imports and the shader URL for consistent browser cache refresh; numerical code unchanged."
+}

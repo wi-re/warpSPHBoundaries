@@ -4,25 +4,36 @@ Coarse samples include aligned face/edge/vertex queries. Software Vulkan checks
 numerics, not hardware throughput. Float64 core is separately audited vs mpmath.
 """
 import json
+import fcntl
+import os
 from pathlib import Path
 import shutil,subprocess
 import numpy as np
 import pytest
-wgpu=pytest.importorskip('wgpu')
+try:import wgpu
+except ImportError:wgpu=None
 STATIC=Path(__file__).parents[2]/'src/warpSPHBoundaries/visualizer/static'
+DAWN=Path(os.environ.get('FLUXBRIDGE_WEBGPU_MODULE',STATIC.parents[3]/'.tmp/dawn-check/node_modules/webgpu/index.js'))
+RUNNER=Path(__file__).parent/'js/analytic-gpu-runner.mjs'
 FIELDS=['m00','m100','m010','m001','m200','m110','m101','m020','m011','m002','Gx','Gy','Gz',*[f'g1{a}{b}' for a in 'xyz' for b in 'xyz'],*[f'H{ij}' for ij in ['xx','xy','xz','yy','yz','zz']],'laplacian','grad_norm']
 FIELDS2=['m00','m10','m01','m20','m11','m02','Gx','Gy','g1xx','g1xy','g1yx','g1yy','grad_norm']
 
 @pytest.fixture(scope='module')
 def execute():
     if not shutil.which('node'):pytest.skip('Node needed for actual production host plans')
-    try:d=wgpu.gpu.request_adapter_sync(force_fallback_adapter=True).request_device_sync()
-    except Exception as e:pytest.skip(str(e))
-    m=d.create_shader_module(code=(STATIC/'analytic3d-compute.wgsl').read_text())
-    pipeline=d.create_compute_pipeline(layout='auto',compute={'module':m,'entry_point':'compute_analytic3d'})
+    dawn=DAWN.is_file()
+    d=None
+    if not dawn:
+        if wgpu is None:pytest.skip('Optional Dawn or wgpu runtime required')
+        try:d=wgpu.gpu.request_adapter_sync(force_fallback_adapter=True).request_device_sync()
+        except Exception as e:pytest.skip(str(e))
+    pipelines={}
     def run(config,fields,dimension=3,series=False,local=False):
         config={**dict(radius=1,width=2,height=2,depth=2,h=1,resolution=17,padding=1,quality=1,models=['analytic']),**config}
         script=f'''
+import fs from 'node:fs';
+import {{specializeAnalyticShader}} from {json.dumps((STATIC/'analytic-specialize.js').as_uri())};
+const source=fs.readFileSync({json.dumps(str(STATIC/'analytic3d-compute.wgsl'))},'utf8');
 import {{compileAnalytic3d,split32}} from {json.dumps((STATIC/'analytic3d-plan.js').as_uri())};
 import {{compileAnalytic2d,compileStrip2d}} from {json.dumps((STATIC/'analytic2d-plan.js').as_uri())};
 import {{compileLocal2d}} from {json.dumps((STATIC/'local2d-plan.js').as_uri())};
@@ -33,25 +44,41 @@ const config={json.dumps(config)},dimension={dimension},series={json.dumps(serie
 for(const field of {json.dumps(fields)}){{const c={{...config,field}},plan=series?compileSeries(c,dimension):local?compileLocal2d(c,c.models[0]==='curvature_analytic'):c.models[0]==='strip'?compileStrip2d(c):dimension===3?compileAnalytic3d(c):compileAnalytic2d(c),f=new Float32Array(plan.uniform.buffer),u=new Uint32Array(plan.uniform.buffer);u[0]=5;const step=split32(((plan.axis??plan.x)[4]-(plan.axis??plan.x)[0])/c.h);f[6]=step[0];f[7]=step[1];if(local){{const start=u[3]*6+f[14]*4,packed=[...plan.table.slice(0,start)];for(const j of [0,4,8,12,16])for(const i of [0,4,8,12,16])packed.push(...plan.table.slice(start+(j*17+i)*12,start+(j*17+i+1)*12));plan.table=new Float32Array(packed);}}let expected=[];
  if(dimension===3){{const g=prepare(c),axis=[0,4,8,12,16].map(i=>plan.axis?plan.axis[i]:plan.x[i]);for(const z of axis)for(const y of axis)for(const x of axis)expected.push(pointTerm([x,y,z],c,series?'ball_series':'analytic',g));}}
  else{{const result=compute2d(c),values=result.results[0].values;for(const j of [0,4,8,12,16])for(const i of [0,4,8,12,16])expected.push(values[j*17+i]);}}
- rows.push({{uniform:[...plan.uniform],table:[...plan.table],expected,field}});
+ const shader=specializeAnalyticShader(source,plan);
+ rows.push({{uniform:[...plan.uniform],table:[...plan.table],expected,field,shader}});
 }}console.log(JSON.stringify(rows));
 '''
         rows=json.loads(subprocess.run(['node','--input-type=module','--eval',script],check=True,capture_output=True,text=True).stdout)
         output=[]
+        if dawn:
+            with open('/tmp/fluxbridge-gpu.lock','a') as lock:
+                fcntl.flock(lock,fcntl.LOCK_EX)
+                result=subprocess.run(['node',str(RUNNER)],input=json.dumps(dict(rows=rows)),capture_output=True,text=True,timeout=600)
+            assert result.returncode==0,result.stderr
+            for row,actual in zip(rows,json.loads(result.stdout)['results']):
+                raw=np.array(actual['rolling']['values']).reshape(-1,4)
+                assert np.isfinite(raw).all(),row['field']
+                output.append((row['field'],np.where(raw[:,2]>.5,raw[:,0],np.nan),np.array(row['expected'],float)))
+            return output
         for row in rows:
+            key=row['shader']['key']
+            if key not in pipelines:
+                module=d.create_shader_module(code=row['shader']['code'])
+                pipelines[key]=d.create_compute_pipeline(layout='auto',compute={'module':module,'entry_point':'compute_analytic3d'})
+            selected=pipelines[key]
             uniform=d.create_buffer_with_data(data=bytes(row['uniform']),usage=wgpu.BufferUsage.UNIFORM)
             table=d.create_buffer_with_data(data=np.array(row['table'],dtype='<f4'),usage=wgpu.BufferUsage.STORAGE)
             count=5**dimension;out=d.create_buffer(size=count*16,usage=wgpu.BufferUsage.STORAGE|wgpu.BufferUsage.COPY_SRC)
             try:
-                group=d.create_bind_group(layout=pipeline.get_bind_group_layout(0),entries=[{'binding':i,'resource':{'buffer':b}} for i,b in enumerate([uniform,table,out])])
-                e=d.create_command_encoder();p=e.begin_compute_pass();p.set_pipeline(pipeline);p.set_bind_group(0,group);p.dispatch_workgroups((count+63)//64);p.end();d.queue.submit([e.finish()]);raw=np.frombuffer(d.queue.read_buffer(out),dtype='<f4').reshape(-1,4)
+                group=d.create_bind_group(layout=selected.get_bind_group_layout(0),entries=[{'binding':i,'resource':{'buffer':b}} for i,b in enumerate([uniform,table,out])])
+                e=d.create_command_encoder();p=e.begin_compute_pass();p.set_pipeline(selected);p.set_bind_group(0,group);p.dispatch_workgroups((count+63)//64);p.end();d.queue.submit([e.finish()]);raw=np.frombuffer(d.queue.read_buffer(out),dtype='<f4').reshape(-1,4)
                 assert np.isfinite(raw).all(),row['field']
                 actual=np.where(raw[:,2]>.5,raw[:,0],np.nan);expected=np.array(row['expected'],float)
                 output.append((row['field'],actual,expected))
             finally:uniform.destroy();table.destroy();out.destroy()
         return output
     yield run
-    d.destroy()
+    if d is not None:d.destroy()
 
 @pytest.mark.parametrize('kernel',['w2','w4','w6','cubic'])
 def test_analytic_polyhedron_every_field_and_aligned_boundaries(execute,kernel):

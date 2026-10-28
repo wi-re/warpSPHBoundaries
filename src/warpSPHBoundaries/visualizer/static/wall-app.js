@@ -1,4 +1,4 @@
-import {computeWallInBrowser,cancelWall} from './wall-engine.js';
+import {computeWallInBrowser,cancelWall} from './wall-engine.js?v=20261028-webgpu1';
 const $ = id => document.getElementById(id);
 const form = $('controls');
 const vectorKeys = new Set(['center', 'fluid', 'skeleton', 'fluid_gradient', 'skeleton_gradient']);

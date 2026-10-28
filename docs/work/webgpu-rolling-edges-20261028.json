@@ -1,0 +1,243 @@
+{
+  "adapter": {
+    "vendor": "mesa",
+    "architecture": "software",
+    "device": "llvmpipe-llvm-20-1-2-256-bits-",
+    "description": "llvmpipe: Mesa 25.2.8-0ubuntu0.24.04.4 (LLVM 20.1.2)"
+  },
+  "resolution": 17,
+  "repeats": 3,
+  "timing": "wall-clock dispatch + readback, preallocated buffers; compilation separate",
+  "rows": [
+    {
+      "dimension": 2,
+      "kernel": "w2",
+      "field": "m00",
+      "queries": 289,
+      "worst_mixed_vs_generic": 8.526512829120778e-14,
+      "generic": {
+        "compile_ms": 5108.0474509999995,
+        "cold_dispatch_readback_ms": 8823.318391,
+        "warm_dispatch_readback_ms": [
+          14.35906900000009,
+          19.782500999999684,
+          13.566224000000147
+        ],
+        "warm_median_ms": 14.35906900000009
+      },
+      "rolling": {
+        "compile_ms": 2163.014681999999,
+        "cold_dispatch_readback_ms": 5949.8958760000005,
+        "warm_dispatch_readback_ms": [
+          5.295912000001408,
+          12.662661999998818,
+          4.518137999999453
+        ],
+        "warm_median_ms": 5.295912000001408
+      },
+      "speedup": 2.7113496221229267
+    },
+    {
+      "dimension": 2,
+      "kernel": "w2",
+      "field": "Gx",
+      "queries": 289,
+      "worst_mixed_vs_generic": 0.0,
+      "generic": {
+        "compile_ms": 0.005823999999847729,
+        "cold_dispatch_readback_ms": 12.90892299999905,
+        "warm_dispatch_readback_ms": [
+          12.804254999999102,
+          13.302533999998559,
+          16.98458699999901
+        ],
+        "warm_median_ms": 13.302533999998559
+      },
+      "rolling": {
+        "compile_ms": 2423.265890999999,
+        "cold_dispatch_readback_ms": 3342.540130000001,
+        "warm_dispatch_readback_ms": [
+          4.674912999998924,
+          6.7123609999980545,
+          4.765277000002243
+        ],
+        "warm_median_ms": 4.765277000002243
+      },
+      "speedup": 2.7915552443210117
+    },
+    {
+      "dimension": 2,
+      "kernel": "w4",
+      "field": "m00",
+      "queries": 289,
+      "worst_mixed_vs_generic": 5.044853423895816e-13,
+      "generic": {
+        "compile_ms": 0.0017220000008819625,
+        "cold_dispatch_readback_ms": 26.022793000000092,
+        "warm_dispatch_readback_ms": [
+          14.481384999999136,
+          14.132093999996869,
+          14.164553999999043
+        ],
+        "warm_median_ms": 14.164553999999043
+      },
+      "rolling": {
+        "compile_ms": 2568.9218550000005,
+        "cold_dispatch_readback_ms": 8055.806399000001,
+        "warm_dispatch_readback_ms": [
+          4.900074000004679,
+          4.7145220000020345,
+          4.760138999998162
+        ],
+        "warm_median_ms": 4.760138999998162
+      },
+      "speedup": 2.9756597443907653
+    },
+    {
+      "dimension": 2,
+      "kernel": "w4",
+      "field": "Gx",
+      "queries": 289,
+      "worst_mixed_vs_generic": 1.818945506970519e-12,
+      "generic": {
+        "compile_ms": 0.0018049999998765998,
+        "cold_dispatch_readback_ms": 13.80670299999474,
+        "warm_dispatch_readback_ms": [
+          13.821228000000701,
+          19.40664800000377,
+          13.973575999996683
+        ],
+        "warm_median_ms": 13.973575999996683
+      },
+      "rolling": {
+        "compile_ms": 2847.6003889999993,
+        "cold_dispatch_readback_ms": 4118.890036999997,
+        "warm_dispatch_readback_ms": [
+          5.284234999999171,
+          5.017703000004985,
+          5.614514000000781
+        ],
+        "warm_median_ms": 5.284234999999171
+      },
+      "speedup": 2.644389585247226
+    },
+    {
+      "dimension": 3,
+      "kernel": "w2",
+      "field": "m00",
+      "queries": 4913,
+      "worst_mixed_vs_generic": 4.9737986080601776e-14,
+      "generic": {
+        "compile_ms": 0.001994999998714775,
+        "cold_dispatch_readback_ms": 141.63916700000118,
+        "warm_dispatch_readback_ms": [
+          139.46504599999753,
+          135.79133300000103,
+          144.49607999999716
+        ],
+        "warm_median_ms": 139.46504599999753
+      },
+      "rolling": {
+        "compile_ms": 2244.0729150000043,
+        "cold_dispatch_readback_ms": 6649.925196999997,
+        "warm_dispatch_readback_ms": [
+          68.44807700000092,
+          77.2663790000006,
+          49.45417299999826
+        ],
+        "warm_median_ms": 68.44807700000092
+      },
+      "speedup": 2.037530521127652
+    },
+    {
+      "dimension": 3,
+      "kernel": "w2",
+      "field": "Gx",
+      "queries": 4913,
+      "worst_mixed_vs_generic": 1.8189547351944087e-12,
+      "generic": {
+        "compile_ms": 0.002148999999917578,
+        "cold_dispatch_readback_ms": 147.99656900000264,
+        "warm_dispatch_readback_ms": [
+          155.08361600000353,
+          130.14787400000205,
+          142.28498100000434
+        ],
+        "warm_median_ms": 142.28498100000434
+      },
+      "rolling": {
+        "compile_ms": 2183.2357129999946,
+        "cold_dispatch_readback_ms": 6211.609744000001,
+        "warm_dispatch_readback_ms": [
+          67.95170499999949,
+          73.99541399999725,
+          68.75592299999698
+        ],
+        "warm_median_ms": 68.75592299999698
+      },
+      "speedup": 2.0694214373358144
+    },
+    {
+      "dimension": 3,
+      "kernel": "w4",
+      "field": "m00",
+      "queries": 4913,
+      "worst_mixed_vs_generic": 9.094859040940754e-13,
+      "generic": {
+        "compile_ms": 0.004905999994662125,
+        "cold_dispatch_readback_ms": 133.11095799999748,
+        "warm_dispatch_readback_ms": [
+          133.80019600000378,
+          166.71060099999886,
+          168.89632999999594
+        ],
+        "warm_median_ms": 166.71060099999886
+      },
+      "rolling": {
+        "compile_ms": 2796.3964119999946,
+        "cold_dispatch_readback_ms": 8440.137101,
+        "warm_dispatch_readback_ms": [
+          64.01679799999692,
+          72.18979299999774,
+          57.49541999999201
+        ],
+        "warm_median_ms": 64.01679799999692
+      },
+      "speedup": 2.6041696274781954
+    },
+    {
+      "dimension": 3,
+      "kernel": "w4",
+      "field": "Gx",
+      "queries": 4913,
+      "worst_mixed_vs_generic": 5.817133142817709e-11,
+      "generic": {
+        "compile_ms": 0.0026040000084321946,
+        "cold_dispatch_readback_ms": 139.8776729999954,
+        "warm_dispatch_readback_ms": [
+          152.98236399999587,
+          147.92337000000407,
+          135.45450999999593
+        ],
+        "warm_median_ms": 147.92337000000407
+      },
+      "rolling": {
+        "compile_ms": 2843.7228059999907,
+        "cold_dispatch_readback_ms": 8051.075706999996,
+        "warm_dispatch_readback_ms": [
+          88.0372650000063,
+          65.01416399999289,
+          74.88627200000337
+        ],
+        "warm_median_ms": 74.88627200000337
+      },
+      "speedup": 1.9753069027123877
+    }
+  ],
+  "source_sha256": {
+    "src/warpSPHBoundaries/visualizer/static/analytic-specialize.js": "b52b14fbb94cf38ee603e86202b9ab07264b9d41c16ccd745a67f01bd56c5ca4",
+    "src/warpSPHBoundaries/visualizer/static/analytic-gpu.js": "74899904b1c970e11c5c7096903985d95a33a0701d3cbaf2db93b0540b1c5588",
+    "src/warpSPHBoundaries/visualizer/static/analytic3d-compute.wgsl": "97bd9d84d252cdcefedb4403c32fe9905dedbd158fdee67f2e15558c8bdd410c",
+    "tests/visualizer/js/analytic-gpu-runner.mjs": "9e34fae79cb3d4c2c391873998168fd0a8511685e84a93d5dc2cec1b2aacdf8a"
+  }
+}

@@ -430,6 +430,15 @@ independence. These are finite validation cases, not certified global error boun
 
 ### Browser variants and compensated fp32
 
+Analytic polygon/strip and polyhedron WebGPU computations use fixed-profile
+rolling edge recurrences, consuming each degree immediately instead of storing
+endpoint primitive arrays. Equivalent axis fields share a cached pipeline;
+new profile/output variants incur compilation on first use. Paired fp32 and
+the arithmetic self-test remain active. Matched software-Vulkan measurements
+show about 2–3× faster warm dispatch/readback for C2/C4 mass and gradient fields;
+hardware GPU timing remains unverified. See the
+[implementation and benchmark record](work/webgpu-rolling-edges-20261028.md).
+
 `Available browser methods` lists each viewer's methods and geometry limits.
 The 2D viewer exposes analytic polygon/mesh edges and boundary-quadrature
 comparisons; analytic, quadrature and sampled-SDF local models; an exact
@@ -617,6 +626,12 @@ profile/product or quadrature error. No GPU fp64 or paired-float integration is
 used. Regional reductions and the small material contractions use JavaScript
 Number, explicitly identified in exported provenance.
 
+The mixed wall GPU path now shares profile evaluations between requested
+moments. Long sample ranges run as parallel jobs, whose integer accumulators
+are merged exactly in a second compute pass. Host preparation avoids per-sample
+vector allocations and reuses regional geometry between convergence rules.
+These optimizations are automatic in Browser/WebGPU mode.
+
 Both polygon edges and tetrahedral face/edge angular rules retain exterior
 regular flux. The 3D near-plane path uses the native regular-potential Duffy
 rule. Accepted/comparison orders start at 16/24, increasing by eight up to 64,
@@ -628,8 +643,11 @@ available without the native service; browser fp64 comparison is outside scope.
 Buffers are adapter-checked and batched: a prepared face group is capped at 8 MiB
 of uploaded samples, with roughly 250,000 samples per dispatch batch. Reported
 owned GPU peak bytes are logical buffer sizes (including output and readback),
-not driver allocations/context or total host memory. Query-specific host arrays
-and preparation can dominate 3D cost. The worker/device/pipeline persist between
+plus exact-integer partial storage when jobs are split, not driver allocations/
+context or total host memory. Job sizes adapt to the existing buffer/dispatch
+limits; partial storage retains the five-storage-buffer requirement. Timings
+also report the actual compute-pass count. Query-specific host arrays and
+preparation can dominate 3D cost. The worker/device/pipeline persist between
 successful requests; **Cancel evaluation** terminates the worker and cancels CPU
 preparation, and a later request creates a fresh context.
 
@@ -646,7 +664,11 @@ not apply across arbitrary discontinuous material traces. The first hardware
 measurements are about 108 ms for an 81-probe 2D example and 6.7 s for a 25-probe
 3D example (degree three, both convergence rules, warm device/pipeline). These
 single runs include host preparation/readback and are not general performance
-promises. The 3D path still needs shared-profile and preparation optimization.
+promises. The subsequent
+[mixed wall optimization record](work/webgpu-mixed-wall-20261028.md) reports
+matched software-Vulkan evaluations at roughly 1.7–2.3× faster in 2D and
+4.7–5.4× in 3D, with identical measured material terms. Those measurements
+include preparation/upload/readback and do not establish hardware GPU speedups.
 
 
 ### Chrome/Linux adapter discovery

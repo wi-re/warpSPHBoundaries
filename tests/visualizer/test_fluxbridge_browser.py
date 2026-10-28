@@ -51,12 +51,13 @@ def test_browser_geometry_request_and_contraction_contract(d,geometry):
     for name,value in expected.items():np.testing.assert_allclose(actual['terms'][name],value,atol=2e-13,rtol=2e-13)
 
 
-def test_wgsl_independent_volume_fixtures():
+@pytest.mark.parametrize('strategy',['auto','shared','chunked'])
+def test_wgsl_independent_volume_fixtures(strategy):
     base=json.loads((ROOT/'tests/fixtures/fluxbridge-v1.json').read_text())['cases']
     cases=[c for c in base if c['measure']=='volume']
     extra=json.loads((ROOT/'tests/fixtures/fluxbridge-tetquad-v1.json').read_text())['cases']
     cases+=extra
-    result=run(dict(cases=cases),gpu=True)
+    result=run(dict(cases=cases,strategy=strategy),gpu=True)
     errors=[]
     for case,row in zip(cases,result['results']):
         a=np.array(row['values']);b=np.array(case['values'],float)
@@ -81,13 +82,24 @@ def test_live_browser_wall_matches_native_all_terms(d,kernel):
     assert browser['contract']['kernel_dimension']==d
 
 
-def test_integer_reduction_survives_compiler_reassociation_and_cancellation():
+@pytest.mark.parametrize('strategy',['generic','shared','chunked'])
+def test_integer_reduction_survives_compiler_reassociation_and_cancellation(strategy):
     largest=float(np.finfo(np.float32).max)
     weights=[[1e30,1,-1e30,1],[-1e30,-1,1e30,-1],
              [largest]*4096+[-largest]*4095,[largest,-largest,1e-20]]
-    result=run(dict(reductions=weights),gpu=True)
+    result=run(dict(reductions=weights,strategy=strategy),gpu=True)
     np.testing.assert_array_equal(result['reductions'][:3],[2.,-2.,largest])
     np.testing.assert_allclose(result['reductions'][3],np.float32(1e-20),rtol=1e-6,atol=0)
+
+
+def test_shared_profiles_preserve_degree_nine_products_and_empty_partial_tiles():
+    result=run(dict(parity=[2,3]),gpu=True)
+    assert len(result['parity'])==8
+    for row in result['parity']:
+        assert row['profiles']==31
+        assert row['columns']>64
+        np.testing.assert_array_equal(row['shared'],row['generic'],err_msg=f"{row['dimension']}D/{row['kernel']}")
+        np.testing.assert_array_equal(row['chunked'],row['generic'],err_msg=f"chunked {row['dimension']}D/{row['kernel']}")
 
 
 def test_export_browser_assets_without_native_imports(tmp_path):
